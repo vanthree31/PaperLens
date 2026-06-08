@@ -1,0 +1,614 @@
+"""检索引擎 - PubMed + OpenAlex 聚合检索（增强版）
+
+支持 PubMed 字段标签语法：
+  keyword[ti]   - 标题搜索
+  keyword[tiab] - 标题+摘要搜索
+  keyword[au]   - 作者搜索
+  keyword[ta]   - 期刊名搜索
+  keyword[mh]   - MeSH 主题词
+  keyword[tw]   - 自由词（Title/Abstract/Keywords）
+
+布尔运算：AND / OR / NOT
+年份过滤：2020:2026[pdat]
+
+示例：
+  super-resolution microscopy[ti]
+  Nature Methods[ta] AND single-molecule[tiab]
+  (expansion microscopy[ti] OR light-sheet[ti]) AND 2024:2026[pdat]
+"""
+
+import re
+import time
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
+from typing import Optional, List
+import requests
+
+
+@dataclass
+class Paper:
+    title: str = ""
+    authors: List[str] = field(default_factory=list)
+    journal: str = ""
+    year: int = 0
+    doi: str = ""
+    pmid: str = ""
+    abstract: str = ""
+    citation_count: int = 0
+    oa_url: str = ""
+    keywords: List[str] = field(default_factory=list)
+    source: str = ""
+
+
+# 常用期刊缩写映射（用于智能查询构建）
+JOURNAL_ALIASES = {
+    "nature": "Nature",
+    "science": "Science",
+    "cell": "Cell",
+    "nature methods": "Nat Methods",
+    "nat methods": "Nat Methods",
+    "nature photonics": "Nat Photonics",
+    "nat photonics": "Nat Photonics",
+    "nature cell biology": "Nat Cell Biol",
+    "nat cell biol": "Nat Cell Biol",
+    "nature neuroscience": "Nat Neurosci",
+    "nat neurosci": "Nat Neurosci",
+    "nature biotechnology": "Nat Biotechnol",
+    "nat biotechnol": "Nat Biotechnol",
+    "nature communications": "Nat Commun",
+    "nat commun": "Nat Commun",
+    "nature chemistry": "Nat Chem",
+    "nat chem": "Nat Chem",
+    "nature physics": "Nat Phys",
+    "nat phys": "Nat Phys",
+    "nature materials": "Nat Mater",
+    "nat mater": "Nat Mater",
+    "nature medicine": "Nat Med",
+    "nat med": "Nat Med",
+    "nature biomedical engineering": "Nat Biomed Eng",
+    "cell reports": "Cell Rep",
+    "cell rep": "Cell Rep",
+    "cell stem cell": "Cell Stem Cell",
+    "cell metabolism": "Cell Metab",
+    "cell met": "Cell Metab",
+    "molecular cell": "Mol Cell",
+    "mol cell": "Mol Cell",
+    "cancer cell": "Cancer Cell",
+    "neuron": "Neuron",
+    "immunity": "Immunity",
+    "science advances": "Sci Adv",
+    "sci adv": "Sci Adv",
+    "acs nano": "ACS Nano",
+    "light:science": "Light Sci Appl",
+    "light science": "Light Sci Appl",
+    "optica": "Optica",
+    "optics express": "Opt Express",
+    "opt express": "Opt Express",
+    "biomedical optics": "J Biomed Opt",
+    "j biomed opt": "J Biomed Opt",
+    "journal of biomedical optics": "J Biomed Opt",
+}
+
+
+def build_pubmed_query(keywords: str, journal: str = "", field: str = "",
+                       year_from: int = 0, year_to: int = 0,
+                       mesh_term: str = "", pub_type: str = "") -> str:
+    """智能构建 PubMed 检索式
+
+    Args:
+        keywords: 用户输入的关键词（可含字段标签）
+        journal: 期刊过滤（支持缩写或全名）
+        field: 默认字段标签（ti/tiab/au/tw），当用户未指定时使用
+        year_from: 起始年份
+        year_to: 截止年份
+        mesh_term: MeSH 主题词
+        pub_type: 文献类型（review/clinical trial 等）
+    """
+    parts = []
+
+    # 处理关键词
+    kw = keywords.strip()
+    if kw:
+        # 如果用户已经写了字段标签（如 xxx[ti]），直接使用
+        if re.search(r'\[\w+\]', kw):
+            parts.append(f"({kw})")
+        elif field:
+            # 用户指定了默认字段
+            parts.append(f"({kw}[{field}])")
+        else:
+            # 智能判断：如果有引号或布尔运算符，当作高级查询
+            if any(op in kw.upper() for op in [' AND ', ' OR ', ' NOT ']) or '"' in kw:
+                parts.append(f"({kw})")
+            else:
+                # 默认在标题+摘要中搜索
+                parts.append(f"({kw}[tiab])")
+
+    # 期刊过滤
+    if journal:
+        journal = journal.strip()
+        # 检查是否是已知缩写
+        canonical = JOURNAL_ALIASES.get(journal.lower(), journal)
+        parts.append(f"{canonical}[ta]")
+
+    # MeSH 主题词
+    if mesh_term:
+        parts.append(f"{mesh_term}[mh]")
+
+    # 文献类型
+    if pub_type:
+        parts.append(f"{pub_type}[pt]")
+
+    # 年份范围
+    if year_from or year_to:
+        y_from = year_from if year_from else 1900
+        y_to = year_to if year_to else 2030
+        parts.append(f"{y_from}:{y_to}[pdat]")
+
+    return " AND ".join(parts) if parts else keywords
+
+
+class PubMedSearch:
+    BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+
+    def __init__(self, email="", api_key="", proxy=None):
+        self.email = email
+        self.api_key = api_key
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "LitSearch/1.0"
+        if proxy:
+            self.session.proxies = proxy
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               sort="relevance", max_results=50,
+               journal="", field="", mesh_term="", pub_type="") -> List[str]:
+        """返回 PMID 列表
+
+        Args:
+            query: 检索词（可含 PubMed 字段标签）
+            journal: 期刊过滤
+            field: 默认字段标签
+            mesh_term: MeSH 主题词
+            pub_type: 文献类型
+        """
+        # 检测是否是 DOI 查询
+        doi_match = re.match(r'^(10\.\d{4,}/\S+)$', query.strip())
+        if doi_match:
+            # 用 DOI[aid] 精确查询，后续需要过滤精确匹配
+            term = f'{query.strip()}[aid]'
+            self._exact_doi = query.strip().lower()
+        else:
+            # 构建检索式
+            term = build_pubmed_query(
+            keywords=query,
+            journal=journal,
+            field=field,
+            year_from=year_from,
+            year_to=year_to,
+            mesh_term=mesh_term,
+            pub_type=pub_type,
+        )
+
+        if not term:
+            return []
+
+        # 映射排序参数
+        sort_map = {
+            "relevance": "relevance",
+            "date": "pub+date",
+            "citations": "relevance",  # PubMed 无引用排序，回退到相关度
+        }
+
+        params = {
+            "db": "pubmed",
+            "term": term,
+            "retmax": max_results,
+            "sort": sort_map.get(sort, "relevance"),
+            "retmode": "json",
+        }
+        if self.email:
+            params["email"] = self.email
+        if self.api_key:
+            params["api_key"] = self.api_key
+
+        try:
+            r = self.session.get(f"{self.BASE}/esearch.fcgi", params=params, timeout=20)
+            r.raise_for_status()
+            data = r.json()
+            return data.get("esearchresult", {}).get("idlist", [])
+        except Exception as e:
+            print(f"PubMed search error: {e}")
+            return []
+
+    def fetch_details(self, pmids: list[str]) -> list:
+        """批量获取文献详情"""
+        if not pmids:
+            return []
+
+        papers = []
+        for i in range(0, len(pmids), 100):
+            batch = pmids[i:i+100]
+            params = {
+                "db": "pubmed",
+                "id": ",".join(batch),
+                "retmode": "xml",
+            }
+            if self.email:
+                params["email"] = self.email
+            if self.api_key:
+                params["api_key"] = self.api_key
+
+            try:
+                r = self.session.get(f"{self.BASE}/efetch.fcgi", params=params, timeout=30)
+                r.raise_for_status()
+                papers.extend(self._parse_xml(r.text))
+            except Exception as e:
+                print(f"PubMed fetch error: {e}")
+
+            if i + 100 < len(pmids):
+                time.sleep(0.5)
+
+        return papers
+
+    def _parse_xml(self, xml_text: str) -> list:
+        papers = []
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return papers
+
+        for article in root.findall(".//PubmedArticle"):
+            p = Paper(source="pubmed")
+
+            pmid_el = article.find(".//PMID")
+            if pmid_el is not None:
+                p.pmid = pmid_el.text or ""
+
+            title_el = article.find(".//ArticleTitle")
+            if title_el is not None:
+                p.title = self._get_text(title_el)
+
+            for author in article.findall(".//Author"):
+                last = author.find("LastName")
+                first = author.find("ForeName")
+                if last is not None and last.text:
+                    name = last.text
+                    if first is not None and first.text:
+                        name += f", {first.text}"
+                    p.authors.append(name)
+
+            journal_el = article.find(".//Journal/Title")
+            if journal_el is not None:
+                p.journal = journal_el.text or ""
+
+            year_el = article.find(".//PubDate/Year")
+            if year_el is not None and year_el.text:
+                try:
+                    p.year = int(year_el.text)
+                except ValueError:
+                    pass
+
+            for aid in article.findall(".//ArticleId"):
+                if aid.get("IdType") == "doi":
+                    p.doi = aid.text or ""
+
+            abstract_el = article.find(".//Abstract")
+            if abstract_el is not None:
+                parts = []
+                for text_el in abstract_el.findall("AbstractText"):
+                    label = text_el.get("Label", "")
+                    text = self._get_text(text_el)
+                    if label:
+                        parts.append(f"{label}: {text}")
+                    else:
+                        parts.append(text)
+                p.abstract = " ".join(parts)
+
+            for kw in article.findall(".//Keyword"):
+                if kw.text:
+                    p.keywords.append(kw.text)
+
+            papers.append(p)
+
+        return papers
+
+    def _get_text(self, el) -> str:
+        return "".join(el.itertext()).strip()
+
+
+class OpenAlexSearch:
+    BASE = "https://api.openalex.org"
+
+    def __init__(self, email="", proxy=None):
+        self.email = email
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "LitSearch/1.0"
+        if proxy:
+            self.session.proxies = proxy
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               max_results=50, journal="") -> list:
+        """OpenAlex 检索"""
+        # 检测 DOI 查询，使用专用端点
+        doi_match = re.match(r'^(10\.\d{4,}/\S+)$', query.strip())
+        if doi_match:
+            return self._search_by_doi(query.strip())
+
+        # 清理 PubMed 字段标签，OpenAlex 不识别
+        clean_query = re.sub(r'\[(?:ti|tiab|au|ta|tw|mh|pt|pdat)\]', '', query, flags=re.IGNORECASE)
+        # 清理布尔运算符中的多余空格
+        clean_query = re.sub(r'\s+', ' ', clean_query).strip()
+        # 去掉年份过滤（OpenAlex 用 filter 参数处理）
+        clean_query = re.sub(r'\d{4}:\d{4}\[pdat\]', '', clean_query).strip()
+        # 去掉末尾的 AND/OR
+        clean_query = re.sub(r'\s+(AND|OR|NOT)\s*$', '', clean_query, flags=re.IGNORECASE).strip()
+
+        if not clean_query:
+            return []
+
+        # 提取核心关键词（用于结果相关性检查）
+        self._last_keywords = set()
+        for word in re.split(r'\s+(?:AND|OR|NOT)\s+', clean_query, flags=re.IGNORECASE):
+            word = word.strip('()"\' ')
+            if len(word) > 2 and word.lower() not in ('and', 'or', 'not', 'the', 'for', 'with'):
+                self._last_keywords.add(word.lower())
+
+        params = {
+            "search": clean_query,
+            "filter": f"publication_year:{year_from}-{year_to}",
+            "per_page": min(max_results * 2, 200),  # 多取一些，后续过滤
+            "sort": "relevance_score:desc",
+        }
+        if journal:
+            # OpenAlex 用 source.display_name 过滤
+            params["filter"] += f",primary_location.source.display_name:{journal}"
+        if self.email:
+            params["mailto"] = self.email
+
+        try:
+            r = self.session.get(f"{self.BASE}/works", params=params, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+            results = self._parse_results(data.get("results", []))
+
+            # 基本相关性过滤：标题至少包含一个搜索关键词
+            keywords = getattr(self, '_last_keywords', set())
+            if keywords:
+                filtered = []
+                for p in results:
+                    title_lower = p.title.lower()
+                    if any(kw in title_lower for kw in keywords):
+                        filtered.append(p)
+                # 如果过滤后结果太少，回退到原始结果
+                if len(filtered) >= 2:
+                    return filtered[:max_results]
+            return results[:max_results]
+        except Exception as e:
+            print(f"OpenAlex search error: {e}")
+            return []
+
+    def enrich_with_citations(self, papers: list) -> list:
+        """用 OpenAlex 补充引用次数和 OA 链接"""
+        papers_with_doi = [p for p in papers if p.doi]
+        if not papers_with_doi:
+            return papers
+
+        # 分批查询（每批最多 25 个，避免 URL 过长）
+        for i in range(0, len(papers_with_doi), 25):
+            batch = papers_with_doi[i:i+25]
+            # OpenAlex 格式: doi:doi1|doi2|doi3（doi: 只出现一次）
+            doi_values = "|".join([p.doi for p in batch])
+            doi_filter = f"doi:{doi_values}"
+            params = {
+                "filter": doi_filter,
+                "per_page": 50,
+            }
+            if self.email:
+                params["mailto"] = self.email
+
+            try:
+                r = self.session.get(f"{self.BASE}/works", params=params, timeout=15)
+                r.raise_for_status()
+                data = r.json()
+
+                # 构建 DOI → OpenAlex 结果的映射
+                doi_map = {}
+                for w in data.get("results", []):
+                    oa_doi = (w.get("doi", "") or "").replace("https://doi.org/", "").lower()
+                    if oa_doi:
+                        doi_map[oa_doi] = w
+
+                # 精确匹配补充信息 [Bug #12]：始终更新引用数
+                for p in batch:
+                    doi_key = p.doi.lower()
+                    if doi_key in doi_map:
+                        w = doi_map[doi_key]
+                        p.citation_count = w.get("cited_by_count", 0)
+                        if not p.oa_url:
+                            oa = w.get("open_access", {})
+                            p.oa_url = oa.get("oa_url", "") or ""
+            except Exception as e:
+                print(f"OpenAlex enrich error: {e}")
+
+            if i + 25 < len(papers_with_doi):
+                time.sleep(0.3)
+
+        return papers
+
+    def _parse_results(self, results) -> list:
+        papers = []
+        for w in results:
+            p = Paper(source="openalex")
+            p.title = re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip()
+            loc = w.get("primary_location") or {}
+            src = loc.get("source") or {}
+            p.journal = src.get("display_name", "") or ""
+            p.year = w.get("publication_year", 0) or 0
+            p.doi = (w.get("doi", "") or "").replace("https://doi.org/", "")
+            p.citation_count = w.get("cited_by_count", 0)
+
+            # OpenAlex 摘要是反转索引格式，需要重建
+            abstract_inv = w.get("abstract_inverted_index")
+            if abstract_inv:
+                p.abstract = self._reconstruct_abstract(abstract_inv)
+
+            for author in w.get("authorships", []):
+                name = author.get("author", {}).get("display_name", "")
+                if name:
+                    p.authors.append(name)
+
+            oa = w.get("open_access", {})
+            p.oa_url = oa.get("oa_url", "") or ""
+
+            # 关键词
+            for kw in w.get("keywords", []):
+                k = kw.get("display_name", "") if isinstance(kw, dict) else str(kw)
+                if k:
+                    p.keywords.append(k)
+
+            papers.append(p)
+        return papers
+
+    @staticmethod
+    def _reconstruct_abstract(inverted_index: dict) -> str:
+        """从 OpenAlex 反转索引重建摘要文本"""
+        if not inverted_index:
+            return ""
+        try:
+            word_positions = []
+            for word, positions in inverted_index.items():
+                for pos in positions:
+                    word_positions.append((pos, word))
+            word_positions.sort(key=lambda x: x[0])
+            return " ".join(w for _, w in word_positions)
+        except Exception:
+            return ""
+
+    def _search_by_doi(self, doi: str) -> list:
+        """通过 DOI 精确查询 OpenAlex"""
+        try:
+            params = {"mailto": self.email} if self.email else {}
+            r = self.session.get(f"{self.BASE}/works/doi:{doi}", params=params, timeout=10)
+            if r.status_code == 200:
+                w = r.json()
+                p = Paper(source="openalex")
+                p.title = re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip()
+                loc = w.get("primary_location") or {}
+                src = loc.get("source") or {}
+                p.journal = src.get("display_name", "") or ""
+                p.year = w.get("publication_year", 0) or 0
+                p.doi = (w.get("doi", "") or "").replace("https://doi.org/", "")
+                p.citation_count = w.get("cited_by_count", 0)
+                abstract_inv = w.get("abstract_inverted_index")
+                if abstract_inv:
+                    p.abstract = self._reconstruct_abstract(abstract_inv)
+                for author in w.get("authorships", []):
+                    name = author.get("author", {}).get("display_name", "")
+                    if name:
+                        p.authors.append(name)
+                oa = w.get("open_access", {})
+                p.oa_url = oa.get("oa_url", "") or ""
+                return [p]
+        except Exception as e:
+            print(f"OpenAlex DOI search error: {e}")
+        return []
+
+
+class SearchEngine:
+    """聚合检索引擎"""
+
+    def __init__(self, config: dict):
+        proxy_cfg = config.get("proxy", {})
+        proxy = {}
+        if proxy_cfg.get("http"):
+            proxy["http"] = proxy_cfg["http"]
+        if proxy_cfg.get("https"):
+            proxy["https"] = proxy_cfg["https"]
+        proxy = proxy if proxy else None
+
+        pubmed_cfg = config.get("sources", {}).get("pubmed", {})
+        openalex_cfg = config.get("sources", {}).get("openalex", {})
+
+        self.pubmed = PubMedSearch(
+            email=pubmed_cfg.get("email", ""),
+            api_key=pubmed_cfg.get("api_key", ""),
+            proxy=proxy
+        ) if pubmed_cfg.get("enabled", True) else None
+
+        self.openalex = OpenAlexSearch(
+            email=openalex_cfg.get("email", ""),
+            proxy=proxy
+        ) if openalex_cfg.get("enabled", True) else None
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               sort="relevance", max_results=50,
+               use_pubmed=True, use_openalex=True,
+               journal="", field="", mesh_term="", pub_type="") -> list:
+        """聚合检索
+
+        Args:
+            query: 检索词（可含 PubMed 字段标签）
+            journal: 期刊过滤
+            field: 默认字段标签（ti/tiab/au/tw）
+            mesh_term: MeSH 主题词
+            pub_type: 文献类型（review/clinical trial 等）
+        """
+        all_papers = []
+
+        # PubMed 检索
+        if use_pubmed and self.pubmed:
+            pmids = self.pubmed.search(
+                query, year_from, year_to, sort, max_results,
+                journal=journal, field=field,
+                mesh_term=mesh_term, pub_type=pub_type,
+            )
+            if pmids:
+                papers = self.pubmed.fetch_details(pmids)
+                # DOI 精确搜索时，只保留 DOI 完全匹配的结果 [Bug #2]
+                exact_doi = getattr(self.pubmed, '_exact_doi', None)
+                if exact_doi:
+                    papers = [p for p in papers if p.doi and p.doi.lower() == exact_doi]
+                    if hasattr(self.pubmed, '_exact_doi'):
+                        del self.pubmed._exact_doi
+                all_papers.extend(papers)
+
+        # OpenAlex 检索
+        if use_openalex and self.openalex:
+            oa_papers = self.openalex.search(
+                query, year_from, year_to, max_results, journal=journal
+            )
+            all_papers.extend(oa_papers)
+
+        # 去重
+        seen_dois = set()
+        unique = []
+        for p in all_papers:
+            key = p.doi.lower() if p.doi else f"pmid:{p.pmid}"
+            if key not in seen_dois:
+                seen_dois.add(key)
+                unique.append(p)
+
+        # 补充引用次数
+        if self.openalex:
+            unique = self.openalex.enrich_with_citations(unique)
+
+        # 排序
+        if sort == "date":
+            unique.sort(key=lambda p: p.year, reverse=True)
+        elif sort == "citations":
+            unique.sort(key=lambda p: p.citation_count, reverse=True)
+
+        return unique
+
+    def search_by_doi(self, doi: str):
+        """通过 DOI 精确查询"""
+        if self.pubmed:
+            pmids = self.pubmed.search(doi, max_results=1)
+            if pmids:
+                papers = self.pubmed.fetch_details(pmids)
+                if papers:
+                    return papers[0]
+        if self.openalex:
+            papers = self.openalex.search(doi, max_results=1)
+            if papers:
+                return papers[0]
+        return None

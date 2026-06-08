@@ -1,0 +1,39 @@
+# 文献检索智能体 - 配置文件
+
+# 数据源
+sources:
+  pubmed:
+    enabled: true
+    email: ""
+    api_key: ""
+  openalex:
+    enabled: true
+    email: ""
+
+# AI 模型 - 智能检索（解析自然语言 → 生成检索式，建议用快速模型）
+ai_search:
+  enabled: false
+  provider: "deepseek"
+  api_key: ""
+  base_url: ""
+  model: ""
+
+# AI 模型 - 论文分析（总结/详析/对比，建议用高质量模型）
+ai_analysis:
+  enabled: false
+  provider: "deepseek"
+  api_key: ""
+  base_url: ""
+  model: ""
+
+# 网络代理
+proxy:
+  http: ""
+  https: ""
+
+# 检索默认值
+defaults:
+  max_results: 50
+  sort: "relevance"
+  year_from: 2020
+  year_to: 2026

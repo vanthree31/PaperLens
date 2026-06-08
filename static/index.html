@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaperLens</title>
+<style>
+:root {
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --success: #10b981;
+  --danger: #ef4444;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+.header {
+  background: var(--primary);
+  color: white;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(37,99,235,0.3);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header h1 { font-size: 18px; font-weight: 600; }
+.header-actions { display: flex; gap: 8px; }
+.btn-icon {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.btn-icon:hover { background: rgba(255,255,255,0.25); }
+.search-section {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+}
+.search-bar {
+  display: flex;
+  gap: 8px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.search-bar input {
+  flex: 1;
+  padding: 10px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-bar input:focus { border-color: var(--primary); }
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--bg); }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn-ai { background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; }
+.btn-ai:hover { background: linear-gradient(135deg, #7c3aed, #4f46e5); }
+.filters {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.filter-group label { cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.filter-group input[type="checkbox"] { accent-color: var(--primary); }
+.filter-group input[type="number"],
+.filter-group select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  width: 80px;
+}
+.filter-group select { width: auto; }
+.main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 24px;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.toolbar-left { font-size: 14px; color: var(--text-secondary); }
+.toolbar-right { display: flex; gap: 8px; flex-wrap: wrap; }
+.paper-list { display: flex; flex-direction: column; gap: 8px; }
+.paper-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  transition: border-color 0.2s;
+}
+.paper-card:hover { border-color: var(--primary); }
+.paper-card.selected { border-color: var(--primary); background: #eff6ff; }
+.paper-header { display: flex; gap: 10px; align-items: flex-start; }
+.paper-checkbox { margin-top: 3px; accent-color: var(--primary); }
+.paper-content { flex: 1; min-width: 0; }
+.paper-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.paper-title:hover { color: var(--primary); }
+.paper-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.paper-meta .tag { display: inline-flex; align-items: center; gap: 3px; }
+.paper-meta .badge {
+  background: #dbeafe;
+  color: var(--primary);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.paper-meta .badge-green { background: #d1fae5; color: #059669; }
+.paper-abstract {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  line-height: 1.5;
+  display: none;
+}
+.paper-abstract.show { display: block; }
+.paper-actions { margin-top: 8px; display: flex; gap: 8px; }
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  font-size: 14px;
+}
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 6px 24px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  z-index: 100;
+}
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 200;
+  display: none;
+}
+.settings-overlay.show { display: block; }
+.settings-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 380px;
+  background: var(--card);
+  box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+  z-index: 201;
+  transform: translateX(100%);
+  transition: transform 0.3s;
+  overflow-y: auto;
+  padding: 20px;
+}
+.settings-panel.show { transform: translateX(0); }
+.settings-panel h2 { font-size: 18px; margin-bottom: 20px; }
+.settings-section { margin-bottom: 20px; }
+.settings-section h3 {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
+.form-group input:focus { border-color: var(--primary); }
+.form-group .hint { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+.spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+.toast {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  background: var(--text);
+  color: white;
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  z-index: 300;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.ai-panel {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: none;
+}
+.ai-panel.show { display: block; }
+.ai-panel .ai-content { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+/* 批量 DOI 模态框 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 200; display: none; }
+.modal-overlay.show { display: flex; align-items: center; justify-content: center; }
+.modal { background: white; border-radius: 12px; padding: 24px; width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+.modal h3 { margin-bottom: 16px; }
+.modal textarea { width: 100%; height: 200px; border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 13px; font-family: monospace; resize: vertical; }
+.modal-btns { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+/* 搜索历史 */
+.history-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--border); border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 50; display: none; max-height: 300px; overflow-y: auto; }
+.history-dropdown.show { display: block; }
+.history-item { padding: 8px 16px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+.history-item:hover { background: var(--bg); }
+.history-item .hq { flex: 1; }
+.history-item .ht { color: var(--text-secondary); font-size: 11px; white-space: nowrap; margin-left: 12px; }
+.history-item .hd { color: var(--danger); cursor: pointer; margin-left: 8px; font-size: 11px; }
+/* 排序按钮 */
+.sort-btn { cursor: pointer; user-select: none; }
+.sort-btn:hover { color: var(--primary); }
+.sort-btn.active { color: var(--primary); font-weight: 600; }
+/* 搜索建议标签 */
+.suggest-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggest-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: #eff6ff;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>PaperLens</h1>
+  <div class="header-actions">
+    <button class="btn-icon" onclick="toggleAI()" title="AI 助手">AI</button>
+    <button class="btn-icon" onclick="toggleSettings()" title="设置">⚙</button>
+  </div>
+</div>
+
+<div class="search-section">
+  <div class="search-bar" style="position:relative">
+    <input type="text" id="searchInput" placeholder="输入检索词或自然语言描述，如：定量相位成像最新进展..." onkeydown="if(event.key==='Enter')doSmartSearch()" autocomplete="off">
+    <button class="btn btn-primary" id="searchBtn" onclick="doSmartSearch()">检索</button>
+    <button class="btn btn-outline" onclick="toggleHistory()" title="搜索历史" style="padding:10px 12px">⏱</button>
+    <button class="btn btn-outline" onclick="openDoiModal()" title="批量 DOI 导入" style="padding:10px 12px">📋</button>
+    <div class="history-dropdown" id="historyDropdown"></div>
+  </div>
+  <div style="max-width:900px;margin:4px auto 0;font-size:12px;color:#94a3b8;display:flex;gap:16px;align-items:center">
+    <span id="searchMode"></span>
+    <span style="margin-left:auto">输入中文或自然语言自动触发 AI 检索，输入英文关键词为普通检索</span>
+  </div>
+  <div id="suggestionBar" style="max-width:900px;margin:8px auto 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:24px">
+    <span style="font-size:12px;color:var(--text-secondary);margin-right:4px">试试：</span>
+  </div>
+  <div class="filters">
+    <div class="filter-group">
+      <label><input type="checkbox" id="usePubmed" checked> PubMed</label>
+      <label><input type="checkbox" id="useOpenalex" checked> OpenAlex</label>
+    </div>
+    <div class="filter-group">
+      期刊: <input type="text" id="filterJournal" placeholder="如 Nature Methods" style="width:140px">
+    </div>
+    <div class="filter-group">
+      字段: <select id="filterField" style="width:80px">
+        <option value="">默认</option>
+        <option value="ti">标题</option>
+        <option value="tiab">标题+摘要</option>
+        <option value="au">作者</option>
+        <option value="tw">自由词</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      年份: <input type="number" id="yearFrom" min="1900" max="2099" style="width:65px"> —
+      <input type="number" id="yearTo" min="1900" max="2099" style="width:65px">
+    </div>
+    <div class="filter-group">
+      类型: <select id="filterPubType" style="width:80px">
+        <option value="">全部</option>
+        <option value="review">综述</option>
+        <option value="clinical trial">临床试验</option>
+        <option value="meta-analysis">Meta分析</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      排序: <select id="sortBy">
+        <option value="relevance">相关度</option>
+        <option value="date">时间</option>
+        <option value="citations">引用</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      数量: <select id="maxResults">
+        <option value="20">20</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="ai-panel" id="aiPanel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong>AI 助手</strong>
+      <div>
+        <button class="btn btn-sm btn-outline" onclick="aiSummarize()">总结全部</button>
+        <button class="btn btn-sm btn-outline" onclick="closeAiPanel()" style="margin-left:4px">✕ 关闭</button>
+      </div>
+    </div>
+    <div class="ai-content" id="aiContent" style="line-height:1.8;font-size:14px">等待操作...</div>
+  </div>
+
+  <div id="results">
+    <div class="empty-state">
+      <div class="icon">📚</div>
+      <p>输入检索词开始搜索文献</p>
+      <p style="font-size:12px;margin-top:8px;color:#94a3b8">支持 PubMed 和 OpenAlex 双数据源</p>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span id="statusText">就绪</span>
+  <span>数据源: PubMed + OpenAlex</span>
+</div>
+
+<div class="settings-overlay" id="settingsOverlay" onclick="toggleSettings()"></div>
+<div class="settings-panel" id="settingsPanel">
+  <h2>⚙ 设置</h2>
+  <div class="settings-section">
+    <h3>数据源配置</h3>
+    <div class="form-group">
+      <label>PubMed Email</label>
+      <input type="email" id="cfgPubmedEmail" placeholder="your@email.com">
+      <div class="hint">可选，提高 NCBI API 速率限制</div>
+    </div>
+    <div class="form-group">
+      <label>PubMed API Key</label>
+      <input type="text" id="cfgPubmedKey" placeholder="可选">
+    </div>
+  </div>
+  <div class="settings-section">
+    <h3>AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）</h3>
+    <div class="toggle-row">
+      <label>启用检索 AI</label>
+      <input type="checkbox" id="cfgSearchAiEnabled">
+    </div>
+    <div class="form-group">
+      <label>提供商</label>
+      <select id="cfgSearchAiProvider">
+        <option value="deepseek">DeepSeek</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="ollama">Ollama (本地)</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="cfgSearchAiKey" placeholder="sk-...">
+    </div>
+    <div class="form-group">
+      <label>模型名称</label>
+      <input type="text" id="cfgSearchAiModel" placeholder="如 deepseek-chat（快速模型）">
+      <div class="hint">推荐：deepseek-chat / gpt-4o-mini</div>
+    </div>
+    <div class="form-group">
+      <label>端点 URL</label>
+      <input type="text" id="cfgSearchAiUrl" placeholder="留空使用默认端点">
+    </div>
+  </div>
+  <div class="settings-section">
+    <h3>AI 论文分析模型（总结/详析/对比，建议用高质量模型）</h3>
+    <div class="toggle-row">
+      <label>启用分析 AI</label>
+      <input type="checkbox" id="cfgAnalysisAiEnabled">
+    </div>
+    <div class="form-group">
+      <label>提供商</label>
+      <select id="cfgAnalysisAiProvider">
+        <option value="deepseek">DeepSeek</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="ollama">Ollama (本地)</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="cfgAnalysisAiKey" placeholder="sk-...">
+    </div>
+    <div class="form-group">
+      <label>模型名称</label>
+      <input type="text" id="cfgAnalysisAiModel" placeholder="如 deepseek-reasoner（高质量模型）">
+      <div class="hint">推荐：deepseek-reasoner / gpt-4o / claude-sonnet</div>
+    </div>
+    <div class="form-group">
+      <label>端点 URL</label>
+      <input type="text" id="cfgAnalysisAiUrl" placeholder="留空使用默认端点">
+    </div>
+  </div>
+  <div class="settings-section">
+    <h3>网络代理</h3>
+    <div class="form-group">
+      <label>HTTP 代理</label>
+      <input type="text" id="cfgProxyHttp" placeholder="http://127.0.0.1:7890">
+    </div>
+    <div class="form-group">
+      <label>HTTPS 代理</label>
+      <input type="text" id="cfgProxyHttps" placeholder="http://127.0.0.1:7890">
+    </div>
+  </div>
+  <div class="settings-section">
+    <h3>数据存储</h3>
+    <div class="form-group">
+      <label>配置与历史数据目录</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="dataDirPath" readonly style="flex:1;background:#f8fafc;font-size:12px">
+        <button class="btn btn-sm btn-outline" onclick="openDataDir()">打开文件夹</button>
+      </div>
+      <div class="hint">搜索历史、偏好设置、AI 配置均存储在此目录</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:20px">
+    <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+    <button class="btn btn-outline" onclick="toggleSettings()">取消</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 批量 DOI 模态框 -->
+<div class="modal-overlay" id="doiModal">
+  <div class="modal">
+    <h3>批量 DOI 导入</h3>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">每行一个 DOI，支持带 "doi:" 前缀</p>
+    <textarea id="doiTextarea" placeholder="10.1038/s41586-025-08985-1&#10;10.1021/acsnano.1c11507&#10;doi:10.1364/OL.417039"></textarea>
+    <div id="doiResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary)"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closeDoiModal()">取消</button>
+      <button class="btn btn-primary" id="doiBtn" onclick="batchDoiLookup()">查询</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+let allPapers = [];
+let currentPage = 1;
+const pageSize = 20;
+let checkedSet = new Set();
+let currentSort = ""; // 当前排序方式
+
+// 初始化：加载偏好和历史
+(async function init() {
+  const now = new Date().getFullYear();
+  document.getElementById("yearFrom").value = now - 5;
+  document.getElementById("yearTo").value = now;
+  document.getElementById("searchInput").focus();
+
+  // 加载用户偏好
+  try {
+    const r = await fetch(`${API}/api/preferences`);
+    if (r.ok) {
+      const prefs = await r.json();
+      if (prefs.yearFrom) document.getElementById("yearFrom").value = prefs.yearFrom;
+      if (prefs.yearTo) document.getElementById("yearTo").value = prefs.yearTo;
+      if (prefs.sortBy) document.getElementById("sortBy").value = prefs.sortBy;
+      if (prefs.maxResults) document.getElementById("maxResults").value = prefs.maxResults;
+      if (prefs.filterJournal) document.getElementById("filterJournal").value = prefs.filterJournal;
+      if (prefs.filterField) document.getElementById("filterField").value = prefs.filterField;
+      if (prefs.filterPubType) document.getElementById("filterPubType").value = prefs.filterPubType;
+    }
+  } catch { /* 忽略 */ }
+
+  // 加载搜索历史
+  await loadHistory();
+
+  // 初始化搜索建议
+  initSuggestions();
+})();
+
+// ========== 动态 Placeholder + 搜索建议 ==========
+const DEFAULT_SUGGESTIONS = [
+  "quantitative phase imaging review",
+  "super-resolution microscopy 2024",
+  "light-sheet microscopy live cell",
+  "expansion microscopy",
+  "单细胞测序最新进展",
+  "AI in medical imaging",
+  "CRISPR gene editing",
+  "spatial transcriptomics",
+  "deep learning microscopy",
+  "organoid imaging",
+  "fluorescent probe development",
+  "adaptive optics microscopy",
+];
+
+function getPlaceholderText() {
+  // 优先用搜索历史
+  if (_historyCache.length > 0) {
+    const item = _historyCache[Math.floor(Math.random() * Math.min(_historyCache.length, 10))];
+    return `试试搜索：${item.q}`;
+  }
+  // 没有历史则用默认建议
+  const tip = DEFAULT_SUGGESTIONS[Math.floor(Math.random() * DEFAULT_SUGGESTIONS.length)];
+  return `试试搜索：${tip}`;
+}
+
+function initSuggestions() {
+  const bar = document.getElementById("suggestionBar");
+  if (!bar) return;
+
+  // 清除旧标签（保留"试试："文字）
+  while (bar.children.length > 1) bar.removeChild(bar.lastChild);
+
+  // 从历史和默认建议中各取一些混合
+  const chips = [];
+  const histChips = _historyCache.slice(0, 5).map(h => ({ text: h.q, fromHistory: true }));
+  const defChips = DEFAULT_SUGGESTIONS
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 5)
+    .map(t => ({ text: t, fromHistory: false }));
+
+  // 交替混合
+  const maxLen = Math.max(histChips.length, defChips.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (histChips[i]) chips.push(histChips[i]);
+    if (defChips[i]) chips.push(defChips[i]);
+  }
+
+  chips.slice(0, 8).forEach(item => {
+    const chip = document.createElement("span");
+    chip.className = "suggest-chip";
+    chip.textContent = item.text;
+    chip.title = item.text;
+    chip.onclick = () => {
+      const input = document.getElementById("searchInput");
+      if (input.value.trim() && input.value.trim() !== item.text) {
+        if (!confirm(`当前搜索框有内容，是否替换为：${item.text}？`)) return;
+      }
+      input.value = item.text;
+      doSmartSearch();
+    };
+    bar.appendChild(chip);
+  });
+
+  // 动态 placeholder 轮播
+  startPlaceholderRotation();
+}
+
+let _placeholderInterval = null;
+function startPlaceholderRotation() {
+  const input = document.getElementById("searchInput");
+  if (!input) return;
+
+  // 立即设置一次
+  if (!input.value) input.placeholder = getPlaceholderText();
+
+  // 每 5 秒轮换
+  clearInterval(_placeholderInterval);
+  _placeholderInterval = setInterval(() => {
+    if (!input.value && document.activeElement !== input) {
+      input.placeholder = getPlaceholderText();
+    }
+  }, 5000);
+}
+
+
+// 保存偏好（防抖）
+let _prefTimer = null;
+function savePreferences() {
+  clearTimeout(_prefTimer);
+  _prefTimer = setTimeout(async () => {
+    const prefs = {
+      yearFrom: document.getElementById("yearFrom").value,
+      yearTo: document.getElementById("yearTo").value,
+      sortBy: document.getElementById("sortBy").value,
+      maxResults: document.getElementById("maxResults").value,
+      filterJournal: document.getElementById("filterJournal").value,
+      filterField: document.getElementById("filterField").value,
+      filterPubType: document.getElementById("filterPubType").value,
+    };
+    try {
+      await fetch(`${API}/api/preferences`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(prefs),
+      });
+    } catch { /* 忽略 */ }
+  }, 1000);
+}
+
+// 监听筛选条件变化，自动保存偏好
+document.querySelectorAll("#yearFrom, #yearTo, #sortBy, #maxResults, #filterJournal, #filterField, #filterPubType").forEach(el => {
+  el.addEventListener("change", savePreferences);
+});
+
+// Escape 键关闭模态框
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    closeDoiModal();
+    const dd = document.getElementById("historyDropdown");
+    if (dd) dd.classList.remove("show");
+    const overlay = document.getElementById("settingsOverlay");
+    if (overlay && overlay.classList.contains("show")) toggleSettings();
+  }
+});
+
+function detectNeedAI(input) {
+  if (/\[(?:ti|tiab|au|ta|tw|mh|pt|pdat)\]/i.test(input)) return false;
+  // 只有包含多个关键词 + 布尔运算符才算普通检索（避免单个 "not"/"or" 被误判）
+  if (/\b\w+\s+(AND|OR|NOT)\s+\w+\b/i.test(input)) return false;
+  if (/^\d+$/.test(input)) return false;
+  if (/^10\.\d{4,}\//.test(input)) return false;
+  if (/[一-鿿]/.test(input)) return true;
+  const nlWords = ['find','search','look for','latest','recent','review','survey','about','regarding','concerning','how','what','which','papers on','articles on','studies on','research on'];
+  const lower = input.toLowerCase();
+  for (const w of nlWords) { if (lower.includes(w)) return true; }
+  if (input.split(/\s+/).length > 5) return true;
+  return false;
+}
+
+async function doSmartSearch() {
+  const query = document.getElementById("searchInput").value.trim();
+  if (!query) { showToast("请输入检索词"); return; }
+  if (detectNeedAI(query)) await doAISearch();
+  else await doSearch();
+}
+
+// 普通检索
+async function doSearch() {
+  const query = document.getElementById("searchInput").value.trim();
+  if (!query) return;
+  const btn = document.getElementById("searchBtn");
+  btn.disabled = true;
+  btn.textContent = "检索中...";
+  setStatus("正在检索...");
+  const modeEl = document.getElementById("searchMode");
+  if (modeEl) modeEl.innerHTML = '<span style="color:#2563eb">● 普通检索模式</span>';
+
+  const body = {
+    query,
+    year_from: parseInt(document.getElementById("yearFrom").value) || 2020,
+    year_to: parseInt(document.getElementById("yearTo").value) || 2026,
+    sort: document.getElementById("sortBy").value,
+    max_results: parseInt(document.getElementById("maxResults").value) || 50,
+    use_pubmed: document.getElementById("usePubmed").checked,
+    use_openalex: document.getElementById("useOpenalex").checked,
+    journal: document.getElementById("filterJournal").value.trim(),
+    field: document.getElementById("filterField").value,
+    pub_type: document.getElementById("filterPubType").value,
+  };
+
+  try {
+    const r = await fetch(`${API}/api/search`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      allPapers = data.papers;
+      currentPage = 1;
+      checkedSet.clear();
+      currentSort = "";
+      renderResults();
+      setStatus(`找到 ${data.total} 篇文献`);
+    } else {
+      showToast(data.error || "检索失败");
+      setStatus("检索失败");
+    }
+  } catch (e) {
+    showToast("网络错误: " + e.message);
+    setStatus("网络错误");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "检索";
+  }
+}
+
+// AI 智能检索（JSON 同步请求 + 计时器）
+async function doAISearch() {
+  const query = document.getElementById("searchInput").value.trim();
+  if (!query) return;
+  const btn = document.getElementById("searchBtn");
+  btn.disabled = true;
+  btn.textContent = "AI 分析中...";
+  const modeEl = document.getElementById("searchMode");
+  if (modeEl) modeEl.innerHTML = '<span style="color:#8b5cf6">● AI 智能检索模式</span>';
+
+  // 计时器
+  let elapsed = 0;
+  const timer = setInterval(() => {
+    elapsed++;
+    setStatus(`AI 正在分析中... 已等待 ${elapsed} 秒`);
+  }, 1000);
+
+  const body = {
+    query,
+    max_results: parseInt(document.getElementById("maxResults").value) || 50,
+    use_pubmed: document.getElementById("usePubmed").checked,
+    use_openalex: document.getElementById("useOpenalex").checked,
+  };
+
+  try {
+    setStatus("AI 正在联网分析检索意图...");
+    const r = await fetch(`${API}/api/ai-search`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    clearInterval(timer);
+
+    const data = await r.json();
+    if (r.ok) {
+      allPapers = data.papers;
+      currentPage = 1;
+      checkedSet.clear();
+      currentSort = "";
+      renderResults();
+
+      if (data.explanation) {
+        const aiPanel = document.getElementById("aiPanel");
+        const aiContent = document.getElementById("aiContent");
+        aiPanel.classList.add("show");
+        aiContent.innerHTML = `<b>AI 检索策略：</b>${data.explanation}` +
+          (data.analysis?.suggested_keywords ? `<br><b>推荐关键词：</b>${data.analysis.suggested_keywords.join(", ")}` : "") +
+          `<br><b>实际检索式：</b><code>${data.query}</code>`;
+      }
+      setStatus(`AI 智能检索完成，找到 ${data.total} 篇文献（耗时 ${elapsed} 秒）`);
+    } else {
+      showToast(data.error || "AI 检索失败");
+      setStatus("AI 检索失败");
+    }
+  } catch (e) {
+    clearInterval(timer);
+    showToast("网络错误: " + e.message);
+    setStatus("网络错误");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "检索";
+  }
+}
+
+// 渲染结果
+function renderResults() {
+  const div = document.getElementById("results");
+  if (!allPapers.length) {
+    const lastStatus = document.getElementById("statusText")?.textContent || "";
+    const isNetworkError = lastStatus.includes("网络") || lastStatus.includes("错误");
+    const hint = isNetworkError
+      ? "网络连接异常，请检查网络或代理设置后重试"
+      : "试试更短的关键词 · 检查拼写 · 扩大年份范围 · 换一个数据源试试";
+    div.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>未找到相关文献</p>
+      <p style="font-size:12px;margin-top:12px;color:#94a3b8">${hint}</p></div>`;
+    setStatus("未找到相关文献");
+    return;
+  }
+
+  const totalPages = Math.ceil(allPapers.length / pageSize);
+  const start = (currentPage - 1) * pageSize;
+  const end = Math.min(start + pageSize, allPapers.length);
+  const page = allPapers.slice(start, end);
+  const selCount = checkedSet.size;
+  const exportLabel = (fmt, name) => selCount > 0 ? `${name} (${selCount}篇)` : `${name} (全部)`;
+
+  let html = `<div class="toolbar">
+    <div class="toolbar-left">共 ${allPapers.length} 篇，显示 ${start+1}-${end} <span id="selectedCount" style="color:var(--primary);font-weight:500">${selCount > 0 ? `（已选 ${selCount} 篇）` : ""}</span>
+      <span style="margin-left:16px;font-size:12px" id="sortBtns">
+        排序: <span class="sort-btn${currentSort==='citations'?' active':''}" onclick="sortPapers('citations')">被引↓</span>
+        <span class="sort-btn${currentSort==='date'?' active':''}" onclick="sortPapers('date')">时间↓</span>
+        <span class="sort-btn${currentSort==='title'?' active':''}" onclick="sortPapers('title')">标题↑</span>
+      </span>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn btn-sm btn-outline" onclick="selectAll()">全选/取消</button>
+      <button class="btn btn-sm btn-ai" id="btnSummary" onclick="aiAnalyzePapers('summary')" ${selCount > 1 ? 'style="display:none"' : ''}>AI 总结</button>
+      <button class="btn btn-sm btn-ai" id="btnDetail" onclick="aiAnalyzePapers('detail')" ${selCount > 1 ? 'style="display:none"' : ''}>AI 详析</button>
+      <button class="btn btn-sm btn-ai" id="btnCompare" onclick="aiAnalyzePapers('compare')" ${selCount < 2 ? 'style="display:none"' : ''}>AI 对比</button>
+      <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${exportLabel('ris', '导出 RIS')}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${exportLabel('bibtex', 'BibTeX')}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', 'CSV')}</button>
+    </div>
+  </div>`;
+
+  html += '<div class="paper-list">';
+  page.forEach((p, i) => {
+    const idx = start + i;
+    const isChecked = checkedSet.has(idx);
+    const authors = p.authors.length > 3 ? p.authors.slice(0, 3).join(", ") + " et al." : p.authors.join(", ");
+    const doiLink = p.doi ? `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" style="color:var(--primary);text-decoration:none">${p.doi}</a>` : "";
+    const oaLink = p.oa_url ? `<a href="${p.oa_url}" target="_blank" class="badge badge-green">OA</a>` : "";
+    const citationTag = p.citation_count > 0 ? `<span class="badge">被引 ${p.citation_count}</span>` : "";
+
+    html += `
+    <div class="paper-card${isChecked ? ' selected' : ''}" id="card-${idx}">
+      <div class="paper-header">
+        <input type="checkbox" class="paper-checkbox" data-idx="${idx}"${isChecked ? ' checked' : ''}>
+        <div class="paper-content">
+          <div class="paper-title" onclick="toggleAbstract(${idx})">${p.title || "无标题"}</div>
+          <div class="paper-meta">
+            <span class="tag">${authors}</span>
+            <span class="tag"><b>${p.journal || ""}</b></span>
+            <span class="tag">(${p.year || "?"})</span>
+            ${p.pmid ? `<span class="tag">PMID:${p.pmid}</span>` : ""}
+            ${doiLink ? `<span class="tag">DOI:${doiLink}</span>` : ""}
+            ${citationTag}
+            ${oaLink}
+          </div>
+          <div class="paper-abstract" id="abs-${idx}">${p.abstract || "<i style='color:#94a3b8'>该数据源无摘要，点击原文链接查看</i>"}</div>
+          <div class="paper-actions">
+            <button class="btn btn-sm btn-outline" onclick="toggleAbstract(${idx})">摘要</button>
+            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="window.open('https://doi.org/${encodeURIComponent(p.doi)}')">原文</button>` : ""}
+            ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title)}')">下载PDF</button>` : ""}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+
+  if (totalPages > 1) {
+    html += `<div class="pagination">
+      <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>上一页</button>
+      <span>第 ${currentPage}/${totalPages} 页</span>
+      <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>下一页</button>
+    </div>`;
+  }
+
+  div.innerHTML = html;
+}
+
+function toggleAbstract(idx) {
+  const el = document.getElementById(`abs-${idx}`);
+  if (el) el.classList.toggle("show");
+}
+
+function goPage(page) {
+  const totalPages = Math.ceil(allPapers.length / pageSize);
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderResults();
+  window.scrollTo(0, 0);
+}
+
+function selectAll() {
+  const checkboxes = document.querySelectorAll(".paper-checkbox");
+  const allChecked = Array.from(checkboxes).every(c => c.checked);
+  checkboxes.forEach(c => {
+    const idx = parseInt(c.dataset.idx);
+    c.checked = !allChecked;
+    c.closest(".paper-card").classList.toggle("selected", c.checked);
+    if (c.checked) checkedSet.add(idx); else checkedSet.delete(idx);
+  });
+  updateSelectedCount();
+}
+
+document.addEventListener("change", e => {
+  if (e.target.classList.contains("paper-checkbox")) {
+    const idx = parseInt(e.target.dataset.idx);
+    e.target.closest(".paper-card").classList.toggle("selected", e.target.checked);
+    if (e.target.checked) checkedSet.add(idx); else checkedSet.delete(idx);
+    updateSelectedCount();
+  }
+});
+
+function updateSelectedCount() {
+  const count = checkedSet.size;
+  const el = document.getElementById("selectedCount");
+  if (el) el.textContent = count > 0 ? `（已选 ${count} 篇）` : "";
+  // 动态切换 AI 按钮显隐
+  const btnS = document.getElementById("btnSummary");
+  const btnD = document.getElementById("btnDetail");
+  const btnC = document.getElementById("btnCompare");
+  if (btnS) btnS.style.display = count > 1 ? "none" : "";
+  if (btnD) btnD.style.display = count > 1 ? "none" : "";
+  if (btnC) btnC.style.display = count < 2 ? "none" : "";
+}
+
+function getSelectedIndices() {
+  return Array.from(checkedSet).sort((a, b) => a - b);
+}
+
+// 导出
+async function exportSelected(fmt) {
+  const indices = Array.from(checkedSet).sort((a, b) => a - b);
+  try {
+    const r = await fetch(`${API}/api/export`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({format: fmt, indices}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      downloadFile(data.content, data.filename, data.mime);
+      showToast(`已导出 ${data.filename}（${indices.length > 0 ? indices.length + '篇' : '全部'}）`);
+    } else {
+      showToast(data.error || "导出失败");
+    }
+  } catch (e) {
+    showToast("导出错误: " + e.message);
+  }
+}
+
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// 设置
+async function loadSettings() {
+  try {
+    const r = await fetch(`${API}/api/config`);
+    const cfg = await r.json();
+    const pm = cfg.sources?.pubmed || {};
+    const searchAi = cfg.ai_search || cfg.ai || {};
+    const analysisAi = cfg.ai_analysis || cfg.ai || {};
+    const px = cfg.proxy || {};
+
+    document.getElementById("cfgPubmedEmail").value = pm.email || "";
+    document.getElementById("cfgPubmedKey").value = pm.api_key || "";
+
+    document.getElementById("cfgSearchAiEnabled").checked = searchAi.enabled || false;
+    document.getElementById("cfgSearchAiProvider").value = searchAi.provider || "deepseek";
+    document.getElementById("cfgSearchAiKey").value = searchAi.api_key || "";
+    document.getElementById("cfgSearchAiModel").value = searchAi.model || "";
+    document.getElementById("cfgSearchAiUrl").value = searchAi.base_url || "";
+
+    document.getElementById("cfgAnalysisAiEnabled").checked = analysisAi.enabled || false;
+    document.getElementById("cfgAnalysisAiProvider").value = analysisAi.provider || "deepseek";
+    document.getElementById("cfgAnalysisAiKey").value = analysisAi.api_key || "";
+    document.getElementById("cfgAnalysisAiModel").value = analysisAi.model || "";
+    document.getElementById("cfgAnalysisAiUrl").value = analysisAi.base_url || "";
+
+    document.getElementById("cfgProxyHttp").value = px.http || "";
+    document.getElementById("cfgProxyHttps").value = px.https || "";
+
+    // 加载数据目录路径
+    try {
+      const dr = await fetch(`${API}/api/data-dir`);
+      if (dr.ok) {
+        const d = await dr.json();
+        document.getElementById("dataDirPath").value = d.path || "";
+      }
+    } catch { /* 忽略 */ }
+  } catch (e) {
+    console.error("Load config error:", e);
+  }
+}
+
+async function saveSettings() {
+  const cfg = {
+    sources: {
+      pubmed: { enabled: true, email: document.getElementById("cfgPubmedEmail").value.trim(), api_key: document.getElementById("cfgPubmedKey").value.trim() },
+      openalex: { enabled: true, email: "" },
+    },
+    ai_search: {
+      enabled: document.getElementById("cfgSearchAiEnabled").checked,
+      provider: document.getElementById("cfgSearchAiProvider").value,
+      api_key: document.getElementById("cfgSearchAiKey").value.trim(),
+      base_url: document.getElementById("cfgSearchAiUrl").value.trim(),
+      model: document.getElementById("cfgSearchAiModel").value.trim(),
+    },
+    ai_analysis: {
+      enabled: document.getElementById("cfgAnalysisAiEnabled").checked,
+      provider: document.getElementById("cfgAnalysisAiProvider").value,
+      api_key: document.getElementById("cfgAnalysisAiKey").value.trim(),
+      base_url: document.getElementById("cfgAnalysisAiUrl").value.trim(),
+      model: document.getElementById("cfgAnalysisAiModel").value.trim(),
+    },
+    proxy: {
+      http: document.getElementById("cfgProxyHttp").value.trim(),
+      https: document.getElementById("cfgProxyHttps").value.trim(),
+    },
+  };
+  try {
+    const r = await fetch(`${API}/api/config`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(cfg),
+    });
+    if (r.ok) { showToast("设置已保存"); toggleSettings(); }
+  } catch (e) {
+    showToast("保存失败: " + e.message);
+  }
+}
+
+async function openDataDir() {
+  try {
+    const r = await fetch(`${API}/api/open-data-dir`, {method: "POST"});
+    if (!r.ok) {
+      const data = await r.json();
+      showToast(data.error || "无法打开文件夹");
+    }
+  } catch (e) {
+    showToast("打开失败: " + e.message);
+  }
+}
+
+function toggleSettings() {
+  const overlay = document.getElementById("settingsOverlay");
+  const panel = document.getElementById("settingsPanel");
+  overlay.classList.toggle("show");
+  panel.classList.toggle("show");
+  if (panel.classList.contains("show")) loadSettings();
+}
+
+function toggleAI() { document.getElementById("aiPanel").classList.toggle("show"); }
+function closeAiPanel() { document.getElementById("aiPanel").classList.remove("show"); }
+
+async function aiSummarize() {
+  if (!allPapers.length) { showToast("请先检索文献"); return; }
+  const el = document.getElementById("aiContent");
+  const panel = document.getElementById("aiPanel");
+  panel.classList.add("show");
+  el.textContent = "AI 正在分析...";
+  try {
+    const r = await fetch(`${API}/api/ai/summarize`, {method: "POST"});
+    const data = await r.json();
+    el.innerHTML = formatAIText(data.response || data.error || "无结果");
+  } catch (e) {
+    el.textContent = "请求失败: " + e.message;
+  }
+}
+
+// AI 论文分析（流式输出）
+async function aiAnalyzePapers(mode, forceRefresh) {
+  const indices = getSelectedIndices();
+  if (!indices.length) { showToast("请先勾选要分析的论文"); return; }
+
+  const modeNames = {summary: "AI 总结", detail: "AI 详析", compare: "AI 对比"};
+  const el = document.getElementById("aiContent");
+  const panel = document.getElementById("aiPanel");
+  panel.classList.add("show");
+
+  // 计时器 + 流式区域
+  let elapsed = 0;
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b><span class="spinner" style="width:16px;height:16px;border-width:2px;vertical-align:middle"></span> ${modeNames[mode]}中...</b>
+      <span id="aiTimer" style="color:#94a3b8;font-size:12px">0 秒</span>
+    </div>
+    <div id="aiStreamText" style="line-height:1.8;font-size:14px;white-space:pre-wrap"></div>`;
+
+  const timer = setInterval(() => {
+    elapsed++;
+    const tEl = document.getElementById("aiTimer");
+    if (tEl) tEl.textContent = `${elapsed} 秒`;
+  }, 1000);
+
+  try {
+    const r = await fetch(`${API}/api/ai/analyze-papers`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({indices, mode, force_refresh: !!forceRefresh, stream: true}),
+    });
+    clearInterval(timer);
+
+    if (!r.ok) {
+      const ct = r.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const err = await r.json();
+        el.textContent = err.error || "分析失败";
+      } else {
+        el.textContent = "分析失败（服务器错误）";
+      }
+      return;
+    }
+
+    const ct = r.headers.get("content-type") || "";
+
+    if (ct.includes("application/json")) {
+      // 缓存命中，直接显示
+      const data = await r.json();
+      renderAIResult(el, modeNames[mode], data.response, data.count || indices.length, data.cached || false);
+    } else {
+      // 流式读取纯文本
+      const streamEl = document.getElementById("aiStreamText");
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, {stream: true});
+        fullText += chunk;
+        streamEl.innerHTML = formatAIText(fullText);
+        const tEl = document.getElementById("aiTimer");
+        if (tEl) tEl.textContent = `${fullText.length} 字`;
+        panel.scrollTop = panel.scrollHeight;
+      }
+
+      renderAIResult(el, modeNames[mode], fullText, indices.length, false);
+    }
+  } catch (e) {
+    clearInterval(timer);
+    el.textContent = "请求失败: " + e.message;
+  }
+}
+
+function renderAIResult(el, modeName, text, count, cached) {
+  const cachedTag = cached ? ' <span style="color:#10b981;font-size:12px">(缓存)</span>' : '';
+  const modeKey = modeName === "AI 总结" ? "summary" : modeName === "AI 详析" ? "detail" : "compare";
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b>${modeName}结果（${count} 篇）${cachedTag}</b>
+      <button class="btn btn-sm btn-outline" onclick="aiAnalyzePapers('${modeKey}', true)">重新生成</button>
+    </div>
+    <div style="line-height:1.8;font-size:14px">${formatAIText(text)}</div>`;
+}
+
+function formatAIText(text) {
+  if (!text) return "";
+  // 先转义 HTML（防 XSS），再转换换行
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\n\n+/g, '</p><p style="margin:10px 0">')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p style="margin:8px 0">')
+    .replace(/$/, '</p>');
+}
+
+function setStatus(text) {
+  document.getElementById("statusText").textContent = text;
+}
+
+function showToast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2500);
+}
+
+// ========== 搜索历史（服务器端持久化） ==========
+let _historyCache = [];
+let _skipHistorySave = false;
+
+async function loadHistory() {
+  try {
+    const r = await fetch(`${API}/api/history`);
+    if (r.ok) _historyCache = await r.json();
+  } catch { _historyCache = []; }
+}
+
+async function saveHistory(query, total) {
+  if (_skipHistorySave) return;
+  _historyCache = _historyCache.filter(item => item.q !== query);
+  _historyCache.unshift({ q: query, t: new Date().toLocaleString(), n: total });
+  if (_historyCache.length > 30) _historyCache = _historyCache.slice(0, 30);
+  try {
+    await fetch(`${API}/api/history`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(_historyCache),
+    });
+  } catch { /* 忽略 */ }
+}
+
+function toggleHistory() {
+  const dd = document.getElementById("historyDropdown");
+  if (dd.classList.contains("show")) { dd.classList.remove("show"); return; }
+  if (!_historyCache.length) { showToast("暂无搜索历史"); return; }
+  dd.innerHTML = "";
+  _historyCache.forEach((item, i) => {
+    const div = document.createElement("div");
+    div.className = "history-item";
+    div.onclick = () => runHistory(item.q);
+    const spanQ = document.createElement("span");
+    spanQ.className = "hq";
+    spanQ.textContent = item.q;
+    const spanN = document.createElement("span");
+    spanN.className = "ht";
+    spanN.textContent = `${item.n}篇`;
+    const spanD = document.createElement("span");
+    spanD.className = "hd";
+    spanD.textContent = "✕";
+    spanD.onclick = (e) => { e.stopPropagation(); deleteHistory(i); };
+    div.appendChild(spanQ);
+    div.appendChild(spanN);
+    div.appendChild(spanD);
+    dd.appendChild(div);
+  });
+  dd.classList.add("show");
+}
+
+function runHistory(query) {
+  document.getElementById("searchInput").value = query;
+  document.getElementById("historyDropdown").classList.remove("show");
+  _skipHistorySave = true;
+  doSmartSearch().finally(() => { _skipHistorySave = false; });
+}
+
+async function deleteHistory(idx) {
+  _historyCache.splice(idx, 1);
+  try {
+    await fetch(`${API}/api/history`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(_historyCache),
+    });
+  } catch { /* 忽略 */ }
+  const dd = document.getElementById("historyDropdown");
+  dd.classList.remove("show");
+  toggleHistory();
+}
+
+document.addEventListener("click", e => {
+  const dd = document.getElementById("historyDropdown");
+  if (dd && !e.target.closest(".search-bar")) dd.classList.remove("show");
+});
+
+// 包装搜索函数：自动保存历史 + 刷新建议（只包装一次）
+const _origDoSearch = doSearch;
+doSearch = async function() {
+  const q = document.getElementById("searchInput").value.trim();
+  await _origDoSearch();
+  if (allPapers.length) {
+    saveHistory(q, allPapers.length);
+    initSuggestions();
+  }
+};
+const _origDoAISearch = doAISearch;
+doAISearch = async function() {
+  const q = document.getElementById("searchInput").value.trim();
+  await _origDoAISearch();
+  if (allPapers.length) {
+    saveHistory(q, allPapers.length);
+    initSuggestions();
+  }
+};
+
+// ========== 功能2: 批量 DOI 导入 ==========
+function openDoiModal() {
+  document.getElementById("doiModal").classList.add("show");
+  document.getElementById("doiTextarea").value = "";
+  document.getElementById("doiResult").textContent = "";
+  document.getElementById("doiTextarea").focus();
+}
+function closeDoiModal() {
+  document.getElementById("doiModal").classList.remove("show");
+}
+async function batchDoiLookup() {
+  const raw = document.getElementById("doiTextarea").value.trim();
+  if (!raw) { showToast("请输入 DOI"); return; }
+  const dois = raw.split("\n").map(l => l.trim().replace(/^doi:\s*/i, "")).filter(l => l);
+  if (!dois.length) { showToast("未识别到有效 DOI"); return; }
+
+  const btn = document.getElementById("doiBtn");
+  btn.disabled = true;
+  btn.textContent = "查询中...";
+  document.getElementById("doiResult").textContent = `正在查询 ${dois.length} 个 DOI...`;
+
+  try {
+    const r = await fetch(`${API}/api/batch-doi`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({dois}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      allPapers = data.papers;
+      checkedSet.clear();
+      currentPage = 1;
+      renderResults();
+      const msg = data.not_found > 0
+        ? `找到 ${data.total} 篇，${data.not_found} 个 DOI 未匹配到（已替换之前的结果）`
+        : `找到 ${data.total} 篇（已替换之前的结果）`;
+      document.getElementById("doiResult").textContent = msg;
+      setStatus(`批量导入完成，${data.total} 篇文献`);
+      setTimeout(closeDoiModal, 2000);
+    } else {
+      document.getElementById("doiResult").textContent = data.error || "查询失败";
+    }
+  } catch (e) {
+    document.getElementById("doiResult").textContent = "网络错误: " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "查询";
+  }
+}
+
+// ========== 功能3: 结果排序 ==========
+function sortPapers(by) {
+  if (!allPapers.length) return;
+  // 再次点击同一排序 → 反转
+  if (currentSort === by) {
+    allPapers.reverse();
+  } else {
+    if (by === "citations") {
+      allPapers.sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
+    } else if (by === "date") {
+      allPapers.sort((a, b) => (b.year || 0) - (a.year || 0));
+    } else if (by === "title") {
+      allPapers.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    }
+  }
+  currentSort = by;
+  checkedSet.clear();
+  currentPage = 1;
+  renderResults();
+}
+
+// ========== 功能4: OA PDF 下载 ==========
+async function downloadOA(encodedUrl, encodedTitle) {
+  const url = decodeURIComponent(encodedUrl);
+  const title = decodeURIComponent(encodedTitle);
+  showToast("正在验证 PDF 链接...");
+  try {
+    const r = await fetch(`${API}/api/download-pdf`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({url, title}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      showToast(`正在打开: ${data.filename}`);
+      window.open(data.url, "_blank");
+    } else {
+      showToast(data.error || "无法下载");
+    }
+  } catch {
+    // 验证失败时直接打开链接
+    window.open(url, "_blank");
+  }
+}
+</script>
+</body>
+</html>
