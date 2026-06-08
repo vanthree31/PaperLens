@@ -345,11 +345,12 @@ body {
 
 <div class="search-section">
   <div class="search-bar" style="position:relative">
-    <input type="text" id="searchInput" placeholder="输入检索词或自然语言描述，如：定量相位成像最新进展..." onkeydown="if(event.key==='Enter')doSmartSearch()" autocomplete="off">
+    <input type="text" id="searchInput" placeholder="输入检索词或自然语言描述，如：定量相位成像最新进展..." onkeydown="handleSearchKeydown(event)" autocomplete="off">
     <button class="btn btn-primary" id="searchBtn" onclick="doSmartSearch()">检索</button>
     <button class="btn btn-outline" onclick="toggleHistory()" title="搜索历史" style="padding:10px 12px">⏱</button>
     <button class="btn btn-outline" onclick="openDoiModal()" title="批量 DOI 导入" style="padding:10px 12px">📋</button>
     <div class="history-dropdown" id="historyDropdown"></div>
+    <div class="history-dropdown" id="suggestDropdown"></div>
   </div>
   <div style="max-width:900px;margin:4px auto 0;font-size:12px;color:#94a3b8;display:flex;gap:16px;align-items:center">
     <span id="searchMode"></span>
@@ -714,6 +715,103 @@ document.addEventListener("keydown", e => {
   }
 });
 
+// Tab 补全 + 搜索建议下拉
+let _suggestIdx = -1;
+function handleSearchKeydown(e) {
+  const input = document.getElementById("searchInput");
+  const dd = document.getElementById("suggestDropdown");
+
+  if (e.key === "Enter") {
+    dd.classList.remove("show");
+    doSmartSearch();
+    return;
+  }
+
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const val = input.value.trim();
+    if (!val) {
+      // 空输入：显示所有建议
+      showSuggestDropdown("");
+      return;
+    }
+    // 尝试匹配并补全
+    const all = getAllSuggestions();
+    const match = all.find(s => s.toLowerCase().startsWith(val.toLowerCase()) && s.toLowerCase() !== val.toLowerCase());
+    if (match) {
+      input.value = match;
+      dd.classList.remove("show");
+    } else {
+      showSuggestDropdown(val);
+    }
+    return;
+  }
+
+  if (dd.classList.contains("show")) {
+    const items = dd.querySelectorAll(".history-item");
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      _suggestIdx = Math.min(_suggestIdx + 1, items.length - 1);
+      updateSuggestHighlight(items);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      _suggestIdx = Math.max(_suggestIdx - 1, 0);
+      updateSuggestHighlight(items);
+    } else if (e.key === "Escape") {
+      dd.classList.remove("show");
+    }
+  } else {
+    // 输入时实时显示匹配建议
+    setTimeout(() => showSuggestDropdown(input.value.trim()), 0);
+  }
+}
+
+function getAllSuggestions() {
+  const hist = _historyCache.map(h => h.q);
+  return [...new Set([...hist, ...DEFAULT_SUGGESTIONS])];
+}
+
+function showSuggestDropdown(val) {
+  const dd = document.getElementById("suggestDropdown");
+  const all = getAllSuggestions();
+  const filtered = val
+    ? all.filter(s => s.toLowerCase().includes(val.toLowerCase())).slice(0, 8)
+    : all.slice(0, 8);
+
+  if (!filtered.length) { dd.classList.remove("show"); return; }
+
+  dd.innerHTML = "";
+  filtered.forEach(text => {
+    const div = document.createElement("div");
+    div.className = "history-item";
+    div.onclick = () => {
+      document.getElementById("searchInput").value = text;
+      dd.classList.remove("show");
+      doSmartSearch();
+    };
+    const span = document.createElement("span");
+    span.className = "hq";
+    span.textContent = text;
+    div.appendChild(span);
+    dd.appendChild(div);
+  });
+  _suggestIdx = -1;
+  dd.classList.add("show");
+}
+
+function updateSuggestHighlight(items) {
+  items.forEach((el, i) => el.style.background = i === _suggestIdx ? "var(--bg)" : "");
+  if (items[_suggestIdx]) {
+    document.getElementById("searchInput").value = items[_suggestIdx].querySelector(".hq").textContent;
+  }
+}
+
+// 点击空白处关闭建议下拉
+document.addEventListener("click", e => {
+  const dd = document.getElementById("suggestDropdown");
+  if (dd && !e.target.closest(".search-bar")) dd.classList.remove("show");
+});
+
 function detectNeedAI(input) {
   if (/\[(?:ti|tiab|au|ta|tw|mh|pt|pdat)\]/i.test(input)) return false;
   // 只有包含多个关键词 + 布尔运算符才算普通检索（避免单个 "not"/"or" 被误判）
@@ -729,7 +827,17 @@ function detectNeedAI(input) {
 }
 
 async function doSmartSearch() {
-  const query = document.getElementById("searchInput").value.trim();
+  const input = document.getElementById("searchInput");
+  let query = input.value.trim();
+  // 搜索框为空时，自动使用 placeholder 中的推荐内容
+  if (!query) {
+    const ph = input.placeholder || "";
+    const match = ph.match(/^试试搜索[：:]\s*(.+)$/);
+    if (match) {
+      query = match[1].trim();
+      input.value = query;
+    }
+  }
   if (!query) { showToast("请输入检索词"); return; }
   if (detectNeedAI(query)) await doAISearch();
   else await doSearch();
