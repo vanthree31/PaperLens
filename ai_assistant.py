@@ -89,9 +89,13 @@ class AIAssistant:
         return {"model": self.model, "messages": messages, "temperature": 0.7, "max_tokens": 4096, "stream": stream}
 
     def _get_endpoint(self) -> str:
+        url = self.base_url.rstrip("/")
+        # 如果用户配置的 URL 已经包含完整路径，直接使用
+        if url.endswith("/chat/completions") or url.endswith("/messages"):
+            return url
         if self.provider == "anthropic":
-            return f"{self.base_url}/messages"
-        return f"{self.base_url}/chat/completions"
+            return f"{url}/messages"
+        return f"{url}/chat/completions"
 
     def _extract_content(self, data: dict) -> str:
         if self.provider == "anthropic":
