@@ -856,7 +856,7 @@ function applyLang() {
 
   // 状态栏
   const statusEl = document.getElementById("statusText");
-  if (statusEl && statusEl.textContent === "就绪" || statusEl?.textContent === "Ready") {
+  if (statusEl && (statusEl.textContent === "就绪" || statusEl.textContent === "Ready")) {
     statusEl.textContent = t("ready");
   }
 
@@ -955,12 +955,12 @@ function applySettingsLang() {
   if (h3s[3]) h3s[3].textContent = t("networkProxy");
   if (h3s[4]) h3s[4].textContent = t("dataStorage");
 
-  // 标签
+  // 标签（只匹配 .form-group label，不包括 .toggle-row label）
   const labels = section.querySelectorAll(".form-group label");
   const labelKeys = [
     "pubmedEmail", "pubmedAPIKey",
-    "enableSearchAI", "provider", "apiKey", "modelName", "endpointURL",
-    "enableAnalysisAI", "provider", "apiKey", "modelName", "endpointURL",
+    "provider", "apiKey", "modelName", "endpointURL",
+    "provider", "apiKey", "modelName", "endpointURL",
     "httpProxy", "httpsProxy",
     "dataDir", "exportPath"
   ];
@@ -971,9 +971,9 @@ function applySettingsLang() {
   // 提示
   const hints = section.querySelectorAll(".hint");
   const hintKeys = [
-    "pubmedEmailHint", "optional",
-    "searchAIHint", "endpointHint",
-    "analysisAIHint", "endpointHint",
+    "pubmedEmailHint",
+    "searchAIHint",
+    "analysisAIHint",
     "dataDirHint", "exportPathHint"
   ];
   hints.forEach((el, i) => {
@@ -1538,7 +1538,7 @@ document.addEventListener("change", e => {
 function updateSelectedCount() {
   const count = checkedSet.size;
   const el = document.getElementById("selectedCount");
-  if (el) el.textContent = count > 0 ? `（已选 ${count} 篇）` : "";
+  if (el) el.textContent = count > 0 ? `(${t("selected")} ${count} ${t("papers")})` : "";
   // 动态切换 AI 按钮显隐
   const btnS = document.getElementById("btnSummary");
   const btnD = document.getElementById("btnDetail");
@@ -1781,7 +1781,7 @@ async function aiSummarize() {
   try {
     const r = await fetch(`${API}/api/ai/summarize`, {method: "POST"});
     const data = await r.json();
-    el.innerHTML = formatAIText(data.response || data.error || currentLang === "zh" ? "无结果" : "No result");
+    el.innerHTML = formatAIText(data.response || data.error || (currentLang === "zh" ? "无结果" : "No result"));
   } catch (e) {
     el.textContent = `${t("requestFailed")} ${e.message}`;
   }
