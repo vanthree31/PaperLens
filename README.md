@@ -137,9 +137,11 @@ PaperLens/
 └── CONTRIBUTING.md
 ```
 
-## Roadmap
+## Roadmap (Planned — Not Yet Implemented)
 
-- [ ] PDF download for OA papers (integrated, not browser redirect)
+These are ideas for future development. Contributions welcome!
+
+- [ ] Integrated OA PDF download (currently opens in browser)
 - [ ] Citation graph visualization
 - [ ] Paper recommendation based on reading history
 - [ ] RAG integration for literature review assistance
