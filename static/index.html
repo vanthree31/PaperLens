@@ -3158,8 +3158,10 @@ function graphOpenOriginal() {
 
 function openGraphNodeInNewGraph() {
   if (!_graphPaper || !_graphPaper.doi) { showToast(t("noDOI")); return; }
-  closeGraph();
-  showCitationGraph(encodeURIComponent(_graphPaper.doi), encodeURIComponent(_graphPaper.title));
+  // 保存当前论文信息，因为新图谱会覆盖 _graphPaper
+  const doi = _graphPaper.doi;
+  const title = _graphPaper.title;
+  openNewCitationGraph(doi, title);
 }
 
 // ========== Novelty Detection ==========
