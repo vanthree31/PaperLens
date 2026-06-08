@@ -615,6 +615,7 @@ body {
       <button class="btn btn-sm btn-ai" onclick="graphAnalyze('detail')">AI 详析</button>
       <button class="btn btn-sm btn-ai" onclick="graphNoveltyDetection()">创新点检测</button>
       <button class="btn btn-sm btn-outline" onclick="graphDiscoverRelated()" id="graphRelatedBtn">发现相关论文</button>
+      <button class="btn btn-sm btn-outline" onclick="openGraphNodeInNewGraph()" id="graphNewGraphBtn">在新图谱中打开</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('ris')">导出 RIS</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('bibtex')">BibTeX</button>
       <button class="btn btn-sm btn-outline" onclick="graphDownloadPDF()">下载 PDF</button>
@@ -751,6 +752,7 @@ const LANGS = {
     // 引用图谱
     citationGraph: "引用关系图谱", legendCenter: "当前论文", legendCiting: "引用了此论文", legendReferenced: "此论文引用",
     loadingGraph: "加载引用关系中...", noDOI: "该论文无 DOI，无法查看引用关系",
+    openNewGraph: "在新图谱中打开",
     // AI 功能
     pleaseSearchFirst: "请先检索文献", pleaseSelectPapers: "请先勾选要分析的论文",
     aiFailed: "AI 检索失败", analysisFailed: "分析失败", serverError: "分析失败（服务器错误）",
@@ -844,6 +846,7 @@ const LANGS = {
     // Citation graph
     citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
     loadingGraph: "Loading citation graph...", noDOI: "No DOI available for citation graph",
+    openNewGraph: "Open in New Graph",
     // AI features
     pleaseSearchFirst: "Please search papers first", pleaseSelectPapers: "Please select papers to analyze first",
     aiFailed: "AI search failed", analysisFailed: "Analysis failed", serverError: "Analysis failed (server error)",
@@ -2396,9 +2399,9 @@ function renderGraph(data) {
   // 力模拟
   _graphSimulation = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id(d => d.id).distance(200))
-    .force("charge", d3.forceManyBody().strength(-800))
+    .force("charge", d3.forceManyBody().strength(-400))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collide", d3.forceCollide().radius(d => d.radius + 30))
+    .force("collide", d3.forceCollide().radius(d => d.radius + 50).strength(0.8).iterations(3))
     .on("tick", () => {
       link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
           .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -2441,132 +2444,168 @@ function setGraphPaper(paper) {
 }
 
 async function expandGraphNode(d) {
-  const key = d.doi || d.fullTitle || d.id;
-  if (!key || _graphExpanded.has(key)) return;
-  _graphExpanded.add(key);
-
-  setGraphPaper({ doi: d.doi || "", title: d.fullTitle, year: d.year, citations: d.citations, oa_url: d.oa_url || "" });
-
   if (!d.doi) { showToast("该论文无 DOI，无法加载引用关系"); return; }
+  openNewCitationGraph(d.doi, d.fullTitle || "");
+}
 
-  showToast("正在加载引用关系...");
-  try {
-    const r = await fetch(`${API}/api/citation-graph`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ doi: d.doi }),
-    });
-    const data = await r.json();
-    if (!r.ok) { showToast(data.error || "加载失败"); return; }
+let _graphCounter = 0;
+function openNewCitationGraph(doi, title) {
+  const gid = "graph-" + (++_graphCounter);
 
-    const nodes = renderGraph._nodes;
-    const links = renderGraph._links;
-    const container = renderGraph._container;
-    if (!nodes || !links || !container) return;
+  const overlay = document.createElement("div");
+  overlay.className = "graph-overlay show";
+  overlay.id = gid + "-overlay";
+  overlay.style.zIndex = 200 + _graphCounter;
+  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
 
-    const existingDois = new Set(nodes.map(n => n.doi).filter(Boolean));
-    const maxCitations = Math.max(d.citations || 1, 1);
-    const citingScale = d3.scaleSqrt().domain([0, maxCitations]).range([14, 22]);
-    const refScale = d3.scaleSqrt().domain([0, maxCitations]).range([12, 20]);
-    const colorMap = { center: "#2563eb", citing: "#10b981", referenced: "#f59e0b" };
+  overlay.innerHTML = `
+    <div class="graph-panel" id="${gid}-panel">
+      <div class="graph-header">
+        <h3>${t("citationGraph")} - ${(title || doi).substring(0, 60)}</h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-overlay').remove()">✕ ${t("close")}</button>
+        </div>
+      </div>
+      <div class="graph-body" id="${gid}-body">
+        <svg id="${gid}-svg" style="width:100%;height:100%"></svg>
+        <div class="graph-legend">
+          <div><span class="dot" style="background:#2563eb"></span> ${t("legendCenter")}</div>
+          <div><span class="dot" style="background:#10b981"></span> ${t("legendCiting")}</div>
+          <div><span class="dot" style="background:#f59e0b"></span> ${t("legendReferenced")}</div>
+        </div>
+      </div>
+    </div>`;
 
-    let newCount = 0;
-    const srcNode = nodes.find(n => n.doi === d.doi) || nodes.find(n => n.id === "center");
+  document.body.appendChild(overlay);
 
-    // ---- 计算新节点位置：确定性扇形排列，不依赖力模拟 ----
-    const newCiting = (data.citing || []).filter(p => !(p.doi && existingDois.has(p.doi))).slice(0, 8);
-    const newRef = (data.referenced || []).filter(p => !(p.doi && existingDois.has(p.doi))).slice(0, 8);
+  const svgEl = document.getElementById(gid + "-svg");
+  svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${t("loadingGraph")}</text>`;
 
-    // 已有节点的包围圈：取所有已存在节点到 srcNode 的最大距离，新节点放在更外层
-    let maxDist = 250;
-    nodes.forEach(n => {
-      if (n === srcNode) return;
-      const dd = Math.sqrt((n.x - srcNode.x) ** 2 + (n.y - srcNode.y) ** 2);
-      if (dd > maxDist) maxDist = dd;
-    });
-    const baseDist = maxDist + 140; // 新圈层 = 已有最远距离 + 间距
+  fetch(`${API}/api/citation-graph`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ doi }),
+  }).then(r => r.json()).then(data => {
+    if (!data.paper) { svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${data.error || t("analysisFailed")}</text>`; return; }
+    renderGraphInto(svgEl, data, doi, title, overlay, gid);
+  }).catch(e => {
+    svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
+  });
+}
 
-    function placeNodes(list, type, baseAngle) {
-      const count = list.length;
-      if (!count) return;
-      const arc = Math.min(Math.PI * 0.8, count * 0.45); // 总扇形角度，随数量增长但不超过 144°
-      const startAngle = baseAngle - arc / 2;
-      const angleStep = count > 1 ? arc / (count - 1) : 0;
-      list.forEach((p, i) => {
-        const angle = count > 1 ? startAngle + angleStep * i : baseAngle;
-        const r = type === "citing" ? citingScale(p.citations) : refScale(p.citations);
-        const dist = baseDist + r;
-        const nid = `${type[0]}-${Date.now()}-${i}`;
-        const nNode = {
-          id: nid, fullTitle: p.title, doi: p.doi || "",
-          year: p.year, citations: p.citations,
-          type, radius: r,
-          x: srcNode.x + Math.cos(angle) * dist,
-          y: srcNode.y + Math.sin(angle) * dist,
-          fx: srcNode.x + Math.cos(angle) * dist, // 锁定位置，不靠模拟
-          fy: srcNode.y + Math.sin(angle) * dist,
-        };
-        nodes.push(nNode);
-        links.push({ source: type === "citing" ? nNode : srcNode, target: type === "citing" ? srcNode : nNode, type });
-        if (p.doi) existingDois.add(p.doi);
-        newCount++;
-      });
-    }
+function renderGraphInto(svgEl, data, doi, title, overlayEl, gid) {
+  const width = svgEl.clientWidth || 800;
+  const height = svgEl.clientHeight || 600;
+  svgEl.innerHTML = "";
 
-    // citing 放在上方（-π/2），referenced 放在下方（+π/2）
-    placeNodes(newCiting, "citing", -Math.PI / 2);
-    placeNodes(newRef, "referenced", Math.PI / 2);
+  const svg = d3.select(svgEl);
+  const maxCitations = Math.max(data.paper.citations, 1);
 
-    if (!newCount) { showToast("没有新的引用关系"); return; }
+  svg.append("defs").selectAll("marker")
+    .data(["arrow-citing-" + gid, "arrow-ref-" + gid])
+    .join("marker")
+      .attr("id", d => d)
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 22).attr("refY", 0)
+      .attr("markerWidth", 8).attr("markerHeight", 8)
+      .attr("orient", "auto")
+    .append("path")
+      .attr("d", "M0,-4L10,0L0,4")
+      .attr("fill", d => d.includes("citing") ? "#10b981" : "#f59e0b");
 
-    // 更新 D3（使用 key function 确保正确绑定）
-    const linkG = container.select("g:nth-child(2)");
-    const nodeG = container.select("g:nth-child(3)");
+  const nodes = [];
+  const links = [];
+  const centerData = data.paper;
+  const centerNode = {
+    id: "center", fullTitle: centerData.title, doi: centerData.doi || "",
+    year: centerData.year, citations: centerData.citations,
+    type: "center", radius: 24,
+  };
+  nodes.push(centerNode);
 
-    const newLinkSel = linkG.selectAll("line").data(links, l => `${l.source.id || l.source}-${l.target.id || l.target}`).join("line")
+  const citingScale = d3.scaleSqrt().domain([0, maxCitations]).range([14, 22]);
+  const refScale = d3.scaleSqrt().domain([0, maxCitations]).range([12, 20]);
+
+  data.citing.slice(0, 10).forEach((p, i) => {
+    const node = {
+      id: `citing-${i}`, fullTitle: p.title, doi: p.doi || "",
+      year: p.year, citations: p.citations,
+      type: "citing", radius: citingScale(p.citations),
+    };
+    nodes.push(node);
+    links.push({ source: node, target: centerNode, type: "citing" });
+  });
+
+  data.referenced.slice(0, 10).forEach((p, i) => {
+    const node = {
+      id: `ref-${i}`, fullTitle: p.title, doi: p.doi || "",
+      year: p.year, citations: p.citations,
+      type: "referenced", radius: refScale(p.citations),
+    };
+    nodes.push(node);
+    links.push({ source: centerNode, target: node, type: "referenced" });
+  });
+
+  const colorMap = { center: "#2563eb", citing: "#10b981", referenced: "#f59e0b" };
+  const container = svg.append("g");
+
+  const zoomBehavior = d3.zoom().scaleExtent([0.15, 5]).on("zoom", e => {
+    container.attr("transform", e.transform);
+  });
+  svg.call(zoomBehavior);
+
+  const link = container.append("g").selectAll("line")
+    .data(links, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join("line")
       .attr("class", "graph-link")
-      .attr("stroke", l => colorMap[l.type])
+      .attr("stroke", d => colorMap[d.type])
       .attr("stroke-width", 1.5)
-      .attr("marker-end", l => `url(#arrow-${l.type === "citing" ? "citing" : "ref"})`);
+      .attr("marker-end", d => `url(#arrow-${d.type === "citing" ? "citing" : "ref"}-${gid})`);
 
-    const newNodeSel = nodeG.selectAll("g").data(nodes, n => n.id).join(enter => {
-      const g = enter.append("g").attr("class", "graph-node");
-      g.append("circle").attr("r", n => n.radius)
-        .attr("fill", n => colorMap[n.type]).attr("stroke", "#fff").attr("stroke-width", 2);
-      g.append("text").attr("class", "graph-label-text")
-        .attr("text-anchor", "middle").attr("dy", n => n.radius + 14)
-        .attr("font-size", n => n.type === "center" ? 12 : 10)
-        .attr("font-weight", n => n.type === "center" ? 600 : 400)
-        .attr("fill", "#475569").text(n => _graphLabel(n, 1));
-      g.append("text").attr("text-anchor", "middle").attr("dy", n => n.radius + 26)
-        .attr("font-size", 9).attr("fill", "#94a3b8")
-        .text(n => `${n.year} · ${t("cited")} ${n.citations}`);
-      g.append("title").text(n => `${n.fullTitle}\n${n.year} | ${t("cited")} ${n.citations}`);
-      return g;
+  const node = container.append("g").selectAll("g")
+    .data(nodes, d => d.id).join("g")
+      .attr("class", "graph-node")
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end", (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+      );
+
+  node.append("circle")
+    .attr("r", d => d.radius)
+    .attr("fill", d => colorMap[d.type])
+    .attr("stroke", "#fff").attr("stroke-width", 2);
+
+  node.append("text")
+    .attr("class", "graph-label-text")
+    .attr("text-anchor", "middle").attr("dy", d => d.radius + 14)
+    .attr("font-size", d => d.type === "center" ? 12 : 10)
+    .attr("font-weight", d => d.type === "center" ? 600 : 400)
+    .attr("fill", "#475569")
+    .text(d => _graphLabel(d, 1));
+
+  node.append("text")
+    .attr("text-anchor", "middle").attr("dy", d => d.radius + 26)
+    .attr("font-size", 9).attr("fill", "#94a3b8")
+    .text(d => `${d.year} · ${t("cited")} ${d.citations}`);
+
+  node.append("title")
+    .text(d => `${d.fullTitle}\n${d.year} | ${t("cited")} ${d.citations}`);
+
+  node.on("click", (e, d) => {
+    e.stopPropagation();
+    if (d.doi || d.fullTitle) expandGraphNode(d);
+  });
+
+  const sim = d3.forceSimulation(nodes)
+    .force("link", d3.forceLink(links).id(d => d.id).distance(200))
+    .force("charge", d3.forceManyBody().strength(-400))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide().radius(d => d.radius + 50).strength(0.8).iterations(3))
+    .on("tick", () => {
+      link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      node.attr("transform", d => `translate(${d.x},${d.y})`);
     });
-
-    newNodeSel.call(d3.drag()
-      .on("start", (e, n) => { if (!e.active) _graphSimulation.alphaTarget(0.3).restart(); n.fx = n.x; n.fy = n.y; })
-      .on("drag", (e, n) => { n.fx = e.x; n.fy = e.y; })
-      .on("end", (e, n) => { if (!e.active) _graphSimulation.alphaTarget(0); n.fx = null; n.fy = null; })
-    );
-
-    newNodeSel.on("click", (e, n) => {
-      e.stopPropagation();
-      if (n.doi || n.fullTitle) expandGraphNode(n);
-    });
-
-    renderGraph._linkSel = newLinkSel;
-    renderGraph._nodeSel = newNodeSel;
-    _graphSimulation.nodes(nodes);
-    _graphSimulation.force("link").links(links);
-    // 极低 alpha：只刷新 DOM 位置，不移动任何节点（全部 fx/fy 锁定）
-    _graphSimulation.alpha(0.001).restart();
-
-    showToast(`已展开 ${newCount} 个新节点`);
-  } catch (e) {
-    showToast("加载引用关系失败: " + e.message);
-  }
 }
 
 function graphAnalyze(mode) {
@@ -2653,6 +2692,12 @@ function graphOpenOriginal() {
   window.open(`https://doi.org/${encodeURIComponent(_graphPaper.doi)}`, "_blank");
 }
 
+function openGraphNodeInNewGraph() {
+  if (!_graphPaper || !_graphPaper.doi) { showToast(t("noDOI")); return; }
+  closeGraph();
+  showCitationGraph(encodeURIComponent(_graphPaper.doi), encodeURIComponent(_graphPaper.title));
+}
+
 // ========== Related Work Discovery ==========
 async function graphDiscoverRelated() {
   if (!_graphPaper || !_graphPaper.doi) { showToast("请先点击论文节点"); return; }
@@ -2696,8 +2741,17 @@ async function graphDiscoverRelated() {
     const newPapers = data.papers.filter(p => p.doi && !existingDois.has(p.doi)).slice(0, 8);
     if (!newPapers.length) { showToast("相关论文均已显示"); return; }
 
-    const arc = Math.min(Math.PI * 0.6, newPapers.length * 0.4);
-    const startAngle = -arc / 2; // 右侧扇形
+    // 沿 srcNode 向外方向展开
+    const svgEl = document.getElementById("graphSvg");
+    const svgW = svgEl?.clientWidth || 800;
+    const svgH = svgEl?.clientHeight || 600;
+    const dx = srcNode.x - svgW / 2;
+    const dy = srcNode.y - svgH / 2;
+    const baseAngle = Math.atan2(dy, dx) + Math.PI / 2; // 偏向侧面
+
+    const totalWidth = newPapers.reduce((sum) => sum + 32 + 20, 0);
+    const arc = Math.max(Math.PI * 0.5, Math.min(totalWidth / baseDist, Math.PI));
+    const startAngle = baseAngle - arc / 2;
     const angleStep = newPapers.length > 1 ? arc / (newPapers.length - 1) : 0;
 
     // 添加图例项（如果还没有）
@@ -2709,18 +2763,18 @@ async function graphDiscoverRelated() {
     }
 
     newPapers.forEach((p, i) => {
-      const angle = newPapers.length > 1 ? startAngle + angleStep * i : 0;
+      const angle = newPapers.length > 1 ? startAngle + angleStep * i : baseAngle;
       const r = 16;
       const dist = baseDist + r;
       const nid = `rel-${Date.now()}-${i}`;
+      const nx = srcNode.x + Math.cos(angle) * dist;
+      const ny = srcNode.y + Math.sin(angle) * dist;
       const nNode = {
         id: nid, fullTitle: p.title, doi: p.doi || "",
         year: p.year, citations: p.citations,
         type: "related", radius: r,
-        x: srcNode.x + Math.cos(angle) * dist,
-        y: srcNode.y + Math.sin(angle) * dist,
-        fx: srcNode.x + Math.cos(angle) * dist,
-        fy: srcNode.y + Math.sin(angle) * dist,
+        x: nx, y: ny,
+        _targetX: nx, _targetY: ny,
       };
       nodes.push(nNode);
       links.push({ source: nNode, target: srcNode, type: "related" });
@@ -2728,8 +2782,8 @@ async function graphDiscoverRelated() {
     });
 
     // 更新 D3
-    const linkG = container.select("g:nth-child(2)");
-    const nodeG = container.select("g:nth-child(3)");
+    const linkG = container.select("g:nth-child(1)");
+    const nodeG = container.select("g:nth-child(2)");
 
     linkG.selectAll("line").data(links, l => `${l.source.id || l.source}-${l.target.id || l.target}`).join("line")
       .attr("class", "graph-link")
@@ -2769,7 +2823,9 @@ async function graphDiscoverRelated() {
     renderGraph._nodeSel = nodeG.selectAll("g");
     _graphSimulation.nodes(nodes);
     _graphSimulation.force("link").links(links);
-    _graphSimulation.alpha(0.001).restart();
+    _graphSimulation.force("x", d3.forceX(n => n._targetX || n.x).strength(n => n._targetX ? 0.15 : 0));
+    _graphSimulation.force("y", d3.forceY(n => n._targetY || n.y).strength(n => n._targetY ? 0.15 : 0));
+    _graphSimulation.alpha(0.3).restart();
 
     showToast(`发现 ${newPapers.length} 篇相关论文（共同引用关系）`);
   } catch (e) {
