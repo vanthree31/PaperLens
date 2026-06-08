@@ -415,6 +415,14 @@ body {
 .group-tab:hover:not(.active) { background: var(--bg); }
 .add-group-btn { padding: 4px 8px; font-size: 12px; border-radius: 4px; cursor: pointer; border: 1px dashed var(--border); background: none; color: var(--text-secondary); }
 .add-group-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+/* 可拖动悬浮图谱 */
+.graph-float { position: fixed; background: var(--card); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; resize: both; min-width: 500px; min-height: 400px; }
+.graph-float .graph-header { cursor: move; user-select: none; }
+.graph-float .graph-body { flex: 1; overflow: hidden; position: relative; }
+.graph-float .graph-ai-panel { display: none; max-height: 250px; overflow-y: auto; border-top: 1px solid var(--border); background: #f0fdf4; padding: 12px 16px; }
+.graph-float .graph-ai-panel.show { display: block; }
+.graph-float-resize-handle { position: absolute; bottom: 0; right: 0; width: 16px; height: 16px; cursor: nwse-resize; }
 </style>
 
 <div class="header">
@@ -2617,9 +2625,9 @@ function renderGraph(data) {
   // 力模拟
   _graphSimulation = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id(d => d.id).distance(200))
-    .force("charge", d3.forceManyBody().strength(-400))
+    .force("charge", d3.forceManyBody().strength(-500))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collide", d3.forceCollide().radius(d => d.radius + 50).strength(0.8).iterations(3))
+    .force("collide", d3.forceCollide().radius(d => d.radius + 40).strength(1).iterations(5))
     .on("tick", () => {
       link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
           .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -2669,32 +2677,63 @@ async function expandGraphNode(d) {
 let _graphCounter = 0;
 function openNewCitationGraph(doi, title) {
   const gid = "graph-" + (++_graphCounter);
+  // 每个图谱实例独立的论文信息
+  const graphPaperState = { doi, title, oa_url: "", current: null };
 
-  const overlay = document.createElement("div");
-  overlay.className = "graph-overlay show";
-  overlay.id = gid + "-overlay";
-  overlay.style.zIndex = 200 + _graphCounter;
-  overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
+  const floatDiv = document.createElement("div");
+  floatDiv.className = "graph-float";
+  floatDiv.id = gid + "-float";
+  // 随机位置偏移，避免重叠
+  const offset = (_graphCounter % 6) * 30;
+  floatDiv.style.cssText = `left:${120 + offset}px;top:${80 + offset}px;width:850px;height:600px;z-index:${300 + _graphCounter}`;
 
-  overlay.innerHTML = `
-    <div class="graph-panel" id="${gid}-panel">
-      <div class="graph-header">
-        <h3>${t("citationGraph")} - ${(title || doi).substring(0, 60)}</h3>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-overlay').remove()">✕ ${t("close")}</button>
+  floatDiv.innerHTML = `
+    <div class="graph-header" id="${gid}-header">
+      <h3 style="font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t("citationGraph")} - ${(title || doi).substring(0, 50)}</h3>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button class="btn btn-sm btn-outline" onclick="toggleFloatGraphFullscreen('${gid}')" title="全屏">⛶</button>
+        <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-float').remove()" title="关闭">✕</button>
+      </div>
+    </div>
+    <div id="${gid}-toolbar" style="display:none;padding:6px 12px;border-bottom:1px solid var(--border);background:#fafbfc;gap:4px;flex-wrap:wrap;align-items:center">
+      <span id="${gid}-paperTitle" style="font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','summary')">AI 总结</button>
+      <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','detail')">AI 详析</button>
+      <button class="btn btn-sm btn-ai" onclick="floatGraphNovelty('${gid}')">创新点</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphDiscoverRelated('${gid}')">相关论文</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphOpenNew('${gid}')">新图谱</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphExport('${gid}','ris')">RIS</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphExport('${gid}','bibtex')">BibTeX</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphDownloadPDF('${gid}')">PDF</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphOpenOriginal('${gid}')">原文</button>
+    </div>
+    <div class="graph-body" id="${gid}-body" style="flex:1;overflow:hidden;position:relative">
+      <svg id="${gid}-svg" style="width:100%;height:100%"></svg>
+      <div class="graph-legend">
+        <div><span class="dot" style="background:#2563eb"></span> ${t("legendCenter")}</div>
+        <div><span class="dot" style="background:#10b981"></span> ${t("legendCiting")}</div>
+        <div><span class="dot" style="background:#f59e0b"></span> ${t("legendReferenced")}</div>
+        <div style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);color:#94a3b8;font-size:10px">滚轮缩放 · 拖拽平移 · 点击展开</div>
+      </div>
+    </div>
+    <div class="graph-ai-panel" id="${gid}-aiPanel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <strong style="font-size:12px">AI 分析</strong>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-sm btn-outline" onclick="floatGraphAiCopy('${gid}')">复制</button>
+          <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-aiPanel').classList.remove('show')">✕</button>
         </div>
       </div>
-      <div class="graph-body" id="${gid}-body">
-        <svg id="${gid}-svg" style="width:100%;height:100%"></svg>
-        <div class="graph-legend">
-          <div><span class="dot" style="background:#2563eb"></span> ${t("legendCenter")}</div>
-          <div><span class="dot" style="background:#10b981"></span> ${t("legendCiting")}</div>
-          <div><span class="dot" style="background:#f59e0b"></span> ${t("legendReferenced")}</div>
-        </div>
-      </div>
+      <div id="${gid}-aiContent" style="font-size:12px;line-height:1.7;white-space:pre-wrap"></div>
     </div>`;
 
-  document.body.appendChild(overlay);
+  document.body.appendChild(floatDiv);
+
+  // 拖动功能
+  makeDraggable(floatDiv, document.getElementById(gid + "-header"));
+
+  // 存储实例状态
+  floatDiv._graphState = graphPaperState;
 
   const svgEl = document.getElementById(gid + "-svg");
   svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${t("loadingGraph")}</text>`;
@@ -2705,10 +2744,232 @@ function openNewCitationGraph(doi, title) {
     body: JSON.stringify({ doi }),
   }).then(r => r.json()).then(data => {
     if (!data.paper) { svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${data.error || t("analysisFailed")}</text>`; return; }
-    renderGraphInto(svgEl, data, doi, title, overlay, gid);
+    renderGraphInto(svgEl, data, doi, title, floatDiv, gid);
   }).catch(e => {
     svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
   });
+}
+
+// 拖动功能
+function makeDraggable(el, handle) {
+  let isDragging = false, startX, startY, startLeft, startTop;
+  handle.addEventListener("mousedown", e => {
+    if (e.target.tagName === "BUTTON") return;
+    isDragging = true;
+    startX = e.clientX; startY = e.clientY;
+    startLeft = el.offsetLeft; startTop = el.offsetTop;
+    el.style.transition = "none";
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", e => {
+    if (!isDragging) return;
+    el.style.left = (startLeft + e.clientX - startX) + "px";
+    el.style.top = (startTop + e.clientY - startY) + "px";
+  });
+  document.addEventListener("mouseup", () => { isDragging = false; el.style.transition = ""; });
+}
+
+// 悬浮图谱全屏切换
+function toggleFloatGraphFullscreen(gid) {
+  const el = document.getElementById(gid + "-float");
+  if (el.dataset.fullscreen === "true") {
+    el.style.cssText = el.dataset.savedStyle;
+    el.dataset.fullscreen = "false";
+  } else {
+    el.dataset.savedStyle = el.style.cssText;
+    el.style.cssText = "left:0;top:0;width:100vw;height:100vh;z-index:999";
+    el.dataset.fullscreen = "true";
+  }
+  // 重新调整 SVG 尺寸
+  setTimeout(() => {
+    const svg = document.getElementById(gid + "-svg");
+    if (svg) { svg.setAttribute("width", svg.clientWidth); svg.setAttribute("height", svg.clientHeight); }
+  }, 300);
+}
+
+// 悬浮图谱设置当前论文
+function setFloatGraphPaper(gid, paper) {
+  const floatEl = document.getElementById(gid + "-float");
+  if (!floatEl) return;
+  const state = floatEl._graphState;
+  state.current = paper;
+  const toolbar = document.getElementById(gid + "-toolbar");
+  const titleEl = document.getElementById(gid + "-paperTitle");
+  if (paper) {
+    toolbar.style.display = "flex";
+    titleEl.textContent = paper.title || paper.doi || "";
+    if (paper.doi && !paper.oa_url) {
+      fetch(`${API}/api/paper-by-doi`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ doi: paper.doi }),
+      }).then(r => r.json()).then(data => { if (data.paper?.oa_url) state.current.oa_url = data.paper.oa_url; }).catch(() => {});
+    }
+  } else {
+    toolbar.style.display = "none";
+  }
+}
+
+// 悬浮图谱 AI 分析
+function floatGraphAnalyze(gid, mode) {
+  const state = document.getElementById(gid + "-float")._graphState;
+  const paper = state.current;
+  if (!paper) { showToast("请先点击论文节点"); return; }
+  const panel = document.getElementById(gid + "-aiPanel");
+  const content = document.getElementById(gid + "-aiContent");
+  panel.classList.add("show");
+  content.textContent = "AI 分析中...";
+
+  fetch(`${API}/api/paper-by-doi`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ doi: paper.doi }),
+  }).then(r => r.json()).then(data => {
+    if (!data.paper) { content.textContent = "获取论文失败"; return; }
+    const saved = allPapers;
+    allPapers = [data.paper];
+    checkedSet.clear();
+    checkedSet.add(0);
+    fetch(`${API}/api/ai/analyze-papers`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ indices: [0], mode, stream: true, lang: currentLang, force_refresh: true }),
+    }).then(r => {
+      if (!r.ok) { content.textContent = "AI 分析失败"; allPapers = saved; return; }
+      const ct = r.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        r.json().then(d => { content.innerHTML = formatAIText(d.response || "无结果"); allPapers = saved; });
+      } else {
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "";
+        function readChunk() {
+          reader.read().then(({ done, value }) => {
+            if (done) { content.innerHTML = formatAIText(fullText); allPapers = saved; return; }
+            fullText += decoder.decode(value, { stream: true });
+            content.innerHTML = formatAIText(fullText);
+            readChunk();
+          });
+        }
+        readChunk();
+      }
+    }).catch(e => { content.textContent = "请求失败"; allPapers = saved; });
+  }).catch(e => { content.textContent = "获取论文失败"; });
+}
+
+// 悬浮图谱创新点检测
+function floatGraphNovelty(gid) {
+  const state = document.getElementById(gid + "-float")._graphState;
+  const paper = state.current;
+  if (!paper) { showToast("请先点击论文节点"); return; }
+  const panel = document.getElementById(gid + "-aiPanel");
+  const content = document.getElementById(gid + "-aiContent");
+  panel.classList.add("show");
+  content.textContent = "AI 创新点检测中...";
+
+  fetch(`${API}/api/paper-by-doi`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ doi: paper.doi }),
+  }).then(r => r.json()).then(data => {
+    if (!data.paper) { content.textContent = "获取论文失败"; return; }
+    const saved = allPapers;
+    allPapers = [data.paper];
+    checkedSet.clear();
+    checkedSet.add(0);
+    fetch(`${API}/api/ai/analyze-papers`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ indices: [0], mode: "novelty", stream: true, lang: currentLang, force_refresh: true }),
+    }).then(r => {
+      if (!r.ok) { content.textContent = "AI 分析失败"; allPapers = saved; return; }
+      const ct = r.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        r.json().then(d => { content.innerHTML = formatAIText(d.response || "无结果"); allPapers = saved; });
+      } else {
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "";
+        function readChunk() {
+          reader.read().then(({ done, value }) => {
+            if (done) { content.innerHTML = formatAIText(fullText); allPapers = saved; return; }
+            fullText += decoder.decode(value, { stream: true });
+            content.innerHTML = formatAIText(fullText);
+            readChunk();
+          });
+        }
+        readChunk();
+      }
+    }).catch(e => { content.textContent = "请求失败"; allPapers = saved; });
+  }).catch(e => { content.textContent = "获取论文失败"; });
+}
+
+// 悬浮图谱发现相关论文
+async function floatGraphDiscoverRelated(gid) {
+  const state = document.getElementById(gid + "-float")._graphState;
+  const paper = state.current;
+  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
+  showToast("正在发现相关论文...");
+  try {
+    const r = await fetch(`${API}/api/related-papers`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ doi: paper.doi }),
+    });
+    const data = await r.json();
+    if (data.error) { showToast(data.error); return; }
+    if (!data.papers?.length) { showToast("未找到相关论文"); return; }
+    // 在新窗口中显示相关论文
+    const panel = document.getElementById(gid + "-aiPanel");
+    const content = document.getElementById(gid + "-aiContent");
+    panel.classList.add("show");
+    let html = `<strong>相关论文（基于共同引用）</strong>\n\n`;
+    data.papers.forEach((p, i) => {
+      html += `${i+1}. ${p.title}\n   ${p.year} · 引用 ${p.citations} · 共同引用 ${p.shared_refs}\n   DOI: ${p.doi}\n\n`;
+    });
+    content.innerHTML = formatAIText(html);
+  } catch (e) { showToast("发现相关论文失败"); }
+}
+
+// 悬浮图谱在新图谱中打开
+function floatGraphOpenNew(gid) {
+  const state = document.getElementById(gid + "-float")._graphState;
+  const paper = state.current;
+  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
+  openNewCitationGraph(paper.doi, paper.title);
+}
+
+// 悬浮图谱导出
+function floatGraphExport(gid, fmt) {
+  const state = document.getElementById(gid + "-float")._graphState;
+  const paper = state.current;
+  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
+  fetch(`${API}/api/paper-by-doi`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ doi: paper.doi }),
+  }).then(r => r.json()).then(data => {
+    if (!data.paper) return;
+    const saved = allPapers;
+    allPapers = [data.paper];
+    exportSelected(fmt).finally(() => { allPapers = saved; });
+  });
+}
+
+// 悬浮图谱下载 PDF
+function floatGraphDownloadPDF(gid) {
+  const state = document.getElementById(gid + "-float")._graphState;
+  const paper = state.current;
+  if (!paper?.oa_url) { showToast("无 OA 链接"); return; }
+  downloadOA(encodeURIComponent(paper.oa_url), encodeURIComponent(paper.title || "paper"));
+}
+
+// 悬浮图谱打开原文
+function floatGraphOpenOriginal(gid) {
+  const state = document.getElementById(gid + "-float")._graphState;
+  const paper = state.current;
+  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
+  window.open(`https://doi.org/${encodeURIComponent(paper.doi)}`);
+}
+
+// 悬浮图谱复制 AI 内容
+function floatGraphAiCopy(gid) {
+  const content = document.getElementById(gid + "-aiContent");
+  if (!content) return;
+  navigator.clipboard.writeText(content.textContent).then(() => showToast(t("copied"))).catch(() => {});
 }
 
 function renderGraphInto(svgEl, data, doi, title, overlayEl, gid) {
@@ -2816,9 +3077,9 @@ function renderGraphInto(svgEl, data, doi, title, overlayEl, gid) {
 
   const sim = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id(d => d.id).distance(200))
-    .force("charge", d3.forceManyBody().strength(-400))
+    .force("charge", d3.forceManyBody().strength(-500))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collide", d3.forceCollide().radius(d => d.radius + 50).strength(0.8).iterations(3))
+    .force("collide", d3.forceCollide().radius(d => d.radius + 40).strength(1).iterations(5))
     .on("tick", () => {
       link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
           .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
@@ -2947,29 +3208,41 @@ async function graphDiscoverRelated() {
     const colorMap = { center: "#2563eb", citing: "#10b981", referenced: "#f59e0b", related: "#8b5cf6" };
     const srcNode = nodes.find(n => n.doi === _graphPaper.doi) || nodes.find(n => n.id === "center");
 
-    // 计算放置位置 — 放在右侧弧形区域
-    let maxDist = 250;
+    // 计算放置位置 — 放在源节点周围环形区域
+    let maxDist = 200;
     nodes.forEach(n => {
       if (n === srcNode) return;
       const dd = Math.sqrt((n.x - srcNode.x) ** 2 + (n.y - srcNode.y) ** 2);
       if (dd > maxDist) maxDist = dd;
     });
-    const baseDist = maxDist + 160;
+    const baseDist = maxDist + 200; // 增加距离，避免重叠
 
     const newPapers = data.papers.filter(p => p.doi && !existingDois.has(p.doi)).slice(0, 8);
     if (!newPapers.length) { showToast("相关论文均已显示"); return; }
 
-    // 沿 srcNode 向外方向展开
+    // 计算环形分布的角度
     const svgEl = document.getElementById("graphSvg");
     const svgW = svgEl?.clientWidth || 800;
     const svgH = svgEl?.clientHeight || 600;
-    const dx = srcNode.x - svgW / 2;
-    const dy = srcNode.y - svgH / 2;
-    const baseAngle = Math.atan2(dy, dx) + Math.PI / 2; // 偏向侧面
 
-    const totalWidth = newPapers.reduce((sum) => sum + 32 + 20, 0);
-    const arc = Math.max(Math.PI * 0.5, Math.min(totalWidth / baseDist, Math.PI));
-    const startAngle = baseAngle - arc / 2;
+    // 找一个远离现有节点的方向作为起始角度
+    const existingAngles = nodes.filter(n => n !== srcNode).map(n => Math.atan2(n.y - srcNode.y, n.x - srcNode.x));
+    let bestAngle = 0;
+    let maxMinDist = 0;
+    // 尝试 12 个方向，找最空旷的
+    for (let a = 0; a < 12; a++) {
+      const testAngle = (a / 12) * Math.PI * 2;
+      const minDist = existingAngles.reduce((min, ea) => {
+        let diff = Math.abs(testAngle - ea);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        return Math.min(min, diff);
+      }, Infinity);
+      if (minDist > maxMinDist) { maxMinDist = minDist; bestAngle = testAngle; }
+    }
+
+    // 沿最空旷方向展开成扇形
+    const arc = Math.min(Math.PI * 0.8, newPapers.length * 0.35); // 每个节点间隔约 20 度
+    const startAngle = bestAngle - arc / 2;
     const angleStep = newPapers.length > 1 ? arc / (newPapers.length - 1) : 0;
 
     // 添加图例项（如果还没有）
@@ -2981,9 +3254,9 @@ async function graphDiscoverRelated() {
     }
 
     newPapers.forEach((p, i) => {
-      const angle = newPapers.length > 1 ? startAngle + angleStep * i : baseAngle;
+      const angle = newPapers.length > 1 ? startAngle + angleStep * i : bestAngle;
       const r = 16;
-      const dist = baseDist + r;
+      const dist = baseDist + r + i * 20; // 每个节点距离递增，避免重叠
       const nid = `rel-${Date.now()}-${i}`;
       const nx = srcNode.x + Math.cos(angle) * dist;
       const ny = srcNode.y + Math.sin(angle) * dist;
@@ -3041,9 +3314,12 @@ async function graphDiscoverRelated() {
     renderGraph._nodeSel = nodeG.selectAll("g");
     _graphSimulation.nodes(nodes);
     _graphSimulation.force("link").links(links);
-    _graphSimulation.force("x", d3.forceX(n => n._targetX || n.x).strength(n => n._targetX ? 0.15 : 0));
-    _graphSimulation.force("y", d3.forceY(n => n._targetY || n.y).strength(n => n._targetY ? 0.15 : 0));
-    _graphSimulation.alpha(0.3).restart();
+    // 增加位置引导力强度，确保相关论文节点不会挤在一起
+    _graphSimulation.force("x", d3.forceX(n => n._targetX || n.x).strength(n => n._targetX ? 0.4 : 0));
+    _graphSimulation.force("y", d3.forceY(n => n._targetY || n.y).strength(n => n._targetY ? 0.4 : 0));
+    // 增加碰撞检测半径，避免重叠
+    _graphSimulation.force("collide", d3.forceCollide().radius(d => d.radius + 30).strength(1).iterations(5));
+    _graphSimulation.alpha(0.5).restart();
 
     showToast(`发现 ${newPapers.length} 篇相关论文（共同引用关系）`);
   } catch (e) {
