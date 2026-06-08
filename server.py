@@ -330,7 +330,8 @@ def create_app():
         if not selected:
             return jsonify({"error": "选中的论文无效"}), 400
 
-        cache_key = f"{mode}_{lang}_{'_'.join(str(i) for i in indices)}"
+        paper_ids = "_".join(sorted(set(p.doi or p.pmid or str(i) for i, p in zip(indices, selected))))
+        cache_key = f"{mode}_{lang}_{paper_ids}"
         if not force_refresh and cache_key in ai_cache and ai_cache[cache_key]:
             return jsonify({"response": ai_cache[cache_key], "count": len(selected), "mode": mode, "cached": True})
 
