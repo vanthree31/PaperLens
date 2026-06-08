@@ -2,6 +2,31 @@
 
 All notable changes to PaperLens will be documented in this file.
 
+## [1.1.0] - 2026-06-08
+
+### Added
+- **Related Work Discovery**: find related papers through shared citation patterns (purple nodes in graph)
+- **Novelty Detection**: AI analysis mode that identifies research gaps, unexplored areas, and promising directions
+- Fullscreen toggle for citation graph with zoom state preservation
+- Reset zoom button in citation graph legend
+- Zoom level percentage display in graph legend
+- Click overlay background to close citation graph
+- Markdown bold (`**text**`) rendering in AI analysis results
+
+### Fixed
+- Citation graph expand: nodes no longer cluster — deterministic fan-shaped placement outside existing ring
+- Citation graph zoom now centers on mouse cursor position
+- Paper names fully display as zoom level increases (dynamic label length)
+- Main content area no longer hidden behind status bar (added bottom padding)
+- Graph panel fullscreen toggle with smooth CSS transition
+- D3 data join key functions prevent node/link misalignment on expand
+- Zoom behavior cleanup on graph reopen prevents duplicate handlers
+
+### Changed
+- Project repositioned from "Search Platform" to "AI-Powered Research Assistant"
+- README.md and README.zh-CN.md fully rewritten with architecture diagram
+- AI analysis prompt for "novelty" mode with 5 dimensions (both Chinese and English)
+
 ## [1.0.2] - 2026-06-08
 
 ### Added

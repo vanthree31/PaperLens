@@ -23,7 +23,7 @@ Thank you for your interest in contributing! PaperLens is built for researchers,
 ## Development Setup
 
 ```bash
-git clone https://github.com/yourusername/PaperLens.git
+git clone https://github.com/vanthree31/PaperLens.git
 cd PaperLens
 pip install -r requirements.txt
 python main.py

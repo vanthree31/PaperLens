@@ -125,7 +125,7 @@ body {
 .main {
   max-width: 960px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 16px 24px 48px;
 }
 .toolbar {
   display: flex;
@@ -381,6 +381,7 @@ body {
 .graph-node:active { cursor: grabbing; }
 .graph-node:hover circle { filter: brightness(1.1); stroke-width: 3; }
 .graph-link { stroke-opacity: 0.5; }
+.graph-panel { transition: width 0.2s, height 0.2s, max-width 0.2s, border-radius 0.2s; }
 .graph-panel.fullscreen { width: 100vw !important; height: 100vh !important; max-width: 100vw !important; border-radius: 0; }
 #graphToolbar .btn-sm { font-size: 12px; padding: 4px 10px; }
 #graphAiPanel.fullscreen { position: fixed; inset: 0; z-index: 300; max-height: none; display: flex; flex-direction: column; }
@@ -599,11 +600,12 @@ body {
 <div class="toast" id="toast"></div>
 
 <!-- 引用关系图谱 -->
-<div class="graph-overlay" id="graphOverlay">
+<div class="graph-overlay" id="graphOverlay" onclick="if(event.target===this)closeGraph()">
   <div class="graph-panel" id="graphPanelEl">
     <div class="graph-header">
       <h3 id="graphTitle">引用关系图谱</h3>
       <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-sm btn-outline" onclick="toggleGraphFullscreen()" id="graphFsBtn">⛶ 全屏</button>
         <button class="btn btn-sm btn-outline" onclick="closeGraph()">✕ 关闭</button>
       </div>
     </div>
@@ -611,6 +613,8 @@ body {
       <span id="graphPaperTitle" style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       <button class="btn btn-sm btn-ai" onclick="graphAnalyze('summary')">AI 总结</button>
       <button class="btn btn-sm btn-ai" onclick="graphAnalyze('detail')">AI 详析</button>
+      <button class="btn btn-sm btn-ai" onclick="graphNoveltyDetection()">创新点检测</button>
+      <button class="btn btn-sm btn-outline" onclick="graphDiscoverRelated()" id="graphRelatedBtn">发现相关论文</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('ris')">导出 RIS</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('bibtex')">BibTeX</button>
       <button class="btn btn-sm btn-outline" onclick="graphDownloadPDF()">下载 PDF</button>
@@ -622,7 +626,7 @@ body {
         <div><span class="dot" style="background:#2563eb"></span> <span id="legendCenter">当前论文</span></div>
         <div><span class="dot" style="background:#10b981"></span> <span id="legendCiting">引用了此论文</span></div>
         <div><span class="dot" style="background:#f59e0b"></span> <span id="legendReferenced">此论文引用</span></div>
-        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px">滚轮缩放 · 拖拽平移 · 点击节点展开引用</div>
+        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px"><span id="graphZoomLevel">100%</span> · 滚轮缩放 · 拖拽平移 · 点击节点展开引用 · <a href="#" onclick="resetGraphZoom();return false" style="color:#64748b">重置缩放</a></div>
       </div>
     </div>
     <div id="graphAiPanel" style="display:none;padding:12px 16px;border-top:1px solid var(--border);background:#f0fdf4;overflow-y:auto">
@@ -683,7 +687,7 @@ const LANGS = {
     // 结果
     totalPapers: "共", papers: "篇", showing: "显示", selected: "已选",
     sortBtn: "排序：", cited: "被引", date: "时间", title: "标题",
-    selectAll: "全选/取消", aiSummary: "AI 总结", aiDetail: "AI 详析", aiCompare: "AI 对比",
+    selectAll: "全选/取消", aiSummary: "AI 总结", aiDetail: "AI 详析", aiCompare: "AI 对比", aiNovelty: "创新点检测",
     exportRIS: "导出 RIS", bibtex: "BibTeX", csv: "CSV", all: "全部",
     noTitle: "无标题", noAbstract: "该数据源无摘要，点击原文链接查看",
     abstract: "摘要", original: "原文", downloadPDF: "下载PDF",
@@ -697,7 +701,7 @@ const LANGS = {
     aiAnalyzing: "AI 正在分析...", aiWaiting: "AI 正在分析中... 已等待", seconds: "秒",
     aiSearchStrategy: "AI 检索策略：", suggestedKeywords: "推荐关键词：", actualQuery: "实际检索式：",
     aiSearchComplete: "AI 智能检索完成，找到", papersFound: "篇文献（耗时",
-    aiSummarizing: "AI 总结中...", aiDetailing: "AI 详析中...", aiComparing: "AI 对比中...",
+    aiSummarizing: "AI 总结中...", aiDetailing: "AI 详析中...", aiComparing: "AI 对比中...", aiNoveltyDetecting: "AI 创新点检测中...",
     resultFor: "结果（", papersCount: "篇）", cached: "缓存",
     copied: "已复制到剪贴板", copyFailed: "复制失败，请手动选择复制",
     // 搜索模式
@@ -776,7 +780,7 @@ const LANGS = {
     // Results
     totalPapers: "Total", papers: "papers", showing: "Showing", selected: "Selected",
     sortBtn: "Sort:", cited: "Cited", date: "Date", title: "Title",
-    selectAll: "Select All", aiSummary: "AI Summary", aiDetail: "AI Detail", aiCompare: "AI Compare",
+    selectAll: "Select All", aiSummary: "AI Summary", aiDetail: "AI Detail", aiCompare: "AI Compare", aiNovelty: "Novelty Detection",
     exportRIS: "Export RIS", bibtex: "BibTeX", csv: "CSV", all: "All",
     noTitle: "No Title", noAbstract: "No abstract available for this source, click original link to view",
     abstract: "Abstract", original: "Original", downloadPDF: "Download PDF",
@@ -790,7 +794,7 @@ const LANGS = {
     aiAnalyzing: "AI is analyzing...", aiWaiting: "AI analyzing... waited", seconds: "s",
     aiSearchStrategy: "AI Search Strategy:", suggestedKeywords: "Suggested Keywords:", actualQuery: "Actual Query:",
     aiSearchComplete: "AI search complete, found", papersFound: "papers (took",
-    aiSummarizing: "AI Summarizing...", aiDetailing: "AI Detailing...", aiComparing: "AI Comparing...",
+    aiSummarizing: "AI Summarizing...", aiDetailing: "AI Detailing...", aiComparing: "AI Comparing...", aiNoveltyDetecting: "AI Novelty Detection...",
     resultFor: "Result (", papersCount: " papers)", cached: "Cached",
     copied: "Copied to clipboard", copyFailed: "Copy failed, please select and copy manually",
     // Search mode
@@ -1489,6 +1493,7 @@ function renderResults() {
       <button class="btn btn-sm btn-ai" id="btnSummary" onclick="aiAnalyzePapers('summary')" ${selCount > 1 ? 'style="display:none"' : ''}>${t("aiSummary")}</button>
       <button class="btn btn-sm btn-ai" id="btnDetail" onclick="aiAnalyzePapers('detail')" ${selCount > 1 ? 'style="display:none"' : ''}>${t("aiDetail")}</button>
       <button class="btn btn-sm btn-ai" id="btnCompare" onclick="aiAnalyzePapers('compare')" ${selCount < 2 ? 'style="display:none"' : ''}>${t("aiCompare")}</button>
+      <button class="btn btn-sm btn-ai" id="btnNovelty" onclick="aiAnalyzePapers('novelty')" ${selCount < 1 ? 'style="display:none"' : ''}>${t("aiNovelty")}</button>
       <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${exportLabel('ris', t("exportRIS"))}</button>
       <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${exportLabel('bibtex', t("bibtex"))}</button>
       <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', t("csv"))}</button>
@@ -1585,9 +1590,11 @@ function updateSelectedCount() {
   const btnS = document.getElementById("btnSummary");
   const btnD = document.getElementById("btnDetail");
   const btnC = document.getElementById("btnCompare");
+  const btnN = document.getElementById("btnNovelty");
   if (btnS) btnS.style.display = count > 1 ? "none" : "";
   if (btnD) btnD.style.display = count > 1 ? "none" : "";
   if (btnC) btnC.style.display = count < 2 ? "none" : "";
+  if (btnN) btnN.style.display = count < 1 ? "none" : "";
 }
 
 function getSelectedIndices() {
@@ -1834,7 +1841,7 @@ async function aiAnalyzePapers(mode, forceRefresh) {
   const indices = getSelectedIndices();
   if (!indices.length) { showToast(t("pleaseSelectPapers")); return; }
 
-  const modeNames = {summary: t("aiSummarizing"), detail: t("aiDetailing"), compare: t("aiComparing")};
+  const modeNames = {summary: t("aiSummarizing"), detail: t("aiDetailing"), compare: t("aiComparing"), novelty: t("aiNoveltyDetecting")};
   const el = document.getElementById("aiContent");
   const panel = document.getElementById("aiPanel");
   panel.classList.add("show");
@@ -1907,7 +1914,7 @@ async function aiAnalyzePapers(mode, forceRefresh) {
 
 function renderAIResult(el, modeName, text, count, cached) {
   const cachedTag = cached ? ` <span style="color:#10b981;font-size:12px">(${t("cached")})</span>` : '';
-  const modeKey = modeName === t("aiSummarizing") ? "summary" : modeName === t("aiDetailing") ? "detail" : "compare";
+  const modeKey = modeName === t("aiSummarizing") ? "summary" : modeName === t("aiDetailing") ? "detail" : modeName === t("aiComparing") ? "compare" : "novelty";
   window._lastAIText = text;
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1931,17 +1938,20 @@ function copyAIText() {
 
 function formatAIText(text) {
   if (!text) return "";
-  // 先转义 HTML（防 XSS），再转换换行
-  return text
+  // 先转义 HTML（防 XSS），再转换 Markdown 和换行
+  let s = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
+    .replace(/'/g, "&#39;");
+  // Markdown 粗体 **text**
+  s = s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  // 换行处理
+  s = s
     .replace(/\n\n+/g, '</p><p style="margin:10px 0">')
-    .replace(/\n/g, '<br>')
-    .replace(/^/, '<p style="margin:8px 0">')
-    .replace(/$/, '</p>');
+    .replace(/\n/g, '<br>');
+  return '<p style="margin:8px 0">' + s + '</p>';
 }
 
 function setStatus(text) {
@@ -2220,9 +2230,48 @@ function closeGraph() {
   _graphPaper = null;
   _graphExpanded.clear();
   _graphAiFs = false;
+  _graphFs = false;
   document.getElementById("graphAiPanel")?.classList.remove("fullscreen");
   document.getElementById("graphPanelEl")?.classList.remove("fullscreen");
   document.getElementById("graphOverlay").classList.remove("show");
+}
+
+function resetGraphZoom() {
+  const svgEl = document.getElementById("graphSvg");
+  if (svgEl && renderGraph._zoomBehavior) {
+    d3.select(svgEl).transition().duration(300).call(renderGraph._zoomBehavior.transform, d3.zoomIdentity);
+  }
+}
+
+let _graphFs = false;
+function toggleGraphFullscreen() {
+  _graphFs = !_graphFs;
+  const panel = document.getElementById("graphPanelEl");
+  const btn = document.getElementById("graphFsBtn");
+  panel.classList.toggle("fullscreen", _graphFs);
+  btn.textContent = _graphFs ? "⛶ 退出全屏" : "⛶ 全屏";
+  // 更新力模拟中心以适应新尺寸，保留缩放状态
+  setTimeout(() => {
+    const svgEl = document.getElementById("graphSvg");
+    if (_graphSimulation && svgEl) {
+      const w = svgEl.clientWidth || 800;
+      const h = svgEl.clientHeight || 600;
+      _graphSimulation.force("center", d3.forceCenter(w / 2, h / 2));
+      _graphSimulation.alpha(0.3).restart();
+      // 保留当前缩放比例
+      const savedTransform = renderGraph._currentTransform;
+      if (savedTransform && renderGraph._zoomBehavior) {
+        d3.select(svgEl).call(renderGraph._zoomBehavior.transform, savedTransform);
+      }
+    }
+  }, 250);
+}
+
+function _graphLabel(d, scale) {
+  const base = d.type === "center" ? 40 : 30;
+  const limit = Math.max(base, Math.floor(base * (scale || 1)));
+  const t = d.fullTitle || "";
+  return t.length > limit ? t.substring(0, limit) + "..." : t;
 }
 
 function renderGraph(data) {
@@ -2231,6 +2280,8 @@ function renderGraph(data) {
   const height = svgEl.clientHeight || 600;
 
   if (_graphSimulation) { _graphSimulation.stop(); _graphSimulation = null; }
+  // 移除旧的 zoom behavior 防止重复绑定
+  d3.select(svgEl).on(".zoom", null);
   svgEl.innerHTML = "";
 
   const svg = d3.select(svgEl);
@@ -2255,7 +2306,6 @@ function renderGraph(data) {
   const centerData = data.paper;
   const centerNode = {
     id: "center", fullTitle: centerData.title, doi: centerData.doi || "",
-    label: centerData.title.substring(0, 40) + (centerData.title.length > 40 ? "..." : ""),
     year: centerData.year, citations: centerData.citations,
     type: "center", radius: 24,
   };
@@ -2267,7 +2317,6 @@ function renderGraph(data) {
   data.citing.slice(0, 10).forEach((p, i) => {
     const node = {
       id: `citing-${i}`, fullTitle: p.title, doi: p.doi || "",
-      label: p.title.substring(0, 30) + (p.title.length > 30 ? "..." : ""),
       year: p.year, citations: p.citations,
       type: "citing", radius: citingScale(p.citations),
     };
@@ -2278,7 +2327,6 @@ function renderGraph(data) {
   data.referenced.slice(0, 10).forEach((p, i) => {
     const node = {
       id: `ref-${i}`, fullTitle: p.title, doi: p.doi || "",
-      label: p.title.substring(0, 30) + (p.title.length > 30 ? "..." : ""),
       year: p.year, citations: p.citations,
       type: "referenced", radius: refScale(p.citations),
     };
@@ -2289,17 +2337,28 @@ function renderGraph(data) {
   const colorMap = { center: "#2563eb", citing: "#10b981", referenced: "#f59e0b" };
 
   const container = svg.append("g");
-  svg.call(d3.zoom().scaleExtent([0.15, 5]).on("zoom", e => container.attr("transform", e.transform)));
+
+  // 缩放 — 以鼠标位置为中心
+  const zoomBehavior = d3.zoom().scaleExtent([0.15, 5]).on("zoom", e => {
+    container.attr("transform", e.transform);
+    renderGraph._currentTransform = e.transform; // 保存以便全屏切换时恢复
+    // 随缩放动态扩展论文名显示长度
+    const k = e.transform.k;
+    container.selectAll(".graph-label-text").text(d => _graphLabel(d, k));
+    const zoomEl = document.getElementById("graphZoomLevel");
+    if (zoomEl) zoomEl.textContent = Math.round(k * 100) + "%";
+  });
+  svg.call(zoomBehavior);
 
   const link = container.append("g").selectAll("line")
-    .data(links).join("line")
+    .data(links, d => `${d.source.id || d.source}-${d.target.id || d.target}`).join("line")
       .attr("class", "graph-link")
       .attr("stroke", d => colorMap[d.type])
       .attr("stroke-width", 1.5)
       .attr("marker-end", d => `url(#arrow-${d.type === "citing" ? "citing" : "ref"})`);
 
   const node = container.append("g").selectAll("g")
-    .data(nodes).join("g")
+    .data(nodes, d => d.id).join("g")
       .attr("class", "graph-node")
       .call(d3.drag()
         .on("start", (e, d) => { if (!e.active) _graphSimulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
@@ -2313,11 +2372,12 @@ function renderGraph(data) {
     .attr("stroke", "#fff").attr("stroke-width", 2);
 
   node.append("text")
+    .attr("class", "graph-label-text")
     .attr("text-anchor", "middle").attr("dy", d => d.radius + 14)
     .attr("font-size", d => d.type === "center" ? 12 : 10)
     .attr("font-weight", d => d.type === "center" ? 600 : 400)
     .attr("fill", "#475569")
-    .text(d => d.label);
+    .text(d => _graphLabel(d, 1));
 
   node.append("text")
     .attr("text-anchor", "middle").attr("dy", d => d.radius + 26)
@@ -2327,13 +2387,13 @@ function renderGraph(data) {
   node.append("title")
     .text(d => `${d.fullTitle}\n${d.year} | ${t("cited")} ${d.citations}`);
 
-  // 点击展开（无 hover 高亮干扰）
+  // 点击展开
   node.on("click", (e, d) => {
     e.stopPropagation();
     if (d.doi || d.fullTitle) expandGraphNode(d);
   });
 
-  // 力模拟 — 更大的间距
+  // 力模拟
   _graphSimulation = d3.forceSimulation(nodes)
     .force("link", d3.forceLink(links).id(d => d.id).distance(200))
     .force("charge", d3.forceManyBody().strength(-800))
@@ -2350,6 +2410,8 @@ function renderGraph(data) {
   renderGraph._nodes = nodes;
   renderGraph._links = links;
   renderGraph._container = container;
+  renderGraph._lastData = data;
+  renderGraph._zoomBehavior = zoomBehavior;
 }
 
 // ========== 图谱内功能 ==========
@@ -2411,43 +2473,57 @@ async function expandGraphNode(d) {
     let newCount = 0;
     const srcNode = nodes.find(n => n.doi === d.doi) || nodes.find(n => n.id === "center");
 
-    (data.citing || []).slice(0, 8).forEach((p, i) => {
-      if (p.doi && existingDois.has(p.doi)) return;
-      const nid = `c-${Date.now()}-${i}`;
-      const nNode = {
-        id: nid, fullTitle: p.title, doi: p.doi || "",
-        label: p.title.substring(0, 30) + (p.title.length > 30 ? "..." : ""),
-        year: p.year, citations: p.citations, type: "citing", radius: citingScale(p.citations),
-        x: srcNode.x + (Math.random() - 0.5) * 200, y: srcNode.y - 120 + (Math.random() - 0.5) * 80,
-      };
-      nodes.push(nNode);
-      links.push({ source: nNode, target: srcNode, type: "citing" });
-      if (p.doi) existingDois.add(p.doi);
-      newCount++;
-    });
+    // ---- 计算新节点位置：确定性扇形排列，不依赖力模拟 ----
+    const newCiting = (data.citing || []).filter(p => !(p.doi && existingDois.has(p.doi))).slice(0, 8);
+    const newRef = (data.referenced || []).filter(p => !(p.doi && existingDois.has(p.doi))).slice(0, 8);
 
-    (data.referenced || []).slice(0, 8).forEach((p, i) => {
-      if (p.doi && existingDois.has(p.doi)) return;
-      const nid = `r-${Date.now()}-${i}`;
-      const nNode = {
-        id: nid, fullTitle: p.title, doi: p.doi || "",
-        label: p.title.substring(0, 30) + (p.title.length > 30 ? "..." : ""),
-        year: p.year, citations: p.citations, type: "referenced", radius: refScale(p.citations),
-        x: srcNode.x + (Math.random() - 0.5) * 200, y: srcNode.y + 120 + (Math.random() - 0.5) * 80,
-      };
-      nodes.push(nNode);
-      links.push({ source: srcNode, target: nNode, type: "referenced" });
-      if (p.doi) existingDois.add(p.doi);
-      newCount++;
+    // 已有节点的包围圈：取所有已存在节点到 srcNode 的最大距离，新节点放在更外层
+    let maxDist = 250;
+    nodes.forEach(n => {
+      if (n === srcNode) return;
+      const dd = Math.sqrt((n.x - srcNode.x) ** 2 + (n.y - srcNode.y) ** 2);
+      if (dd > maxDist) maxDist = dd;
     });
+    const baseDist = maxDist + 140; // 新圈层 = 已有最远距离 + 间距
+
+    function placeNodes(list, type, baseAngle) {
+      const count = list.length;
+      if (!count) return;
+      const arc = Math.min(Math.PI * 0.8, count * 0.45); // 总扇形角度，随数量增长但不超过 144°
+      const startAngle = baseAngle - arc / 2;
+      const angleStep = count > 1 ? arc / (count - 1) : 0;
+      list.forEach((p, i) => {
+        const angle = count > 1 ? startAngle + angleStep * i : baseAngle;
+        const r = type === "citing" ? citingScale(p.citations) : refScale(p.citations);
+        const dist = baseDist + r;
+        const nid = `${type[0]}-${Date.now()}-${i}`;
+        const nNode = {
+          id: nid, fullTitle: p.title, doi: p.doi || "",
+          year: p.year, citations: p.citations,
+          type, radius: r,
+          x: srcNode.x + Math.cos(angle) * dist,
+          y: srcNode.y + Math.sin(angle) * dist,
+          fx: srcNode.x + Math.cos(angle) * dist, // 锁定位置，不靠模拟
+          fy: srcNode.y + Math.sin(angle) * dist,
+        };
+        nodes.push(nNode);
+        links.push({ source: type === "citing" ? nNode : srcNode, target: type === "citing" ? srcNode : nNode, type });
+        if (p.doi) existingDois.add(p.doi);
+        newCount++;
+      });
+    }
+
+    // citing 放在上方（-π/2），referenced 放在下方（+π/2）
+    placeNodes(newCiting, "citing", -Math.PI / 2);
+    placeNodes(newRef, "referenced", Math.PI / 2);
 
     if (!newCount) { showToast("没有新的引用关系"); return; }
 
-    // 更新 D3
+    // 更新 D3（使用 key function 确保正确绑定）
     const linkG = container.select("g:nth-child(2)");
     const nodeG = container.select("g:nth-child(3)");
 
-    const newLinkSel = linkG.selectAll("line").data(links).join("line")
+    const newLinkSel = linkG.selectAll("line").data(links, l => `${l.source.id || l.source}-${l.target.id || l.target}`).join("line")
       .attr("class", "graph-link")
       .attr("stroke", l => colorMap[l.type])
       .attr("stroke-width", 1.5)
@@ -2457,10 +2533,11 @@ async function expandGraphNode(d) {
       const g = enter.append("g").attr("class", "graph-node");
       g.append("circle").attr("r", n => n.radius)
         .attr("fill", n => colorMap[n.type]).attr("stroke", "#fff").attr("stroke-width", 2);
-      g.append("text").attr("text-anchor", "middle").attr("dy", n => n.radius + 14)
+      g.append("text").attr("class", "graph-label-text")
+        .attr("text-anchor", "middle").attr("dy", n => n.radius + 14)
         .attr("font-size", n => n.type === "center" ? 12 : 10)
         .attr("font-weight", n => n.type === "center" ? 600 : 400)
-        .attr("fill", "#475569").text(n => n.label);
+        .attr("fill", "#475569").text(n => _graphLabel(n, 1));
       g.append("text").attr("text-anchor", "middle").attr("dy", n => n.radius + 26)
         .attr("font-size", 9).attr("fill", "#94a3b8")
         .text(n => `${n.year} · ${t("cited")} ${n.citations}`);
@@ -2483,7 +2560,8 @@ async function expandGraphNode(d) {
     renderGraph._nodeSel = newNodeSel;
     _graphSimulation.nodes(nodes);
     _graphSimulation.force("link").links(links);
-    _graphSimulation.alpha(0.5).restart();
+    // 极低 alpha：只刷新 DOM 位置，不移动任何节点（全部 fx/fy 锁定）
+    _graphSimulation.alpha(0.001).restart();
 
     showToast(`已展开 ${newCount} 个新节点`);
   } catch (e) {
@@ -2573,6 +2651,178 @@ function graphDownloadPDF() {
 function graphOpenOriginal() {
   if (!_graphPaper || !_graphPaper.doi) return;
   window.open(`https://doi.org/${encodeURIComponent(_graphPaper.doi)}`, "_blank");
+}
+
+// ========== Related Work Discovery ==========
+async function graphDiscoverRelated() {
+  if (!_graphPaper || !_graphPaper.doi) { showToast("请先点击论文节点"); return; }
+
+  const btn = document.getElementById("graphRelatedBtn");
+  btn.disabled = true;
+  btn.textContent = "搜索中...";
+
+  try {
+    const r = await fetch(`${API}/api/related-papers`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ doi: _graphPaper.doi }),
+    });
+    const data = await r.json();
+    if (!r.ok) { showToast(data.error || "获取失败"); return; }
+
+    if (!data.papers || !data.papers.length) {
+      showToast("未找到相关论文");
+      return;
+    }
+
+    // 将相关论文作为新节点添加到图谱中
+    const nodes = renderGraph._nodes;
+    const links = renderGraph._links;
+    const container = renderGraph._container;
+    if (!nodes || !links || !container) return;
+
+    const existingDois = new Set(nodes.map(n => n.doi).filter(Boolean));
+    const colorMap = { center: "#2563eb", citing: "#10b981", referenced: "#f59e0b", related: "#8b5cf6" };
+    const srcNode = nodes.find(n => n.doi === _graphPaper.doi) || nodes.find(n => n.id === "center");
+
+    // 计算放置位置 — 放在右侧弧形区域
+    let maxDist = 250;
+    nodes.forEach(n => {
+      if (n === srcNode) return;
+      const dd = Math.sqrt((n.x - srcNode.x) ** 2 + (n.y - srcNode.y) ** 2);
+      if (dd > maxDist) maxDist = dd;
+    });
+    const baseDist = maxDist + 160;
+
+    const newPapers = data.papers.filter(p => p.doi && !existingDois.has(p.doi)).slice(0, 8);
+    if (!newPapers.length) { showToast("相关论文均已显示"); return; }
+
+    const arc = Math.min(Math.PI * 0.6, newPapers.length * 0.4);
+    const startAngle = -arc / 2; // 右侧扇形
+    const angleStep = newPapers.length > 1 ? arc / (newPapers.length - 1) : 0;
+
+    // 添加图例项（如果还没有）
+    const legend = document.querySelector(".graph-legend");
+    if (legend && !document.getElementById("legendRelated")) {
+      const div = document.createElement("div");
+      div.innerHTML = `<span class="dot" style="background:#8b5cf6"></span> <span id="legendRelated">相关论文</span>`;
+      legend.insertBefore(div, legend.querySelector("div:last-child"));
+    }
+
+    newPapers.forEach((p, i) => {
+      const angle = newPapers.length > 1 ? startAngle + angleStep * i : 0;
+      const r = 16;
+      const dist = baseDist + r;
+      const nid = `rel-${Date.now()}-${i}`;
+      const nNode = {
+        id: nid, fullTitle: p.title, doi: p.doi || "",
+        year: p.year, citations: p.citations,
+        type: "related", radius: r,
+        x: srcNode.x + Math.cos(angle) * dist,
+        y: srcNode.y + Math.sin(angle) * dist,
+        fx: srcNode.x + Math.cos(angle) * dist,
+        fy: srcNode.y + Math.sin(angle) * dist,
+      };
+      nodes.push(nNode);
+      links.push({ source: nNode, target: srcNode, type: "related" });
+      if (p.doi) existingDois.add(p.doi);
+    });
+
+    // 更新 D3
+    const linkG = container.select("g:nth-child(2)");
+    const nodeG = container.select("g:nth-child(3)");
+
+    linkG.selectAll("line").data(links, l => `${l.source.id || l.source}-${l.target.id || l.target}`).join("line")
+      .attr("class", "graph-link")
+      .attr("stroke", l => colorMap[l.type] || "#999")
+      .attr("stroke-width", l => l.type === "related" ? 1 : 1.5)
+      .attr("stroke-dasharray", l => l.type === "related" ? "4,3" : "none")
+      .attr("marker-end", l => {
+        if (l.type === "citing") return "url(#arrow-citing)";
+        if (l.type === "referenced") return "url(#arrow-ref)";
+        return "none";
+      });
+
+    nodeG.selectAll("g").data(nodes, n => n.id).join(enter => {
+      const g = enter.append("g").attr("class", "graph-node");
+      g.append("circle").attr("r", n => n.radius)
+        .attr("fill", n => colorMap[n.type] || "#999")
+        .attr("stroke", "#fff").attr("stroke-width", 2);
+      g.append("text").attr("class", "graph-label-text")
+        .attr("text-anchor", "middle").attr("dy", n => n.radius + 14)
+        .attr("font-size", 10).attr("fill", "#475569")
+        .text(n => _graphLabel(n, 1));
+      g.append("text").attr("text-anchor", "middle").attr("dy", n => n.radius + 26)
+        .attr("font-size", 9).attr("fill", "#94a3b8")
+        .text(n => `${n.year} · ${t("cited")} ${n.citations}`);
+      g.append("title").text(n => `${n.fullTitle}\n${n.year} | ${t("cited")} ${n.citations}`);
+      return g;
+    }).call(d3.drag()
+      .on("start", (e, n) => { if (!e.active) _graphSimulation.alphaTarget(0.3).restart(); n.fx = n.x; n.fy = n.y; })
+      .on("drag", (e, n) => { n.fx = e.x; n.fy = e.y; })
+      .on("end", (e, n) => { if (!e.active) _graphSimulation.alphaTarget(0); n.fx = null; n.fy = null; })
+    ).on("click", (e, n) => {
+      e.stopPropagation();
+      if (n.doi || n.fullTitle) expandGraphNode(n);
+    });
+
+    renderGraph._linkSel = linkG.selectAll("line");
+    renderGraph._nodeSel = nodeG.selectAll("g");
+    _graphSimulation.nodes(nodes);
+    _graphSimulation.force("link").links(links);
+    _graphSimulation.alpha(0.001).restart();
+
+    showToast(`发现 ${newPapers.length} 篇相关论文（共同引用关系）`);
+  } catch (e) {
+    showToast("获取相关论文失败: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "发现相关论文";
+  }
+}
+
+// ========== Novelty Detection ==========
+function graphNoveltyDetection() {
+  if (!_graphPaper) { showToast("请先点击论文节点"); return; }
+  const panel = document.getElementById("graphAiPanel");
+  const content = document.getElementById("graphAiContent");
+  panel.style.display = "block";
+  panel.classList.remove("fullscreen");
+  content.textContent = "AI 正在分析研究空白...";
+
+  fetch(`${API}/api/paper-by-doi`, {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ doi: _graphPaper.doi }),
+  }).then(r => r.json()).then(data => {
+    if (!data.paper) { content.textContent = "获取论文失败"; return; }
+    const saved = allPapers;
+    allPapers = [data.paper];
+    checkedSet.clear();
+    checkedSet.add(0);
+
+    fetch(`${API}/api/ai/analyze-papers`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ indices: [0], mode: "novelty", stream: true, lang: currentLang, force_refresh: true }),
+    }).then(r => {
+      if (!r.ok) { content.textContent = "AI 分析失败"; allPapers = saved; return; }
+      const ct = r.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        r.json().then(d => { content.innerHTML = formatAIText(d.response || "无结果"); allPapers = saved; });
+      } else {
+        const reader = r.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "";
+        function readChunk() {
+          reader.read().then(({ done, value }) => {
+            if (done) { content.innerHTML = formatAIText(fullText); allPapers = saved; return; }
+            fullText += decoder.decode(value, { stream: true });
+            content.innerHTML = formatAIText(fullText);
+            readChunk();
+          });
+        }
+        readChunk();
+      }
+    }).catch(e => { content.textContent = "请求失败: " + e.message; allPapers = saved; });
+  }).catch(e => { content.textContent = "获取论文失败: " + e.message; });
 }
 </script>
 </body>

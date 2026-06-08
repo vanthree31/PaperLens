@@ -155,6 +155,30 @@ What are the most值得关注 questions for continuing in this direction? Which 
 
 {papers_text}"""
 
+        elif mode == "novelty":
+            prompt = f"""You are a senior researcher with deep expertise in this field. Analyze the following papers and identify research gaps, unexplored directions, and opportunities for novel contributions.
+
+{fmt}
+
+Analyze from these perspectives:
+
+1. Under-explored Areas
+What aspects of this research topic have not been adequately studied? What questions remain unanswered?
+
+2. Methodological Gaps
+Are there methodological limitations that could be addressed with new approaches? What alternative methods could be applied?
+
+3. Contradictions and Tensions
+Are there conflicting findings or unresolved debates in the literature? What might explain these discrepancies?
+
+4. Cross-disciplinary Opportunities
+What insights from other fields could be applied to advance this research? Where do disciplinary boundaries limit progress?
+
+5. Promising Research Directions
+What are the most promising next steps? What experiments or studies would have the highest impact?
+
+{papers_text}"""
+
         else:  # summary
             prompt = f"""You are a senior researcher with deep expertise in this field. Summarize the following papers with maximum conciseness.
 
@@ -224,6 +248,30 @@ No pleasantries — straight to content.
 
 四、对后续研究的建议
 如果要在这个方向继续深入，最值得关注的问题是什么？哪些技术路线更有前景？
+
+{papers_text}"""
+
+        elif mode == "novelty":
+            prompt = f"""你是一位在该领域有深厚造诣的资深学者，请分析以下论文，识别研究空白、未探索方向和创新机会。你的读者是同行专家。
+
+{fmt}
+
+请从以下维度分析：
+
+一、未充分探索的领域
+这个研究主题有哪些方面还没有被充分研究？哪些关键问题仍然悬而未决？
+
+二、方法学空白
+现有方法有什么局限性？有哪些新的方法论可以尝试？技术路线上有什么可以突破的点？
+
+三、矛盾与争议
+文献中是否存在矛盾的发现或未解决的争论？这些分歧可能的原因是什么？
+
+四、跨学科机会
+其他领域有哪些思路可以借鉴来推动这项研究？学科边界在哪里限制了进展？
+
+五、有前景的研究方向
+最有价值的下一步是什么？哪些实验或研究会有最高的影响力？
 
 {papers_text}"""
 
@@ -314,7 +362,7 @@ def create_app():
         data = request.json or {}
         indices = sorted(data.get("indices", []))
         mode = data.get("mode", "summary")
-        if mode not in ("summary", "detail", "compare"):
+        if mode not in ("summary", "detail", "compare", "novelty"):
             mode = "summary"
         force_refresh = data.get("force_refresh", False)
         use_stream = data.get("stream", False)
@@ -513,6 +561,74 @@ def create_app():
             })
         except Exception as e:
             return jsonify({"error": f"获取引用关系失败: {e}"}), 500
+
+    @app.route("/api/related-papers", methods=["POST"])
+    def related_papers():
+        """通过共同引用关系发现相关论文"""
+        data = request.json or {}
+        doi = data.get("doi", "").strip()
+        if not doi:
+            return jsonify({"error": "请提供 DOI"}), 400
+
+        try:
+            import requests as req
+            from collections import Counter
+            email = config.get("sources", {}).get("openalex", {}).get("email", "")
+            params = {"mailto": email} if email else {}
+
+            # 获取论文信息
+            r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15)
+            if r.status_code != 200:
+                return jsonify({"error": "未找到论文"}), 404
+
+            work = r.json()
+            work_id = work.get("id", "")
+            refs = work.get("referenced_works", [])
+            if not refs:
+                return jsonify({"papers": [], "message": "该论文无引用数据"})
+
+            # 取前 8 个引用，查找同时引用这些论文的其他论文
+            ref_ids = [r.split("/")[-1] for r in refs[:8]]
+            candidate_counter = Counter()
+            candidate_info = {}
+
+            for ref_id in ref_ids[:6]:  # 限制 API 调用次数
+                try:
+                    cited_by_params = {
+                        **params,
+                        "filter": f"cites:{ref_id},type:article",
+                        "sort": "cited_by_count:desc",
+                        "per_page": 10,
+                    }
+                    rc = req.get("https://api.openalex.org/works", params=cited_by_params, timeout=10)
+                    if rc.status_code == 200:
+                        for w in rc.json().get("results", []):
+                            wid = w.get("id", "")
+                            if wid == work_id:
+                                continue  # 排除自身
+                            candidate_counter[wid] += 1
+                            if wid not in candidate_info:
+                                candidate_info[wid] = {
+                                    "doi": (w.get("doi", "") or "").replace("https://doi.org/", ""),
+                                    "title": re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip(),
+                                    "year": w.get("publication_year", 0),
+                                    "citations": w.get("cited_by_count", 0),
+                                }
+                except Exception:
+                    continue
+
+            # 按共同引用数排序，取前 10
+            top_related = candidate_counter.most_common(10)
+            results = []
+            for wid, shared_count in top_related:
+                info = candidate_info.get(wid, {})
+                if info.get("title"):
+                    info["shared_refs"] = shared_count
+                    results.append(info)
+
+            return jsonify({"papers": results, "source_doi": doi})
+        except Exception as e:
+            return jsonify({"error": f"获取相关论文失败: {e}"}), 500
 
     @app.route("/api/download-pdf", methods=["POST"])
     def download_pdf():

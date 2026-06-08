@@ -1,4 +1,4 @@
-"""PaperLens - 学术论文检索平台"""
+"""PaperLens - AI-Powered Research Assistant"""
 
 import sys
 import os
