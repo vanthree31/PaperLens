@@ -15,11 +15,6 @@ else:
 from server import create_app
 
 
-def get_icon_path():
-    icon = os.path.join(BASE_DIR, "static", "icon.ico")
-    return icon if os.path.exists(icon) else None
-
-
 def main():
     app = create_app()
 
@@ -33,7 +28,6 @@ def main():
 
     try:
         import webview
-        icon = get_icon_path()
         kwargs = {
             "title": "PaperLens",
             "url": f"http://127.0.0.1:{port}",
@@ -43,8 +37,6 @@ def main():
             "resizable": True,
             "text_select": True,
         }
-        if icon:
-            kwargs["icon"] = icon
         webview.create_window(**kwargs)
         webview.start(gui="edgechromium", debug=False)
     except ImportError:

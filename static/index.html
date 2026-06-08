@@ -530,6 +530,7 @@ body {
   <div style="display:flex;gap:8px;margin-top:20px">
     <button class="btn btn-primary" onclick="saveSettings()">保存</button>
     <button class="btn btn-outline" onclick="toggleSettings()">取消</button>
+    <button class="btn btn-outline" onclick="resetSettings()" style="margin-left:auto;color:var(--danger)">重置默认</button>
   </div>
 </div>
 
@@ -778,10 +779,12 @@ async function doSearch() {
     }
   } catch (e) {
     showToast("网络错误: " + e.message);
-    setStatus("网络错误");
+    setStatus("网络错误 - 点击重试");
+    btn.textContent = "重试";
+    btn.onclick = () => { btn.onclick = doSmartSearch; doSmartSearch(); };
   } finally {
     btn.disabled = false;
-    btn.textContent = "检索";
+    if (!btn.onclick || btn.onclick === doSmartSearch) btn.textContent = "检索";
   }
 }
 
@@ -1097,6 +1100,32 @@ async function saveSettings() {
   }
 }
 
+async function resetSettings() {
+  if (!confirm("确定要重置所有设置为默认值吗？")) return;
+  const cfg = {
+    sources: {
+      pubmed: { enabled: true, email: "", api_key: "" },
+      openalex: { enabled: true, email: "" },
+    },
+    ai_search: { enabled: false, provider: "deepseek", api_key: "", base_url: "", model: "" },
+    ai_analysis: { enabled: false, provider: "deepseek", api_key: "", base_url: "", model: "" },
+    proxy: { http: "", https: "" },
+  };
+  try {
+    const r = await fetch(`${API}/api/config`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(cfg),
+    });
+    if (r.ok) {
+      showToast("已重置为默认设置");
+      loadSettings();
+    }
+  } catch (e) {
+    showToast("重置失败: " + e.message);
+  }
+}
+
 async function openDataDir() {
   try {
     const r = await fetch(`${API}/api/open-data-dir`, {method: "POST"});
@@ -1214,12 +1243,25 @@ async function aiAnalyzePapers(mode, forceRefresh) {
 function renderAIResult(el, modeName, text, count, cached) {
   const cachedTag = cached ? ' <span style="color:#10b981;font-size:12px">(缓存)</span>' : '';
   const modeKey = modeName === "AI 总结" ? "summary" : modeName === "AI 详析" ? "detail" : "compare";
+  window._lastAIText = text;
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <b>${modeName}结果（${count} 篇）${cachedTag}</b>
-      <button class="btn btn-sm btn-outline" onclick="aiAnalyzePapers('${modeKey}', true)">重新生成</button>
+      <div>
+        <button class="btn btn-sm btn-outline" onclick="copyAIText()">复制</button>
+        <button class="btn btn-sm btn-outline" onclick="aiAnalyzePapers('${modeKey}', true)">重新生成</button>
+      </div>
     </div>
     <div style="line-height:1.8;font-size:14px">${formatAIText(text)}</div>`;
+}
+
+function copyAIText() {
+  if (!window._lastAIText) return;
+  navigator.clipboard.writeText(window._lastAIText).then(() => {
+    showToast("已复制到剪贴板");
+  }).catch(() => {
+    showToast("复制失败，请手动选择复制");
+  });
 }
 
 function formatAIText(text) {
@@ -1433,10 +1475,18 @@ async function downloadOA(encodedUrl, encodedTitle) {
       showToast(`正在打开: ${data.filename}`);
       window.open(data.url, "_blank");
     } else {
-      showToast(data.error || "无法下载");
+      const errMsg = data.error || "无法下载";
+      if (errMsg.includes("不是 PDF")) {
+        showToast("该链接返回的不是 PDF 文件，可能需要机构权限");
+      } else if (errMsg.includes("验证失败")) {
+        showToast("链接验证失败，正在直接打开...");
+        window.open(url, "_blank");
+      } else {
+        showToast(errMsg);
+      }
     }
   } catch {
-    // 验证失败时直接打开链接
+    showToast("网络异常，正在直接打开链接...");
     window.open(url, "_blank");
   }
 }

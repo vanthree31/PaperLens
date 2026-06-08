@@ -2,6 +2,23 @@
 
 All notable changes to PaperLens will be documented in this file.
 
+## [1.0.1] - 2026-06-08
+
+### Fixed
+- Fixed `create_window()` icon parameter error in pywebview
+- Fixed `os.sys` reference error in server.py
+- Fixed `_last_keywords` not initialized in OpenAlexSearch
+- Fixed `max_tokens` set to 384000 (now 4096)
+- Fixed hardcoded year 2026 (now dynamic)
+- Removed dead code `get_icon_path()` in main.py
+- Moved `import json` to top level in server.py
+
+### Added
+- Copy button for AI analysis results
+- Retry button on network errors
+- Reset settings to default button
+- Better error messages for PDF download failures
+
 ## [1.0.0] - 2026-06-08
 
 ### Added

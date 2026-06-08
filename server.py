@@ -1,9 +1,12 @@
 """Flask 后端 - API 路由"""
 
 import os
+import sys
 import re
+import json
 import html
 import yaml
+from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, Response
 from search_engine import SearchEngine
 from exporters import export_ris, export_bibtex, export_csv
@@ -17,8 +20,8 @@ def _get_app_data_dir() -> str:
         data_dir = os.path.join(appdata, "LitSearch")
     else:
         # 非 Windows 或 APPDATA 未设置时回退到 exe 同目录
-        if getattr(os.sys, 'frozen', False):
-            data_dir = os.path.join(os.path.dirname(os.path.abspath(os.sys.executable)), "data")
+        if getattr(sys, 'frozen', False):
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "data")
         else:
             data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
     if not os.path.exists(data_dir):
@@ -38,8 +41,8 @@ def load_config():
         with open(user_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     # 打包模式：从内置默认加载
-    if getattr(os.sys, 'frozen', False):
-        bundled = os.path.join(getattr(os.sys, '_MEIPASS', ''), "config.yaml")
+    if getattr(sys, 'frozen', False):
+        bundled = os.path.join(getattr(sys, '_MEIPASS', ''), "config.yaml")
         if os.path.exists(bundled):
             with open(bundled, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
@@ -175,8 +178,9 @@ def create_app():
         query = data.get("query", "").strip()
         if not query:
             return jsonify({"error": "请输入检索词"}), 400
+        current_year = datetime.now().year
         papers = engine.search(
-            query=query, year_from=data.get("year_from", 2020), year_to=data.get("year_to", 2026),
+            query=query, year_from=data.get("year_from", 2020), year_to=data.get("year_to", current_year),
             sort=data.get("sort", "relevance"), max_results=data.get("max_results", 50),
             use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
             journal=data.get("journal", "").strip(), field=data.get("field", "").strip(),
@@ -197,9 +201,10 @@ def create_app():
             return jsonify({"error": "请输入检索描述"}), 400
 
         analysis = search_ai.analyze_query(user_input)
+        current_year = datetime.now().year
         papers = engine.search(
             query=analysis.get("query", user_input),
-            year_from=analysis.get("year_from", 2020), year_to=analysis.get("year_to", 2026),
+            year_from=analysis.get("year_from", 2020), year_to=analysis.get("year_to", current_year),
             sort="relevance", max_results=data.get("max_results", 50),
             use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
             journal=analysis.get("journal", ""), field=analysis.get("field", ""),
@@ -266,8 +271,7 @@ def create_app():
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
-                    import json as _json
-                    return jsonify(_json.load(f))
+                    return jsonify(json.load(f))
             except Exception:
                 pass
         return jsonify([])
@@ -277,9 +281,8 @@ def create_app():
         data = request.json or []
         path = _get_user_data_path("history.json")
         try:
-            import json as _json
             with open(path, "w", encoding="utf-8") as f:
-                _json.dump(data[:30], f, ensure_ascii=False)
+                json.dump(data[:30], f, ensure_ascii=False)
             return jsonify({"ok": True})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -289,9 +292,8 @@ def create_app():
         path = _get_user_data_path("preferences.json")
         if os.path.exists(path):
             try:
-                import json as _json
                 with open(path, "r", encoding="utf-8") as f:
-                    return jsonify(_json.load(f))
+                    return jsonify(json.load(f))
             except Exception:
                 pass
         return jsonify({})
@@ -301,9 +303,8 @@ def create_app():
         data = request.json or {}
         path = _get_user_data_path("preferences.json")
         try:
-            import json as _json
             with open(path, "w", encoding="utf-8") as f:
-                _json.dump(data, f, ensure_ascii=False)
+                json.dump(data, f, ensure_ascii=False)
             return jsonify({"ok": True})
         except Exception as e:
             return jsonify({"error": str(e)}), 500

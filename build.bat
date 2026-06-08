@@ -17,7 +17,7 @@ if errorlevel 1 (
 
 echo.
 echo [2/3] Building (may take 1-3 minutes)...
-pyinstaller --onefile --windowed --name "PaperLens" ^
+python -m PyInstaller --onefile --windowed --name "PaperLens" ^
     --icon "static/icon.ico" ^
     --add-data "static;static" ^
     --add-data "config.yaml;." ^

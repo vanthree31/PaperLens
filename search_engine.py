@@ -322,6 +322,7 @@ class OpenAlexSearch:
         self.email = email
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "LitSearch/1.0"
+        self._last_keywords = set()
         if proxy:
             self.session.proxies = proxy
 
