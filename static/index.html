@@ -668,7 +668,6 @@ body {
       <button class="btn btn-sm btn-ai" onclick="graphAnalyze('summary')">AI 总结</button>
       <button class="btn btn-sm btn-ai" onclick="graphAnalyze('detail')">AI 详析</button>
       <button class="btn btn-sm btn-ai" onclick="graphNoveltyDetection()">创新点检测</button>
-      <button class="btn btn-sm btn-outline" onclick="graphDiscoverRelated()" id="graphRelatedBtn">发现相关论文</button>
       <button class="btn btn-sm btn-outline" onclick="openGraphNodeInNewGraph()" id="graphNewGraphBtn">在新图谱中打开</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('ris')">导出 RIS</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('bibtex')">BibTeX</button>
@@ -2700,7 +2699,6 @@ function openNewCitationGraph(doi, title) {
       <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','summary')">AI 总结</button>
       <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','detail')">AI 详析</button>
       <button class="btn btn-sm btn-ai" onclick="floatGraphNovelty('${gid}')">创新点</button>
-      <button class="btn btn-sm btn-outline" onclick="floatGraphDiscoverRelated('${gid}')">相关论文</button>
       <button class="btn btn-sm btn-outline" onclick="floatGraphOpenNew('${gid}')">新图谱</button>
       <button class="btn btn-sm btn-outline" onclick="floatGraphExport('${gid}','ris')">RIS</button>
       <button class="btn btn-sm btn-outline" onclick="floatGraphExport('${gid}','bibtex')">BibTeX</button>
@@ -2745,6 +2743,12 @@ function openNewCitationGraph(doi, title) {
   }).then(r => r.json()).then(data => {
     if (!data.paper) { svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${data.error || t("analysisFailed")}</text>`; return; }
     renderGraphInto(svgEl, data, doi, title, floatDiv, gid);
+    // 自动设置当前论文并显示工具栏
+    setFloatGraphPaper(gid, {
+      doi, title,
+      oa_url: "",
+      year: data.paper.year, citations: data.paper.citations,
+    });
   }).catch(e => {
     svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
   });
@@ -2899,32 +2903,6 @@ function floatGraphNovelty(gid) {
   }).catch(e => { content.textContent = "获取论文失败"; });
 }
 
-// 悬浮图谱发现相关论文
-async function floatGraphDiscoverRelated(gid) {
-  const state = document.getElementById(gid + "-float")._graphState;
-  const paper = state.current;
-  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
-  showToast("正在发现相关论文...");
-  try {
-    const r = await fetch(`${API}/api/related-papers`, {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ doi: paper.doi }),
-    });
-    const data = await r.json();
-    if (data.error) { showToast(data.error); return; }
-    if (!data.papers?.length) { showToast("未找到相关论文"); return; }
-    // 在新窗口中显示相关论文
-    const panel = document.getElementById(gid + "-aiPanel");
-    const content = document.getElementById(gid + "-aiContent");
-    panel.classList.add("show");
-    let html = `<strong>相关论文（基于共同引用）</strong>\n\n`;
-    data.papers.forEach((p, i) => {
-      html += `${i+1}. ${p.title}\n   ${p.year} · 引用 ${p.citations} · 共同引用 ${p.shared_refs}\n   DOI: ${p.doi}\n\n`;
-    });
-    content.innerHTML = formatAIText(html);
-  } catch (e) { showToast("发现相关论文失败"); }
-}
-
 // 悬浮图谱在新图谱中打开
 function floatGraphOpenNew(gid) {
   const state = document.getElementById(gid + "-float")._graphState;
@@ -3072,7 +3050,14 @@ function renderGraphInto(svgEl, data, doi, title, overlayEl, gid) {
 
   node.on("click", (e, d) => {
     e.stopPropagation();
-    if (d.doi || d.fullTitle) expandGraphNode(d);
+    if (d.doi || d.fullTitle) {
+      // 悬浮图谱中设置当前论文并显示工具栏
+      if (gid && gid.startsWith("graph-")) {
+        setFloatGraphPaper(gid, { doi: d.doi, title: d.fullTitle, oa_url: "", citations: d.citations, year: d.year });
+      } else {
+        expandGraphNode(d);
+      }
+    }
   });
 
   const sim = d3.forceSimulation(nodes)
@@ -3175,159 +3160,6 @@ function openGraphNodeInNewGraph() {
   if (!_graphPaper || !_graphPaper.doi) { showToast(t("noDOI")); return; }
   closeGraph();
   showCitationGraph(encodeURIComponent(_graphPaper.doi), encodeURIComponent(_graphPaper.title));
-}
-
-// ========== Related Work Discovery ==========
-async function graphDiscoverRelated() {
-  if (!_graphPaper || !_graphPaper.doi) { showToast("请先点击论文节点"); return; }
-
-  const btn = document.getElementById("graphRelatedBtn");
-  btn.disabled = true;
-  btn.textContent = "搜索中...";
-
-  try {
-    const r = await fetch(`${API}/api/related-papers`, {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ doi: _graphPaper.doi }),
-    });
-    const data = await r.json();
-    if (!r.ok) { showToast(data.error || "获取失败"); return; }
-
-    if (!data.papers || !data.papers.length) {
-      showToast("未找到相关论文");
-      return;
-    }
-
-    // 将相关论文作为新节点添加到图谱中
-    const nodes = renderGraph._nodes;
-    const links = renderGraph._links;
-    const container = renderGraph._container;
-    if (!nodes || !links || !container) return;
-
-    const existingDois = new Set(nodes.map(n => n.doi).filter(Boolean));
-    const colorMap = { center: "#2563eb", citing: "#10b981", referenced: "#f59e0b", related: "#8b5cf6" };
-    const srcNode = nodes.find(n => n.doi === _graphPaper.doi) || nodes.find(n => n.id === "center");
-
-    // 计算放置位置 — 放在源节点周围环形区域
-    let maxDist = 200;
-    nodes.forEach(n => {
-      if (n === srcNode) return;
-      const dd = Math.sqrt((n.x - srcNode.x) ** 2 + (n.y - srcNode.y) ** 2);
-      if (dd > maxDist) maxDist = dd;
-    });
-    const baseDist = maxDist + 200; // 增加距离，避免重叠
-
-    const newPapers = data.papers.filter(p => p.doi && !existingDois.has(p.doi)).slice(0, 8);
-    if (!newPapers.length) { showToast("相关论文均已显示"); return; }
-
-    // 计算环形分布的角度
-    const svgEl = document.getElementById("graphSvg");
-    const svgW = svgEl?.clientWidth || 800;
-    const svgH = svgEl?.clientHeight || 600;
-
-    // 找一个远离现有节点的方向作为起始角度
-    const existingAngles = nodes.filter(n => n !== srcNode).map(n => Math.atan2(n.y - srcNode.y, n.x - srcNode.x));
-    let bestAngle = 0;
-    let maxMinDist = 0;
-    // 尝试 12 个方向，找最空旷的
-    for (let a = 0; a < 12; a++) {
-      const testAngle = (a / 12) * Math.PI * 2;
-      const minDist = existingAngles.reduce((min, ea) => {
-        let diff = Math.abs(testAngle - ea);
-        if (diff > Math.PI) diff = 2 * Math.PI - diff;
-        return Math.min(min, diff);
-      }, Infinity);
-      if (minDist > maxMinDist) { maxMinDist = minDist; bestAngle = testAngle; }
-    }
-
-    // 沿最空旷方向展开成扇形
-    const arc = Math.min(Math.PI * 0.8, newPapers.length * 0.35); // 每个节点间隔约 20 度
-    const startAngle = bestAngle - arc / 2;
-    const angleStep = newPapers.length > 1 ? arc / (newPapers.length - 1) : 0;
-
-    // 添加图例项（如果还没有）
-    const legend = document.querySelector(".graph-legend");
-    if (legend && !document.getElementById("legendRelated")) {
-      const div = document.createElement("div");
-      div.innerHTML = `<span class="dot" style="background:#8b5cf6"></span> <span id="legendRelated">相关论文</span>`;
-      legend.insertBefore(div, legend.querySelector("div:last-child"));
-    }
-
-    newPapers.forEach((p, i) => {
-      const angle = newPapers.length > 1 ? startAngle + angleStep * i : bestAngle;
-      const r = 16;
-      const dist = baseDist + r + i * 20; // 每个节点距离递增，避免重叠
-      const nid = `rel-${Date.now()}-${i}`;
-      const nx = srcNode.x + Math.cos(angle) * dist;
-      const ny = srcNode.y + Math.sin(angle) * dist;
-      const nNode = {
-        id: nid, fullTitle: p.title, doi: p.doi || "",
-        year: p.year, citations: p.citations,
-        type: "related", radius: r,
-        x: nx, y: ny,
-        _targetX: nx, _targetY: ny,
-      };
-      nodes.push(nNode);
-      links.push({ source: nNode, target: srcNode, type: "related" });
-      if (p.doi) existingDois.add(p.doi);
-    });
-
-    // 更新 D3
-    const linkG = container.select("g:nth-child(1)");
-    const nodeG = container.select("g:nth-child(2)");
-
-    linkG.selectAll("line").data(links, l => `${l.source.id || l.source}-${l.target.id || l.target}`).join("line")
-      .attr("class", "graph-link")
-      .attr("stroke", l => colorMap[l.type] || "#999")
-      .attr("stroke-width", l => l.type === "related" ? 1 : 1.5)
-      .attr("stroke-dasharray", l => l.type === "related" ? "4,3" : "none")
-      .attr("marker-end", l => {
-        if (l.type === "citing") return "url(#arrow-citing)";
-        if (l.type === "referenced") return "url(#arrow-ref)";
-        return "none";
-      });
-
-    nodeG.selectAll("g").data(nodes, n => n.id).join(enter => {
-      const g = enter.append("g").attr("class", "graph-node");
-      g.append("circle").attr("r", n => n.radius)
-        .attr("fill", n => colorMap[n.type] || "#999")
-        .attr("stroke", "#fff").attr("stroke-width", 2);
-      g.append("text").attr("class", "graph-label-text")
-        .attr("text-anchor", "middle").attr("dy", n => n.radius + 14)
-        .attr("font-size", 10).attr("fill", "#475569")
-        .text(n => _graphLabel(n, 1));
-      g.append("text").attr("text-anchor", "middle").attr("dy", n => n.radius + 26)
-        .attr("font-size", 9).attr("fill", "#94a3b8")
-        .text(n => `${n.year} · ${t("cited")} ${n.citations}`);
-      g.append("title").text(n => `${n.fullTitle}\n${n.year} | ${t("cited")} ${n.citations}`);
-      return g;
-    }).call(d3.drag()
-      .on("start", (e, n) => { if (!e.active) _graphSimulation.alphaTarget(0.3).restart(); n.fx = n.x; n.fy = n.y; })
-      .on("drag", (e, n) => { n.fx = e.x; n.fy = e.y; })
-      .on("end", (e, n) => { if (!e.active) _graphSimulation.alphaTarget(0); n.fx = null; n.fy = null; })
-    ).on("click", (e, n) => {
-      e.stopPropagation();
-      if (n.doi || n.fullTitle) expandGraphNode(n);
-    });
-
-    renderGraph._linkSel = linkG.selectAll("line");
-    renderGraph._nodeSel = nodeG.selectAll("g");
-    _graphSimulation.nodes(nodes);
-    _graphSimulation.force("link").links(links);
-    // 增加位置引导力强度，确保相关论文节点不会挤在一起
-    _graphSimulation.force("x", d3.forceX(n => n._targetX || n.x).strength(n => n._targetX ? 0.4 : 0));
-    _graphSimulation.force("y", d3.forceY(n => n._targetY || n.y).strength(n => n._targetY ? 0.4 : 0));
-    // 增加碰撞检测半径，避免重叠
-    _graphSimulation.force("collide", d3.forceCollide().radius(d => d.radius + 30).strength(1).iterations(5));
-    _graphSimulation.alpha(0.5).restart();
-
-    showToast(`发现 ${newPapers.length} 篇相关论文（共同引用关系）`);
-  } catch (e) {
-    showToast("获取相关论文失败: " + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "发现相关论文";
-  }
 }
 
 // ========== Novelty Detection ==========
