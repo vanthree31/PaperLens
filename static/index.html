@@ -382,8 +382,8 @@ body {
   <h1>PaperLens</h1>
   <div class="header-actions">
     <button class="btn-icon" id="langBtn" onclick="setLang(currentLang==='zh'?'en':'zh')" title="Language">EN</button>
-    <button class="btn-icon" onclick="toggleAI()" title="AI 助手">AI</button>
-    <button class="btn-icon" onclick="toggleSettings()" title="设置">⚙</button>
+    <button class="btn-icon" onclick="toggleAI()" id="aiBtn" title="AI 助手">AI</button>
+    <button class="btn-icon" onclick="toggleSettings()" id="settingsBtn" title="设置">⚙</button>
   </div>
 </div>
 
@@ -391,8 +391,8 @@ body {
   <div class="search-bar" style="position:relative">
     <input type="text" id="searchInput" placeholder="输入检索词或自然语言描述，如：定量相位成像最新进展..." onkeydown="handleSearchKeydown(event)" autocomplete="off">
     <button class="btn btn-primary" id="searchBtn" onclick="doSmartSearch()">检索</button>
-    <button class="btn btn-outline" onclick="toggleHistory()" title="搜索历史" style="padding:10px 12px">⏱</button>
-    <button class="btn btn-outline" onclick="openDoiModal()" title="批量 DOI 导入" style="padding:10px 12px">📋</button>
+    <button class="btn btn-outline" onclick="toggleHistory()" id="historyBtn" title="搜索历史" style="padding:10px 12px">⏱</button>
+    <button class="btn btn-outline" onclick="openDoiModal()" id="doiBtn2" title="批量 DOI 导入" style="padding:10px 12px">📋</button>
     <div class="history-dropdown" id="historyDropdown"></div>
     <div class="history-dropdown" id="suggestDropdown"></div>
   </div>
@@ -897,6 +897,34 @@ function applyLang() {
   const dataSourceSpan = document.querySelector(".status-bar span:last-child");
   if (dataSourceSpan) dataSourceSpan.textContent = t("dataSource");
 
+  // Placeholder 切换
+  const placeholders = {
+    searchInput: t("searchPlaceholder"),
+    filterJournal: currentLang === "zh" ? "如 Nature Methods" : "e.g. Nature Methods",
+    cfgPubmedKey: t("optional"),
+    cfgSearchAiModel: currentLang === "zh" ? "如 deepseek-chat（快速模型）" : "e.g. deepseek-chat (fast model)",
+    cfgSearchAiUrl: t("endpointHint"),
+    cfgAnalysisAiModel: currentLang === "zh" ? "如 deepseek-reasoner（高质量模型）" : "e.g. deepseek-reasoner (high-quality)",
+    cfgAnalysisAiUrl: t("endpointHint"),
+    cfgExportPath: t("exportPathPlaceholder"),
+  };
+  for (const [id, ph] of Object.entries(placeholders)) {
+    const el = document.getElementById(id);
+    if (el) el.placeholder = ph;
+  }
+
+  // Title 属性切换
+  const titles = {
+    aiBtn: t("aiAssistant"),
+    settingsBtn: t("settings"),
+    historyBtn: currentLang === "zh" ? "搜索历史" : "Search History",
+    doiBtn2: t("batchDOI"),
+  };
+  for (const [id, title] of Object.entries(titles)) {
+    const el = document.getElementById(id);
+    if (el) el.title = title;
+  }
+
   // 批量 DOI 模态框
   const doiTitle = document.querySelector("#doiModal h3");
   if (doiTitle) doiTitle.textContent = t("batchDOI");
@@ -966,6 +994,14 @@ function applySettingsLang() {
   const toggleLabels = section.querySelectorAll(".toggle-row label");
   if (toggleLabels[0]) toggleLabels[0].textContent = t("enableSearchAI");
   if (toggleLabels[1]) toggleLabels[1].textContent = t("enableAnalysisAI");
+
+  // Provider 选项中的本地化
+  const ollamaText = currentLang === "zh" ? "Ollama (本地)" : "Ollama (Local)";
+  const customText = currentLang === "zh" ? "自定义" : "Custom";
+  section.querySelectorAll("select option").forEach(opt => {
+    if (opt.value === "ollama") opt.textContent = ollamaText;
+    if (opt.value === "custom") opt.textContent = customText;
+  });
 }
 
 // 初始化：加载偏好和历史
