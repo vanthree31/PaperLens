@@ -1171,23 +1171,43 @@ async function loadSettings() {
   }
 }
 
+function isMasked(val) {
+  return val && val.includes("****");
+}
+
+function removeUndefined(obj) {
+  if (Array.isArray(obj)) return obj.map(removeUndefined);
+  if (obj && typeof obj === "object") {
+    const result = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v !== undefined) result[k] = removeUndefined(v);
+    }
+    return result;
+  }
+  return obj;
+}
+
 async function saveSettings() {
-  const cfg = {
+  const searchAiKey = document.getElementById("cfgSearchAiKey").value.trim();
+  const analysisAiKey = document.getElementById("cfgAnalysisAiKey").value.trim();
+  const pubmedKey = document.getElementById("cfgPubmedKey").value.trim();
+
+  const cfg = removeUndefined({
     sources: {
-      pubmed: { enabled: true, email: document.getElementById("cfgPubmedEmail").value.trim(), api_key: document.getElementById("cfgPubmedKey").value.trim() },
+      pubmed: { enabled: true, email: document.getElementById("cfgPubmedEmail").value.trim(), api_key: isMasked(pubmedKey) ? undefined : pubmedKey },
       openalex: { enabled: true, email: "" },
     },
     ai_search: {
       enabled: document.getElementById("cfgSearchAiEnabled").checked,
       provider: document.getElementById("cfgSearchAiProvider").value,
-      api_key: document.getElementById("cfgSearchAiKey").value.trim(),
+      api_key: isMasked(searchAiKey) ? undefined : searchAiKey,
       base_url: document.getElementById("cfgSearchAiUrl").value.trim(),
       model: document.getElementById("cfgSearchAiModel").value.trim(),
     },
     ai_analysis: {
       enabled: document.getElementById("cfgAnalysisAiEnabled").checked,
       provider: document.getElementById("cfgAnalysisAiProvider").value,
-      api_key: document.getElementById("cfgAnalysisAiKey").value.trim(),
+      api_key: isMasked(analysisAiKey) ? undefined : analysisAiKey,
       base_url: document.getElementById("cfgAnalysisAiUrl").value.trim(),
       model: document.getElementById("cfgAnalysisAiModel").value.trim(),
     },
@@ -1195,7 +1215,7 @@ async function saveSettings() {
       http: document.getElementById("cfgProxyHttp").value.trim(),
       https: document.getElementById("cfgProxyHttps").value.trim(),
     },
-  };
+  });
   try {
     const r = await fetch(`${API}/api/config`, {
       method: "POST",
