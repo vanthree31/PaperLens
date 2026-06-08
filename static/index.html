@@ -331,9 +331,52 @@ body {
   color: var(--primary);
   background: #eff6ff;
 }
+/* 引用关系图谱 */
+.graph-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: none;
+}
+.graph-overlay.show { display: flex; align-items: center; justify-content: center; }
+.graph-panel {
+  background: var(--card);
+  border-radius: 12px;
+  width: 90vw;
+  height: 85vh;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.graph-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.graph-header h3 { font-size: 16px; margin: 0; }
+.graph-body { flex: 1; position: relative; overflow: hidden; }
+.graph-body svg { width: 100%; height: 100%; }
+.graph-legend {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+}
+.graph-legend div { margin: 3px 0; display: flex; align-items: center; gap: 6px; }
+.graph-legend .dot { width: 10px; height: 10px; border-radius: 50%; }
 </style>
-</head>
-<body>
 
 <div class="header">
   <h1>PaperLens</h1>
@@ -546,6 +589,26 @@ body {
 
 <div class="toast" id="toast"></div>
 
+<!-- 引用关系图谱 -->
+<div class="graph-overlay" id="graphOverlay" onclick="if(event.target===this)closeGraph()">
+  <div class="graph-panel">
+    <div class="graph-header">
+      <h3 id="graphTitle">引用关系图谱</h3>
+      <div>
+        <button class="btn btn-sm btn-outline" onclick="closeGraph()">✕ 关闭</button>
+      </div>
+    </div>
+    <div class="graph-body" id="graphBody">
+      <svg id="graphSvg"></svg>
+      <div class="graph-legend">
+        <div><span class="dot" style="background:#2563eb"></span> <span id="legendCenter">当前论文</span></div>
+        <div><span class="dot" style="background:#10b981"></span> <span id="legendCiting">引用了此论文</span></div>
+        <div><span class="dot" style="background:#f59e0b"></span> <span id="legendReferenced">此论文引用</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 批量 DOI 模态框 -->
 <div class="modal-overlay" id="doiModal">
   <div class="modal">
@@ -651,6 +714,9 @@ const LANGS = {
     exportPathPlaceholder: "留空则弹出浏览器下载", choose: "选择",
     noExportPath: "请先在设置中配置导出路径", fileSaved: "文件已保存到:",
     downloadSuccess: "下载成功", downloadFailed: "下载失败",
+    // 引用图谱
+    citationGraph: "引用关系图谱", legendCenter: "当前论文", legendCiting: "引用了此论文", legendReferenced: "此论文引用",
+    loadingGraph: "加载引用关系中...", noDOI: "该论文无 DOI，无法查看引用关系",
     // AI 功能
     pleaseSearchFirst: "请先检索文献", pleaseSelectPapers: "请先勾选要分析的论文",
     aiFailed: "AI 检索失败", analysisFailed: "分析失败", serverError: "分析失败（服务器错误）",
@@ -741,6 +807,9 @@ const LANGS = {
     exportPathPlaceholder: "Leave empty to use browser download", choose: "Choose",
     noExportPath: "Please set export path in Settings first", fileSaved: "File saved to:",
     downloadSuccess: "Download success", downloadFailed: "Download failed",
+    // Citation graph
+    citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
+    loadingGraph: "Loading citation graph...", noDOI: "No DOI available for citation graph",
     // AI features
     pleaseSearchFirst: "Please search papers first", pleaseSelectPapers: "Please select papers to analyze first",
     aiFailed: "AI search failed", analysisFailed: "Analysis failed", serverError: "Analysis failed (server error)",
@@ -1377,6 +1446,7 @@ function renderResults() {
             <button class="btn btn-sm btn-outline" onclick="toggleAbstract(${idx})">${t("abstract")}</button>
             ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="window.open('https://doi.org/${encodeURIComponent(p.doi)}')">${t("original")}</button>` : ""}
             ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title)}')">${t("downloadPDF")}</button>` : ""}
+            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="showCitationGraph('${encodeURIComponent(p.doi)}','${encodeURIComponent(p.title)}')">${t("citationGraph")}</button>` : ""}
           </div>
         </div>
       </div>
@@ -2021,6 +2091,169 @@ async function downloadOA(encodedUrl, encodedTitle) {
     showToast(t("networkErrorOpening"));
     window.open(url, "_blank");
   }
+}
+
+// ========== 引用关系图谱 ==========
+async function showCitationGraph(encodedDoi, encodedTitle) {
+  const doi = decodeURIComponent(encodedDoi);
+  const title = decodeURIComponent(encodedTitle);
+
+  document.getElementById("graphTitle").textContent = `${t("citationGraph")} - ${title.substring(0, 60)}`;
+  document.getElementById("legendCenter").textContent = t("legendCenter");
+  document.getElementById("legendCiting").textContent = t("legendCiting");
+  document.getElementById("legendReferenced").textContent = t("legendReferenced");
+  document.getElementById("graphOverlay").classList.add("show");
+
+  const svg = document.getElementById("graphSvg");
+  svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${t("loadingGraph")}</text>`;
+
+  try {
+    const r = await fetch(`${API}/api/citation-graph`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({doi}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      renderGraph(data);
+    } else {
+      svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${data.error || t("analysisFailed")}</text>`;
+    }
+  } catch (e) {
+    svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
+  }
+}
+
+function closeGraph() {
+  document.getElementById("graphOverlay").classList.remove("show");
+}
+
+function renderGraph(data) {
+  const svg = document.getElementById("graphSvg");
+  const width = svg.clientWidth || 800;
+  const height = svg.clientHeight || 600;
+
+  svg.innerHTML = "";
+
+  // 构建节点和边
+  const nodes = [];
+  const links = [];
+  const centerNode = {
+    id: "center",
+    label: data.paper.title.substring(0, 40) + (data.paper.title.length > 40 ? "..." : ""),
+    year: data.paper.year,
+    citations: data.paper.citations,
+    type: "center",
+    radius: 20,
+  };
+  nodes.push(centerNode);
+
+  // 引用了此论文的文献（上游）
+  data.citing.slice(0, 10).forEach((p, i) => {
+    const node = {
+      id: `citing-${i}`,
+      label: p.title.substring(0, 30) + (p.title.length > 30 ? "..." : ""),
+      year: p.year,
+      citations: p.citations,
+      type: "citing",
+      radius: 12,
+    };
+    nodes.push(node);
+    links.push({ source: `citing-${i}`, target: "center" });
+  });
+
+  // 此论文引用的文献（下游）
+  data.referenced.slice(0, 10).forEach((p, i) => {
+    const node = {
+      id: `ref-${i}`,
+      label: p.title.substring(0, 30) + (p.title.length > 30 ? "..." : ""),
+      year: p.year,
+      citations: p.citations,
+      type: "referenced",
+      radius: 12,
+    };
+    nodes.push(node);
+    links.push({ source: "center", target: `ref-${i}` });
+  });
+
+  // 简单力导向布局
+  const centerX = width / 2;
+  const centerY = height / 2;
+
+  // 初始化位置
+  nodes.forEach((node, i) => {
+    if (node.type === "center") {
+      node.x = centerX;
+      node.y = centerY;
+    } else if (node.type === "citing") {
+      const angle = (Math.PI * 2 * i) / Math.max(data.citing.length, 1) - Math.PI / 2;
+      node.x = centerX + Math.cos(angle) * 200;
+      node.y = centerY + Math.sin(angle) * 150 - 80;
+    } else {
+      const idx = i - 1 - data.citing.slice(0, 10).length;
+      const angle = (Math.PI * 2 * idx) / Math.max(data.referenced.length, 1) - Math.PI / 2;
+      node.x = centerX + Math.cos(angle) * 200;
+      node.y = centerY + Math.sin(angle) * 150 + 80;
+    }
+  });
+
+  // 创建 SVG 元素
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  svg.appendChild(g);
+
+  // 绘制边
+  links.forEach(link => {
+    const source = nodes.find(n => n.id === link.source);
+    const target = nodes.find(n => n.id === link.target);
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", source.x);
+    line.setAttribute("y1", source.y);
+    line.setAttribute("x2", target.x);
+    line.setAttribute("y2", target.y);
+    line.setAttribute("stroke", "#cbd5e1");
+    line.setAttribute("stroke-width", "1.5");
+    g.appendChild(line);
+  });
+
+  // 绘制节点
+  nodes.forEach(node => {
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    group.style.cursor = "pointer";
+
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", node.x);
+    circle.setAttribute("cy", node.y);
+    circle.setAttribute("r", node.radius);
+    circle.setAttribute("fill", node.type === "center" ? "#2563eb" : node.type === "citing" ? "#10b981" : "#f59e0b");
+    circle.setAttribute("stroke", "#fff");
+    circle.setAttribute("stroke-width", "2");
+    group.appendChild(circle);
+
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.setAttribute("x", node.x);
+    text.setAttribute("y", node.y + node.radius + 14);
+    text.setAttribute("text-anchor", "middle");
+    text.setAttribute("font-size", "10");
+    text.setAttribute("fill", "#475569");
+    text.textContent = node.label;
+    group.appendChild(text);
+
+    const yearText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    yearText.setAttribute("x", node.x);
+    yearText.setAttribute("y", node.y + node.radius + 26);
+    yearText.setAttribute("text-anchor", "middle");
+    yearText.setAttribute("font-size", "9");
+    yearText.setAttribute("fill", "#94a3b8");
+    yearText.textContent = `${node.year} · ${t("cited")} ${node.citations}`;
+    group.appendChild(yearText);
+
+    // Tooltip
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = `${node.label}\n${node.year} | ${t("cited")} ${node.citations}`;
+    group.appendChild(title);
+
+    g.appendChild(group);
+  });
 }
 </script>
 </body>

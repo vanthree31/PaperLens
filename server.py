@@ -431,6 +431,69 @@ def create_app():
 
         return jsonify({"total": len(found_escaped), "papers": found_escaped, "not_found": valid_count - len(found_escaped)})
 
+    @app.route("/api/citation-graph", methods=["POST"])
+    def citation_graph():
+        """获取论文引用关系图谱数据"""
+        data = request.json or {}
+        doi = data.get("doi", "").strip()
+        if not doi:
+            return jsonify({"error": "请提供 DOI"}), 400
+
+        try:
+            import requests as req
+            # 通过 OpenAlex 获取论文引用关系
+            email = config.get("sources", {}).get("openalex", {}).get("email", "")
+            params = {"mailto": email} if email else {}
+
+            # 获取论文信息
+            r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15)
+            if r.status_code != 200:
+                return jsonify({"error": "未找到论文"}), 404
+
+            work = r.json()
+            work_id = work.get("id", "")
+            title = re.sub(r'<[^>]+>', '', work.get("title", "") or "").strip()
+            year = work.get("publication_year", 0)
+            cited_count = work.get("cited_by_count", 0)
+
+            # 获取引用这篇论文的文献（cited_by）
+            cited_by_params = {**params, "filter": f"cites:{work_id}", "per_page": 20, "sort": "cited_by_count:desc"}
+            r_cited = req.get("https://api.openalex.org/works", params=cited_by_params, timeout=15)
+            citing_papers = []
+            if r_cited.status_code == 200:
+                for w in r_cited.json().get("results", []):
+                    citing_papers.append({
+                        "doi": (w.get("doi", "") or "").replace("https://doi.org/", ""),
+                        "title": re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip(),
+                        "year": w.get("publication_year", 0),
+                        "citations": w.get("cited_by_count", 0),
+                    })
+
+            # 获取这篇论文引用的文献（references）
+            refs = work.get("referenced_works", [])
+            referenced_papers = []
+            if refs:
+                # 取前 20 个引用
+                ref_ids = "|".join([r.split("/")[-1] for r in refs[:20]])
+                ref_params = {**params, "filter": f"openalex:{ref_ids}", "per_page": 20}
+                r_refs = req.get("https://api.openalex.org/works", params=ref_params, timeout=15)
+                if r_refs.status_code == 200:
+                    for w in r_refs.json().get("results", []):
+                        referenced_papers.append({
+                            "doi": (w.get("doi", "") or "").replace("https://doi.org/", ""),
+                            "title": re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip(),
+                            "year": w.get("publication_year", 0),
+                            "citations": w.get("cited_by_count", 0),
+                        })
+
+            return jsonify({
+                "paper": {"doi": doi, "title": title, "year": year, "citations": cited_count},
+                "citing": citing_papers,
+                "referenced": referenced_papers,
+            })
+        except Exception as e:
+            return jsonify({"error": f"获取引用关系失败: {e}"}), 500
+
     @app.route("/api/download-pdf", methods=["POST"])
     def download_pdf():
         """验证 OA 论文 PDF 链接并下载到指定目录"""
