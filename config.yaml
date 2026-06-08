@@ -36,4 +36,4 @@ defaults:
   max_results: 50
   sort: "relevance"
   year_from: 2020
-  year_to: 2025
+  year_to: 2026

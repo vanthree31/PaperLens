@@ -39,6 +39,7 @@ Every researcher knows the pain:
 | **Multi-format Export** | RIS (EndNote), BibTeX (LaTeX), CSV |
 | **Search History** | Persistent history with smart suggestions |
 | **Dual AI Models** | Configure separate models for search (fast) and analysis (high-quality) |
+| **Citation Graph** | Interactive D3.js force-directed graph — zoom, pan, drag nodes, click to expand citation relationships |
 
 ## Screenshots
 
@@ -49,7 +50,7 @@ Every researcher knows the pain:
 | Layer | Technology |
 |-------|-----------|
 | Backend | Python, Flask |
-| Frontend | HTML/CSS/JS (single-file, zero dependencies) |
+| Frontend | HTML/CSS/JS (single-file, D3.js for citation graph) |
 | Data Sources | PubMed E-utilities API, OpenAlex API |
 | AI | OpenAI / DeepSeek / Anthropic / Ollama compatible API |
 | Packaging | PyInstaller |

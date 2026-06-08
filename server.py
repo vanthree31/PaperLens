@@ -431,6 +431,25 @@ def create_app():
 
         return jsonify({"total": len(found_escaped), "papers": found_escaped, "not_found": valid_count - len(found_escaped)})
 
+    @app.route("/api/paper-by-doi", methods=["POST"])
+    def paper_by_doi():
+        """通过 DOI 获取单篇论文详情"""
+        data = request.json or {}
+        doi = data.get("doi", "").strip()
+        if not doi:
+            return jsonify({"error": "请提供 DOI"}), 400
+
+        paper = engine.search_by_doi(doi)
+        if not paper:
+            return jsonify({"error": "未找到该论文"}), 404
+
+        # 添加到缓存（避免重复）
+        existing_dois = {p.doi.lower() for p in cached_papers["papers"] if p.doi}
+        if paper.doi and paper.doi.lower() not in existing_dois:
+            cached_papers["papers"].append(paper)
+
+        return jsonify({"paper": _escape_paper(paper)})
+
     @app.route("/api/citation-graph", methods=["POST"])
     def citation_graph():
         """获取论文引用关系图谱数据"""

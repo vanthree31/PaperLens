@@ -34,13 +34,14 @@
 | **多格式导出** | RIS（EndNote）、BibTeX（LaTeX）、CSV |
 | **搜索历史** | 持久化保存，支持快速重执行 |
 | **双 AI 模型** | 检索用快速模型，分析用高质量模型，分别配置 |
+| **引用关系图谱** | D3.js 力导向交互图谱 — 缩放、平移、拖拽节点、点击展开引用关系 |
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
 | 后端 | Python, Flask |
-| 前端 | HTML/CSS/JS（单文件，零依赖） |
+| 前端 | HTML/CSS/JS（单文件，引用图谱用 D3.js） |
 | 数据源 | PubMed E-utilities API, OpenAlex API |
 | AI | 兼容 OpenAI / DeepSeek / Anthropic / Ollama API |
 | 打包 | PyInstaller |

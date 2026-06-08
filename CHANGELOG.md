@@ -2,6 +2,21 @@
 
 All notable changes to PaperLens will be documented in this file.
 
+## [1.0.2] - 2026-06-08
+
+### Added
+- Interactive citation graph with D3.js force-directed layout
+- Zoom, pan, and drag support in citation graph
+- Click nodes to expand citation relationships dynamically
+- Toolbar in citation graph: AI analysis, export, download, original link
+- AI analysis results displayed within citation graph panel
+- `/api/paper-by-doi` endpoint for single paper lookup by DOI
+
+### Fixed
+- Search button stuck on "searching" after results loaded
+- Language switch not updating search result labels
+- Default `year_to` in config.yaml (2025 → 2026)
+
 ## [1.0.1] - 2026-06-08
 
 ### Fixed
