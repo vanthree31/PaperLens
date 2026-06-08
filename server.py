@@ -341,11 +341,12 @@ def create_app():
 
     @app.route("/api/download-pdf", methods=["POST"])
     def download_pdf():
-        """验证 OA 论文 PDF 链接是否可用"""
+        """验证 OA 论文 PDF 链接并下载到指定目录"""
         import urllib.request
         data = request.json or {}
         url = data.get("url", "").strip()
         title = data.get("title", "paper")[:50]
+        save_to_disk = data.get("save_to_disk", False)
 
         if not url:
             return jsonify({"error": "无下载链接"}), 400
@@ -354,12 +355,24 @@ def create_app():
         filename = f"{safe_title}.pdf"
 
         try:
-            # 只读取前 8 字节验证 PDF 魔数，不下载整个文件
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Range": "bytes=0-7"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 header = resp.read(8)
                 if not header.startswith(b'%PDF'):
                     return jsonify({"error": "链接不是 PDF 文件"}), 400
+
+            if save_to_disk:
+                export_dir = load_config().get("export_path", "")
+                if not export_dir:
+                    return jsonify({"error": "no_export_path", "filename": filename, "url": url})
+                try:
+                    os.makedirs(export_dir, exist_ok=True)
+                    filepath = os.path.join(export_dir, filename)
+                    urllib.request.urlretrieve(url, filepath)
+                    return jsonify({"ok": True, "path": filepath, "filename": filename})
+                except Exception as e:
+                    return jsonify({"error": f"下载失败: {e}"}), 500
+
             return jsonify({"filename": filename, "url": url})
         except Exception as e:
             return jsonify({"error": f"链接验证失败: {e}"}), 500
@@ -369,18 +382,35 @@ def create_app():
         data = request.json or {}
         fmt = data.get("format", "ris")
         indices = data.get("indices", [])
+        save_to_disk = data.get("save_to_disk", False)
         papers = cached_papers["papers"]
         if not papers:
             return jsonify({"error": "没有可导出的文献"}), 400
         selected = [papers[i] for i in indices if 0 <= i < len(papers)] if indices else papers
         safe_q = re.sub(r'[^\w\-]', '_', cached_papers['query'][:40]).strip('_') or "results"
         if fmt == "ris":
-            return jsonify({"content": export_ris(selected), "filename": f"lit_search_{safe_q}.ris", "mime": "application/x-research-info-systems"})
+            content, filename, mime = export_ris(selected), f"lit_search_{safe_q}.ris", "application/x-research-info-systems"
         elif fmt == "bibtex":
-            return jsonify({"content": export_bibtex(selected), "filename": f"lit_search_{safe_q}.bib", "mime": "application/x-bibtex"})
+            content, filename, mime = export_bibtex(selected), f"lit_search_{safe_q}.bib", "application/x-bibtex"
         elif fmt == "csv":
-            return jsonify({"content": export_csv(selected), "filename": f"lit_search_{safe_q}.csv", "mime": "text/csv"})
-        return jsonify({"error": f"不支持的格式: {fmt}"}), 400
+            content, filename, mime = export_csv(selected), f"lit_search_{safe_q}.csv", "text/csv"
+        else:
+            return jsonify({"error": f"不支持的格式: {fmt}"}), 400
+
+        if save_to_disk:
+            export_dir = load_config().get("export_path", "")
+            if not export_dir:
+                return jsonify({"error": "no_export_path", "content": content, "filename": filename, "mime": mime})
+            try:
+                os.makedirs(export_dir, exist_ok=True)
+                filepath = os.path.join(export_dir, filename)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+                return jsonify({"ok": True, "path": filepath, "filename": filename})
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+
+        return jsonify({"content": content, "filename": filename, "mime": mime})
 
     @app.route("/api/data-dir", methods=["GET"])
     def get_data_dir():

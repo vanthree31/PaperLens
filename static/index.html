@@ -528,6 +528,14 @@ body {
       </div>
       <div class="hint">搜索历史、偏好设置、AI 配置均存储在此目录</div>
     </div>
+    <div class="form-group">
+      <label>导出文件保存路径</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="cfgExportPath" placeholder="留空则弹出浏览器下载" style="flex:1">
+        <button class="btn btn-sm btn-outline" onclick="chooseExportPath()">选择</button>
+      </div>
+      <div class="hint">导出 RIS/BibTeX/CSV 和下载 PDF 时自动保存到此目录</div>
+    </div>
   </div>
   <div style="display:flex;gap:8px;margin-top:20px">
     <button class="btn btn-primary" onclick="saveSettings()">保存</button>
@@ -639,6 +647,10 @@ const LANGS = {
     resetConfirm: "确定要重置所有设置为默认值吗？", settingsSaved: "设置已保存",
     settingsReset: "已重置为默认设置", saveFailed: "保存失败:", resetFailed: "重置失败:",
     cannotOpenFolder: "无法打开文件夹", openFailed: "打开失败:",
+    exportPath: "导出文件保存路径", exportPathHint: "导出 RIS/BibTeX/CSV 和下载 PDF 时自动保存到此目录",
+    exportPathPlaceholder: "留空则弹出浏览器下载", choose: "选择",
+    noExportPath: "请先在设置中配置导出路径", fileSaved: "文件已保存到:",
+    downloadSuccess: "下载成功", downloadFailed: "下载失败",
     // AI 功能
     pleaseSearchFirst: "请先检索文献", pleaseSelectPapers: "请先勾选要分析的论文",
     aiFailed: "AI 检索失败", analysisFailed: "分析失败", serverError: "分析失败（服务器错误）",
@@ -725,6 +737,10 @@ const LANGS = {
     resetConfirm: "Are you sure to reset all settings to default?", settingsSaved: "Settings saved",
     settingsReset: "Settings reset to default", saveFailed: "Save failed:", resetFailed: "Reset failed:",
     cannotOpenFolder: "Cannot open folder", openFailed: "Open failed:",
+    exportPath: "Export File Save Path", exportPathHint: "Auto-save exported RIS/BibTeX/CSV and downloaded PDFs to this directory",
+    exportPathPlaceholder: "Leave empty to use browser download", choose: "Choose",
+    noExportPath: "Please set export path in Settings first", fileSaved: "File saved to:",
+    downloadSuccess: "Download success", downloadFailed: "Download failed",
     // AI features
     pleaseSearchFirst: "Please search papers first", pleaseSelectPapers: "Please select papers to analyze first",
     aiFailed: "AI search failed", analysisFailed: "Analysis failed", serverError: "Analysis failed (server error)",
@@ -849,7 +865,7 @@ function applySettingsLang() {
     "enableSearchAI", "provider", "apiKey", "modelName", "endpointURL",
     "enableAnalysisAI", "provider", "apiKey", "modelName", "endpointURL",
     "httpProxy", "httpsProxy",
-    "dataDir"
+    "dataDir", "exportPath"
   ];
   labels.forEach((el, i) => {
     if (labelKeys[i]) el.textContent = t(labelKeys[i]);
@@ -861,7 +877,7 @@ function applySettingsLang() {
     "pubmedEmailHint", "optional",
     "searchAIHint", "endpointHint",
     "analysisAIHint", "endpointHint",
-    "dataDirHint"
+    "dataDirHint", "exportPathHint"
   ];
   hints.forEach((el, i) => {
     if (hintKeys[i]) el.textContent = t(hintKeys[i]);
@@ -874,6 +890,7 @@ function applySettingsLang() {
     if (btn.textContent === "取消" || btn.textContent === "Cancel") btn.textContent = t("cancel");
     if (btn.textContent === "重置默认" || btn.textContent === "Reset Default") btn.textContent = t("reset");
     if (btn.textContent === "打开文件夹" || btn.textContent === "Open Folder") btn.textContent = t("openFolder");
+    if (btn.textContent === "选择" || btn.textContent === "Choose") btn.textContent = t("choose");
   });
 
   // Checkbox labels
@@ -1432,18 +1449,38 @@ function getSelectedIndices() {
 // 导出
 async function exportSelected(fmt) {
   const indices = Array.from(checkedSet).sort((a, b) => a - b);
+
+  // 检查是否配置了导出路径
+  const exportPath = document.getElementById("cfgExportPath")?.value?.trim();
+
   try {
     const r = await fetch(`${API}/api/export`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({format: fmt, indices}),
+      body: JSON.stringify({format: fmt, indices, save_to_disk: !!exportPath}),
     });
     const data = await r.json();
     if (r.ok) {
-      downloadFile(data.content, data.filename, data.mime);
-      showToast(`${t("exported")} ${data.filename}（${indices.length > 0 ? indices.length + t("papers") : t("all")}）`);
+      if (data.ok && data.path) {
+        // 已保存到磁盘
+        showToast(`${t("fileSaved")} ${data.path}`);
+      } else if (data.content) {
+        // 浏览器下载
+        downloadFile(data.content, data.filename, data.mime);
+        showToast(`${t("exported")} ${data.filename}`);
+      }
     } else {
-      showToast(data.error || t("exportFailed"));
+      if (data.error === "no_export_path") {
+        // 没有设置导出路径，提示用户设置
+        showToast(t("noExportPath"));
+        toggleSettings();
+        // 同时提供浏览器下载
+        if (data.content) {
+          downloadFile(data.content, data.filename, data.mime);
+        }
+      } else {
+        showToast(data.error || t("exportFailed"));
+      }
     }
   } catch (e) {
     showToast(`${t("exportError")} ${e.message}`);
@@ -1487,6 +1524,9 @@ async function loadSettings() {
 
     document.getElementById("cfgProxyHttp").value = px.http || "";
     document.getElementById("cfgProxyHttps").value = px.https || "";
+
+    // 加载导出路径
+    document.getElementById("cfgExportPath").value = cfg.export_path || "";
 
     // 加载数据目录路径
     try {
@@ -1545,6 +1585,7 @@ async function saveSettings() {
       http: document.getElementById("cfgProxyHttp").value.trim(),
       https: document.getElementById("cfgProxyHttps").value.trim(),
     },
+    export_path: document.getElementById("cfgExportPath").value.trim(),
   });
   try {
     const r = await fetch(`${API}/api/config`, {
@@ -1568,6 +1609,7 @@ async function resetSettings() {
     ai_search: { enabled: false, provider: "deepseek", api_key: "", base_url: "", model: "" },
     ai_analysis: { enabled: false, provider: "deepseek", api_key: "", base_url: "", model: "" },
     proxy: { http: "", https: "" },
+    export_path: "",
   };
   try {
     const r = await fetch(`${API}/api/config`, {
@@ -1602,6 +1644,23 @@ function toggleSettings() {
   overlay.classList.toggle("show");
   panel.classList.toggle("show");
   if (panel.classList.contains("show")) loadSettings();
+}
+
+function chooseExportPath() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.webkitdirectory = true;
+  input.style.display = "none";
+  document.body.appendChild(input);
+  input.click();
+  input.addEventListener("change", () => {
+    if (input.files.length > 0) {
+      const path = input.files[0].path;
+      const dir = path.substring(0, path.lastIndexOf("\\"));
+      document.getElementById("cfgExportPath").value = dir;
+    }
+    document.body.removeChild(input);
+  });
 }
 
 function toggleAI() { document.getElementById("aiPanel").classList.toggle("show"); }
@@ -1921,26 +1980,41 @@ function sortPapers(by) {
 async function downloadOA(encodedUrl, encodedTitle) {
   const url = decodeURIComponent(encodedUrl);
   const title = decodeURIComponent(encodedTitle);
+  const exportPath = document.getElementById("cfgExportPath")?.value?.trim();
+
   showToast(t("verifyingPDF"));
   try {
     const r = await fetch(`${API}/api/download-pdf`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({url, title}),
+      body: JSON.stringify({url, title, save_to_disk: !!exportPath}),
     });
     const data = await r.json();
     if (r.ok) {
-      showToast(`${t("openingPDF")} ${data.filename}`);
-      window.open(data.url, "_blank");
+      if (data.ok && data.path) {
+        // 已下载到磁盘
+        showToast(`${t("fileSaved")} ${data.path}`);
+      } else if (data.url) {
+        // 浏览器下载
+        showToast(`${t("openingPDF")} ${data.filename}`);
+        window.open(data.url, "_blank");
+      }
     } else {
-      const errMsg = data.error || t("cannotDownload");
-      if (errMsg.includes("不是 PDF") || errMsg.includes("not PDF")) {
-        showToast(t("notPDF"));
-      } else if (errMsg.includes("验证失败") || errMsg.includes("verification failed")) {
-        showToast(t("linkVerifyFailed"));
+      if (data.error === "no_export_path") {
+        showToast(t("noExportPath"));
+        toggleSettings();
+        // 同时打开浏览器下载
         window.open(url, "_blank");
       } else {
-        showToast(errMsg);
+        const errMsg = data.error || t("cannotDownload");
+        if (errMsg.includes("不是 PDF") || errMsg.includes("not PDF")) {
+          showToast(t("notPDF"));
+        } else if (errMsg.includes("验证失败") || errMsg.includes("verification failed")) {
+          showToast(t("linkVerifyFailed"));
+          window.open(url, "_blank");
+        } else {
+          showToast(errMsg);
+        }
       }
     }
   } catch {
