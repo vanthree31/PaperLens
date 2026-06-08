@@ -192,13 +192,22 @@ PaperLens/
 ### Implemented
 - [x] AI Smart Search (natural language → PubMed query)
 - [x] Dual data source aggregation (PubMed + OpenAlex)
-- [x] AI Paper Analysis (summary / detail / compare)
+- [x] AI Paper Analysis (summary / detail / compare / novelty)
 - [x] Citation Network Graph (interactive D3.js visualization)
 - [x] Related Work Discovery (find papers through citation patterns)
 - [x] Novelty Detection (AI identifies research gaps)
 - [x] Batch DOI Import
 - [x] Multi-format Export (RIS / BibTeX / CSV)
 - [x] Dual AI model configuration
+- [x] Streaming output for AI analysis
+- [x] User preference persistence (year range, sort, filters)
+- [x] Search history with smart suggestions
+- [x] Citation graph fullscreen with zoom state preservation
+- [x] Graph zoom controls (reset, percentage display)
+- [x] Export path configuration with direct save to disk
+- [x] Data directory management
+- [x] Settings reset to defaults
+- [x] Local paper collections with custom groups
 
 ### Planned
 - [ ] Paper recommendation based on reading history

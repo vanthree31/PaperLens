@@ -386,11 +386,41 @@ body {
 #graphToolbar .btn-sm { font-size: 12px; padding: 4px 10px; }
 #graphAiPanel.fullscreen { position: fixed; inset: 0; z-index: 300; max-height: none; display: flex; flex-direction: column; }
 #graphAiPanel.fullscreen #graphAiContent { flex: 1; overflow-y: auto; font-size: 15px; }
+
+/* 收藏面板 */
+.collections-panel {
+  position: fixed; right: 0; top: 0; bottom: 0; width: 420px; background: var(--card);
+  box-shadow: -4px 0 20px rgba(0,0,0,0.15); z-index: 200; transform: translateX(100%);
+  transition: transform 0.25s ease; display: flex; flex-direction: column;
+}
+.collections-panel.show { transform: translateX(0); }
+.collections-panel h2 { font-size: 18px; padding: 16px 20px; margin: 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.collections-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.collections-empty { text-align: center; padding: 40px 20px; color: var(--text-secondary); }
+.collections-empty .icon { font-size: 32px; margin-bottom: 8px; }
+.collection-group { margin-bottom: 16px; }
+.collection-group-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; cursor: pointer; }
+.collection-group-header h3 { font-size: 14px; font-weight: 600; color: var(--text); }
+.collection-group-header .count { font-size: 12px; color: var(--text-secondary); }
+.collection-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
+.collection-item:hover { border-color: var(--primary); background: #f8fafc; }
+.collection-item .title { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.collection-item .meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.collection-item .actions { margin-top: 6px; display: flex; gap: 4px; }
+.star-btn { background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; opacity: 0.3; transition: opacity 0.15s; }
+.star-btn:hover, .star-btn.active { opacity: 1; }
+.group-tabs { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.group-tab { padding: 4px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: white; white-space: nowrap; }
+.group-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+.group-tab:hover:not(.active) { background: var(--bg); }
+.add-group-btn { padding: 4px 8px; font-size: 12px; border-radius: 4px; cursor: pointer; border: 1px dashed var(--border); background: none; color: var(--text-secondary); }
+.add-group-btn:hover { border-color: var(--primary); color: var(--primary); }
 </style>
 
 <div class="header">
   <h1>PaperLens</h1>
   <div class="header-actions">
+    <button class="btn-icon" onclick="toggleCollections()" id="collectionsBtn" title="收藏">★</button>
     <button class="btn-icon" id="langBtn" onclick="setLang(currentLang==='zh'?'en':'zh')" title="Language">EN</button>
     <button class="btn-icon" onclick="toggleAI()" id="aiBtn" title="AI 助手">AI</button>
     <button class="btn-icon" onclick="toggleSettings()" id="settingsBtn" title="设置">⚙</button>
@@ -599,6 +629,22 @@ body {
 
 <div class="toast" id="toast"></div>
 
+<!-- 收藏面板 -->
+<div class="settings-overlay" id="collectionsOverlay" onclick="toggleCollections()"></div>
+<div class="collections-panel" id="collectionsPanel">
+  <h2>
+    <span id="collectionsTitle">★ 我的收藏</span>
+    <button class="btn btn-sm btn-outline" onclick="toggleCollections()">✕</button>
+  </h2>
+  <div class="group-tabs" id="groupTabs"></div>
+  <div class="collections-body" id="collectionsBody">
+    <div class="collections-empty">
+      <div class="icon">📚</div>
+      <p id="collectionsEmptyText">暂无收藏，点击论文卡片上的 ☆ 添加</p>
+    </div>
+  </div>
+</div>
+
 <!-- 引用关系图谱 -->
 <div class="graph-overlay" id="graphOverlay" onclick="if(event.target===this)closeGraph()">
   <div class="graph-panel" id="graphPanelEl">
@@ -663,6 +709,8 @@ const API = "";
 let allPapers = [];
 let currentPage = 1;
 const pageSize = 20;
+let collectionsData = { groups: [{ id: "default", name: "默认收藏夹" }], items: [] };
+let currentGroupId = "default";
 let checkedSet = new Set();
 let currentSort = "";
 
@@ -761,6 +809,11 @@ const LANGS = {
     replaceConfirm: "当前搜索框有内容，是否替换为：",
     // 语言
     language: "语言", chinese: "中文", english: "English",
+    // 收藏
+    collections: "我的收藏", collectionsEmpty: "暂无收藏，点击论文卡片上的 ☆ 添加",
+    addToCollection: "收藏", removeFromCollection: "取消收藏",
+    addedToCollection: "已添加到收藏", removedFromCollection: "已取消收藏",
+    remove: "移除", operationFailed: "操作失败",
   },
   en: {
     // General
@@ -855,6 +908,11 @@ const LANGS = {
     replaceConfirm: "Search box has content, replace with: ",
     // Language
     language: "Language", chinese: "中文", english: "English",
+    // Collections
+    collections: "My Collections", collectionsEmpty: "No collections yet, click ☆ on paper cards to add",
+    addToCollection: "Add to Collection", removeFromCollection: "Remove from Collection",
+    addedToCollection: "Added to collection", removedFromCollection: "Removed from collection",
+    remove: "Remove", operationFailed: "Operation failed",
   }
 };
 
@@ -973,6 +1031,14 @@ function applyLang() {
   const doiCancelBtn = document.querySelector("#doiModal .btn-outline");
   if (doiCancelBtn) doiCancelBtn.textContent = t("cancel");
 
+  // 收藏面板
+  const collectionsTitle = document.getElementById("collectionsTitle");
+  if (collectionsTitle) collectionsTitle.textContent = `★ ${t("collections")}`;
+  const collectionsBtn = document.getElementById("collectionsBtn");
+  if (collectionsBtn) collectionsBtn.title = t("collections");
+  const collectionsEmptyText = document.getElementById("collectionsEmptyText");
+  if (collectionsEmptyText) collectionsEmptyText.textContent = t("collectionsEmpty");
+
   // 设置面板内容
   applySettingsLang();
 
@@ -1070,6 +1136,9 @@ function applySettingsLang() {
 
   // 加载搜索历史
   await loadHistory();
+
+  // 加载收藏数据
+  await loadCollections();
 
   // 初始化搜索建议
   initSuggestions();
@@ -1507,6 +1576,7 @@ function renderResults() {
   page.forEach((p, i) => {
     const idx = start + i;
     const isChecked = checkedSet.has(idx);
+    const isFavorited = collectionsData.items && collectionsData.items.some(item => item.doi && p.doi && item.doi.toLowerCase() === p.doi.toLowerCase());
     const authors = p.authors.length > 3 ? p.authors.slice(0, 3).join(", ") + " et al." : p.authors.join(", ");
     const doiLink = p.doi ? `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" style="color:var(--primary);text-decoration:none">${p.doi}</a>` : "";
     const oaLink = p.oa_url ? `<a href="${p.oa_url}" target="_blank" class="badge badge-green">OA</a>` : "";
@@ -1517,7 +1587,10 @@ function renderResults() {
       <div class="paper-header">
         <input type="checkbox" class="paper-checkbox" data-idx="${idx}"${isChecked ? ' checked' : ''}>
         <div class="paper-content">
-          <div class="paper-title" onclick="toggleAbstract(${idx})">${p.title || t("noTitle")}</div>
+          <div style="display:flex;align-items:flex-start;gap:8px">
+            <div class="paper-title" onclick="toggleAbstract(${idx})" style="flex:1">${p.title || t("noTitle")}</div>
+            <button class="star-btn${isFavorited ? ' active' : ''}" onclick="toggleFavorite(${idx}, this)" title="${isFavorited ? t('removeFromCollection') : t('addToCollection')}">${isFavorited ? '★' : '☆'}</button>
+          </div>
           <div class="paper-meta">
             <span class="tag">${authors}</span>
             <span class="tag"><b>${p.journal || ""}</b></span>
@@ -2045,6 +2118,151 @@ document.addEventListener("click", e => {
   const dd = document.getElementById("historyDropdown");
   if (dd && !e.target.closest(".search-bar")) dd.classList.remove("show");
 });
+
+// ========== 收藏功能 ==========
+async function loadCollections() {
+  try {
+    const r = await fetch(`${API}/api/collections`);
+    if (r.ok) {
+      collectionsData = await r.json();
+      renderGroupTabs();
+    }
+  } catch { /* 忽略 */ }
+}
+
+function toggleCollections() {
+  const panel = document.getElementById("collectionsPanel");
+  const overlay = document.getElementById("collectionsOverlay");
+  panel.classList.toggle("show");
+  overlay.classList.toggle("show");
+  if (panel.classList.contains("show")) {
+    renderCollections();
+  }
+}
+
+function renderGroupTabs() {
+  const tabs = document.getElementById("groupTabs");
+  if (!tabs) return;
+  const groups = collectionsData.groups || [];
+  let html = groups.map(g =>
+    `<button class="group-tab${g.id === currentGroupId ? ' active' : ''}" onclick="switchGroup('${g.id}')">${g.name}</button>`
+  ).join('');
+  html += `<button class="add-group-btn" onclick="addGroup()">+ 新建</button>`;
+  tabs.innerHTML = html;
+}
+
+function switchGroup(groupId) {
+  currentGroupId = groupId;
+  renderGroupTabs();
+  renderCollections();
+}
+
+function addGroup() {
+  const name = prompt(currentLang === 'zh' ? '输入收藏夹名称：' : 'Enter collection name：');
+  if (!name || !name.trim()) return;
+  const id = 'group_' + Date.now();
+  collectionsData.groups = collectionsData.groups || [];
+  collectionsData.groups.push({ id, name: name.trim() });
+  saveCollectionGroups();
+  currentGroupId = id;
+  renderGroupTabs();
+  renderCollections();
+}
+
+async function saveCollectionGroups() {
+  try {
+    await fetch(`${API}/api/collections/groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groups: collectionsData.groups }),
+    });
+  } catch { /* 忽略 */ }
+}
+
+function renderCollections() {
+  const body = document.getElementById("collectionsBody");
+  if (!body) return;
+  const items = (collectionsData.items || []).filter(item => item.group_id === currentGroupId);
+  if (items.length === 0) {
+    body.innerHTML = `<div class="collections-empty"><div class="icon">📚</div><p>${t("collectionsEmpty")}</p></div>`;
+    return;
+  }
+  let html = '';
+  items.forEach((item, i) => {
+    const authors = (item.authors || []).length > 2 ? item.authors.slice(0, 2).join(", ") + " et al." : (item.authors || []).join(", ");
+    html += `
+    <div class="collection-item" onclick="viewCollectionItem('${encodeURIComponent(item.doi)}')">
+      <div class="title">${item.title || t("noTitle")}</div>
+      <div class="meta">${authors} · ${item.journal || ""} (${item.year || "?"}) ${item.citation_count > 0 ? '· 引用 ' + item.citation_count : ''}</div>
+      <div class="actions">
+        ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();window.open('https://doi.org/${encodeURIComponent(item.doi)}')">${t("original")}</button>` : ''}
+        ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showCitationGraph('${encodeURIComponent(item.doi)}','${encodeURIComponent(item.title)}')">${t("citationGraph")}</button>` : ''}
+        <button class="btn btn-sm btn-outline" style="color:var(--danger)" onclick="event.stopPropagation();removeFromCollection('${encodeURIComponent(item.doi)}')">${t("remove")}</button>
+      </div>
+    </div>`;
+  });
+  body.innerHTML = html;
+}
+
+function viewCollectionItem(encodedDoi) {
+  const doi = decodeURIComponent(encodedDoi);
+  // 先检查当前搜索结果中是否有这篇论文
+  const found = allPapers.find(p => p.doi && p.doi.toLowerCase() === doi.toLowerCase());
+  if (found) {
+    toggleCollections();
+    return;
+  }
+  // 否则通过 DOI 查询并跳转
+  window.open(`https://doi.org/${encodeURIComponent(doi)}`);
+}
+
+async function toggleFavorite(idx, btn) {
+  const paper = allPapers[idx];
+  if (!paper || !paper.doi) return;
+  const isFavorited = collectionsData.items && collectionsData.items.some(item => item.doi && item.doi.toLowerCase() === paper.doi.toLowerCase());
+  if (isFavorited) {
+    await removeFromCollection(encodeURIComponent(paper.doi));
+  } else {
+    await addToCollection(paper);
+  }
+  // renderResults() 已在 addToCollection/removeFromCollection 中调用
+}
+
+async function addToCollection(paper) {
+  try {
+    const r = await fetch(`${API}/api/collections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paper, group_id: currentGroupId }),
+    });
+    if (r.ok) {
+      await loadCollections();
+      renderResults(); // 刷新星标状态
+      showToast(t("addedToCollection"));
+    }
+  } catch (e) {
+    showToast(t("operationFailed"));
+  }
+}
+
+async function removeFromCollection(encodedDoi) {
+  const doi = decodeURIComponent(encodedDoi);
+  try {
+    const r = await fetch(`${API}/api/collections`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doi, group_id: currentGroupId }),
+    });
+    if (r.ok) {
+      await loadCollections();
+      renderCollections();
+      renderResults(); // 刷新星标状态
+      showToast(t("removedFromCollection"));
+    }
+  } catch (e) {
+    showToast(t("operationFailed"));
+  }
+}
 
 // 包装搜索函数：自动保存历史 + 刷新建议（只包装一次）
 const _origDoSearch = doSearch;

@@ -703,6 +703,110 @@ def create_app():
 
         return jsonify({"content": content, "filename": filename, "mime": mime})
 
+    @app.route("/api/collections", methods=["GET"])
+    def get_collections():
+        """获取所有收藏"""
+        path = _get_user_data_path("collections.json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return jsonify(json.load(f))
+            except Exception:
+                pass
+        return jsonify({"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []})
+
+    @app.route("/api/collections", methods=["POST"])
+    def add_collection():
+        """添加收藏"""
+        data = request.json or {}
+        paper = data.get("paper")
+        group_id = data.get("group_id", "default")
+        if not paper or not paper.get("doi"):
+            return jsonify({"error": "缺少论文信息"}), 400
+
+        path = _get_user_data_path("collections.json")
+        collections = {"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    collections = json.load(f)
+            except Exception:
+                pass
+
+        # 检查是否已收藏
+        doi = paper.get("doi", "").lower()
+        for item in collections.get("items", []):
+            if item.get("doi", "").lower() == doi and item.get("group_id") == group_id:
+                return jsonify({"ok": True, "message": "已收藏"})
+
+        collections.setdefault("items", []).append({
+            "doi": paper.get("doi", ""),
+            "title": paper.get("title", ""),
+            "authors": paper.get("authors", []),
+            "journal": paper.get("journal", ""),
+            "year": paper.get("year", 0),
+            "citation_count": paper.get("citation_count", 0),
+            "oa_url": paper.get("oa_url", ""),
+            "pmid": paper.get("pmid", ""),
+            "abstract": paper.get("abstract", ""),
+            "group_id": group_id,
+            "added_at": datetime.now().isoformat(),
+        })
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(collections, f, ensure_ascii=False, indent=2)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/collections", methods=["DELETE"])
+    def remove_collection():
+        """删除收藏"""
+        data = request.json or {}
+        doi = data.get("doi", "").lower()
+        group_id = data.get("group_id", "default")
+        if not doi:
+            return jsonify({"error": "缺少 DOI"}), 400
+
+        path = _get_user_data_path("collections.json")
+        if not os.path.exists(path):
+            return jsonify({"ok": True})
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                collections = json.load(f)
+            collections["items"] = [
+                item for item in collections.get("items", [])
+                if not (item.get("doi", "").lower() == doi and item.get("group_id") == group_id)
+            ]
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(collections, f, ensure_ascii=False, indent=2)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/collections/groups", methods=["POST"])
+    def save_collection_groups():
+        """保存收藏夹分组"""
+        data = request.json or {}
+        groups = data.get("groups", [])
+        path = _get_user_data_path("collections.json")
+        collections = {"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    collections = json.load(f)
+            except Exception:
+                pass
+        collections["groups"] = groups
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(collections, f, ensure_ascii=False, indent=2)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/api/data-dir", methods=["GET"])
     def get_data_dir():
         return jsonify({"path": _get_app_data_dir()})

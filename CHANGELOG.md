@@ -5,6 +5,7 @@ All notable changes to PaperLens will be documented in this file.
 ## [1.1.0] - 2026-06-08
 
 ### Added
+- **Local Paper Collections**: star papers to save, custom collection groups, collections sidebar panel
 - **Related Work Discovery**: find related papers through shared citation patterns (purple nodes in graph)
 - **Novelty Detection**: AI analysis mode that identifies research gaps, unexplored areas, and promising directions
 - Fullscreen toggle for citation graph with zoom state preservation
