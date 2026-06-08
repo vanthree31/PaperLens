@@ -194,6 +194,7 @@ PaperLens/
 - [x] Dual data source aggregation (PubMed + OpenAlex)
 - [x] AI Paper Analysis (summary / detail / compare / novelty)
 - [x] Citation Network Graph (interactive D3.js visualization)
+- [x] Floating Citation Graph (draggable windows with full AI toolbar)
 - [x] Related Work Discovery (find papers through citation patterns)
 - [x] Novelty Detection (AI identifies research gaps)
 - [x] Batch DOI Import

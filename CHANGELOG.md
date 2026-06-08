@@ -6,9 +6,13 @@ All notable changes to PaperLens will be documented in this file.
 
 ### Added
 - **Local Paper Collections**: star papers to save, custom collection groups, collections sidebar panel
+- **Floating Citation Graph**: new graph opens as draggable floating window with full toolbar (AI summary/detail/novelty/related/export)
 - **Related Work Discovery**: find related papers through shared citation patterns (purple nodes in graph)
 - **Novelty Detection**: AI analysis mode that identifies research gaps, unexplored areas, and promising directions
 - Fullscreen toggle for citation graph with zoom state preservation
+
+### Fixed
+- Related papers no longer cluster together — improved spacing and collision detection in citation graph
 - Reset zoom button in citation graph legend
 - Zoom level percentage display in graph legend
 - Click overlay background to close citation graph
