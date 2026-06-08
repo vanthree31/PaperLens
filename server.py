@@ -75,11 +75,26 @@ def _escape_paper(paper) -> dict:
     }
 
 
-def _build_paper_prompt(papers, mode):
-    """构建不同模式的分析 prompt"""
+def _build_paper_prompt(papers, mode, lang="zh"):
+    """构建不同模式的分析 prompt
+
+    Args:
+        papers: 论文列表
+        mode: 分析模式 (summary/detail/compare)
+        lang: 语言 (zh/en)
+    """
     paper_info = []
     for i, p in enumerate(papers, 1):
-        info = f"""【论文 {i}】
+        if lang == "en":
+            info = f"""[Paper {i}]
+Title: {p.title}
+Authors: {', '.join(p.authors[:10])}
+Journal: {p.journal} ({p.year})
+DOI: {p.doi}  PMID: {p.pmid}  Citations: {p.citation_count}
+Abstract: {p.abstract if p.abstract else 'No abstract'}
+Keywords: {', '.join(p.keywords) if p.keywords else 'None'}"""
+        else:
+            info = f"""【论文 {i}】
 标题: {p.title}
 作者: {', '.join(p.authors[:10])}
 期刊: {p.journal} ({p.year})
@@ -89,13 +104,80 @@ DOI: {p.doi}  PMID: {p.pmid}  被引: {p.citation_count}
         paper_info.append(info)
     papers_text = "\n\n".join(paper_info)
 
-    fmt = """格式要求：
+    if lang == "en":
+        fmt = """Format requirements:
+- Answer in English, use plain text without Markdown symbols (# * - ` > etc.)
+- Use numbered sections (1. 2. 3.), with blank lines between paragraphs
+- Write professionally and concisely, as a senior professor reviewing for peers"""
+
+        if mode == "detail":
+            prompt = f"""You are a senior researcher and university professor with deep expertise in this field. Analyze the following paper in depth for fellow experts. No introductory filler — go straight to substance.
+
+{fmt}
+
+Analyze each paper across these dimensions:
+
+1. Core Contribution
+What does this paper actually do? What key problem does it solve? Do not repeat the title.
+
+2. Methodology
+What methods were used? What are the key experiments/algorithms/apparatus? What is methodologically novel?
+
+3. Key Findings
+What are the most important quantitative or qualitative results? Are there any surprising outcomes?
+
+4. Academic Value and Limitations
+Where does this contribution sit in the field? What are the clear limitations or debatable points?
+
+5. Relationship to Prior Work
+How does this paper compare to contemporaneous or classic work? Does it resolve open problems from previous research?
+
+{papers_text}"""
+
+        elif mode == "compare":
+            prompt = f"""You are a senior researcher with deep expertise in this field. Provide a systematic comparative analysis of the following papers for fellow experts.
+
+{fmt}
+
+Analyze from these perspectives:
+
+1. Research Approach Comparison
+What are the similarities and differences in technical approaches? What are the strengths and weaknesses of each?
+
+2. Innovation Comparison
+What is the core innovation of each? Which is more groundbreaking?
+
+3. Complementarity and Research Gaps
+What complementary relationships exist between these works? Do they collectively expose unresolved problems in the field?
+
+4. Recommendations for Future Research
+What are the most值得关注 questions for continuing in this direction? Which technical approaches are more promising?
+
+{papers_text}"""
+
+        else:  # summary
+            prompt = f"""You are a senior researcher with deep expertise in this field. Summarize the following papers with maximum conciseness.
+
+{fmt}
+
+For each paper, summarize in 3-5 sentences covering:
+- What was done (one sentence on the core work)
+- How it was done (key technology)
+- What was found (core results)
+- Why it matters (academic or applied value)
+
+No pleasantries — straight to content.
+
+{papers_text}"""
+
+    else:  # Chinese
+        fmt = """格式要求：
 - 用中文回答，使用纯文本，不要用 Markdown 符号（# * - ` > 等）
 - 用"一、二、三"或"1. 2. 3."编号，段落之间空一行
 - 语言专业精炼，像资深教授写给同行的评审意见"""
 
-    if mode == "detail":
-        prompt = f"""你是一位在该领域有深厚造诣的资深学者，请对以下论文进行深度解析。你的读者是同行专家，不需要科普，直接说干货。
+        if mode == "detail":
+            prompt = f"""你是一位在该领域有深厚造诣的资深学者和大学教授，请对以下论文进行深度解析。你的读者是同行专家，不需要科普，直接说干货。
 
 {fmt}
 
@@ -104,22 +186,28 @@ DOI: {p.doi}  PMID: {p.pmid}  被引: {p.citation_count}
 一、核心贡献
 用一两句话说清楚这篇论文到底做了什么、解决了什么关键问题。不要复述标题。
 
-二、技术路线
-用了什么方法？关键实验/算法/装置是什么？方法上有什么创新？
+二、研究动机
+为什么需要这项工作？它填补了此前研究的什么空白？
 
-三、关键结果
-最重要的定量或定性发现是什么？有没有出乎意料的结果？
+三、技术路线
+用了什么方法？关键实验/算法/装置是什么？方法上有什么创新？用通俗语言解释公式和模型。
 
-四、学术价值与局限
+四、关键结果
+最重要的定量或定性发现是什么？有没有出乎意料的结果？实验设计是否合理？
+
+五、学术价值与局限
 这篇论文的贡献在领域内处于什么水平？有什么明显的局限性或可商榷之处？
 
-五、与本领域其他工作的关系
+六、与本领域其他工作的关系
 这篇论文和同期或经典工作相比，有什么异同？是否解决了前人遗留的问题？
+
+七、未来方向
+这项研究开启了哪些新的研究机会？
 
 {papers_text}"""
 
-    elif mode == "compare":
-        prompt = f"""你是一位在该领域有深厚造诣的资深学者，请对以下论文进行系统对比分析。你的读者是同行专家。
+        elif mode == "compare":
+            prompt = f"""你是一位在该领域有深厚造诣的资深学者，请对以下论文进行系统对比分析。你的读者是同行专家。
 
 {fmt}
 
@@ -139,15 +227,15 @@ DOI: {p.doi}  PMID: {p.pmid}  被引: {p.citation_count}
 
 {papers_text}"""
 
-    else:  # summary
-        prompt = f"""你是一位在该领域有深厚造诣的资深学者，请用最精炼的语言总结以下论文。
+        else:  # summary
+            prompt = f"""你是一位在该领域有深厚造诣的资深学者和大学教授，请用最精炼的语言总结以下论文，如同写给同行的研究笔记。
 
 {fmt}
 
 每篇论文用 3-5 句话概括，必须包含：
-- 做了什么（一句话说清核心工作）
-- 怎么做的（关键技术）
-- 发现了什么（核心结果）
+- 做了什么（一句话说清核心工作，不要复述标题）
+- 怎么做的（关键技术，用通俗语言）
+- 发现了什么（核心结果，尽量定量）
 - 有什么用（学术或应用价值）
 
 不需要客套话，直接说内容。
@@ -230,6 +318,7 @@ def create_app():
             mode = "summary"
         force_refresh = data.get("force_refresh", False)
         use_stream = data.get("stream", False)
+        lang = data.get("lang", "zh")
 
         papers = cached_papers["papers"]
         if not papers:
@@ -241,12 +330,15 @@ def create_app():
         if not selected:
             return jsonify({"error": "选中的论文无效"}), 400
 
-        cache_key = f"{mode}_{'_'.join(str(i) for i in indices)}"
+        cache_key = f"{mode}_{lang}_{'_'.join(str(i) for i in indices)}"
         if not force_refresh and cache_key in ai_cache and ai_cache[cache_key]:
             return jsonify({"response": ai_cache[cache_key], "count": len(selected), "mode": mode, "cached": True})
 
-        prompt = _build_paper_prompt(selected, mode)
-        context = "你是一位资深学术论文分析专家，擅长用中文为同行学者提供精准、深刻、不啰嗦的论文分析。根据论文内容自动判断所属领域，用该领域的专业语言进行分析。"
+        prompt = _build_paper_prompt(selected, mode, lang)
+        if lang == "en":
+            context = "You are a senior academic paper analysis expert. Provide precise, insightful, and concise paper analysis for fellow researchers. Automatically identify the research field and use domain-appropriate professional language."
+        else:
+            context = "你是一位资深学术论文分析专家，擅长用中文为同行学者提供精准、深刻、不啰嗦的论文分析。根据论文内容自动判断所属领域，用该领域的专业语言进行分析。"
 
         if use_stream:
             def generate():

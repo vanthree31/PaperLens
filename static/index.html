@@ -1710,7 +1710,7 @@ async function aiAnalyzePapers(mode, forceRefresh) {
     const r = await fetch(`${API}/api/ai/analyze-papers`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({indices, mode, force_refresh: !!forceRefresh, stream: true}),
+      body: JSON.stringify({indices, mode, force_refresh: !!forceRefresh, stream: true, lang: currentLang}),
     });
     clearInterval(timer);
 
