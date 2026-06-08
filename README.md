@@ -1,4 +1,8 @@
 <p align="center">
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
+</p>
+
+<p align="center">
   <h1 align="center">🔬 PaperLens</h1>
   <p align="center">An intelligent academic paper discovery platform that helps researchers see through the noise.</p>
   <p align="center">

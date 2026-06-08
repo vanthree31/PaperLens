@@ -1,4 +1,8 @@
 <p align="center">
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
+</p>
+
+<p align="center">
   <h1 align="center">🔬 PaperLens</h1>
   <p align="center">智能学术论文检索平台 — 一眼看穿海量论文</p>
 </p>
