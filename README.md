@@ -28,7 +28,6 @@ Research Question → AI Query Understanding → Multi-Source Search → Citatio
 - **AI Smart Search** — describe your research interest in natural language, AI builds the optimal query
 - **Citation Network Explorer** — interactive graph showing how papers cite each other, click to expand relationships
 - **AI Paper Analysis** — instant summaries, detailed analysis, multi-paper comparison
-- **Related Work Discovery** — find related papers through shared citation patterns
 - **Novelty Detection** — AI identifies research gaps and unexplored directions in a field
 
 ## Why PaperLens?
@@ -69,7 +68,6 @@ PaperLens solves all of these with a single interface.
 | Feature | Description |
 |---------|-------------|
 | **Citation Graph** | Interactive D3.js force-directed graph — zoom, pan, drag nodes, click to expand citation relationships |
-| **Related Work Discovery** | Find papers that share citation patterns — discover connections you wouldn't find through search |
 | **Citation Expansion** | Click any node in the graph to load its citing and referenced papers |
 
 ### Export & Integration
@@ -145,7 +143,7 @@ Find recent papers on light-sheet microscopy for live cell imaging
 The AI analyzes your intent, builds an optimal PubMed query, and executes it.
 
 ### Citation Network Exploration
-Click the **引用关系图谱** button on any paper → see its citation relationships in an interactive graph → click nodes to expand → discover related works.
+Click the **Citation Graph** button on any paper → see its citation relationships in an interactive graph → click nodes to expand citations.
 
 ### AI Paper Analysis
 Select papers → click **AI Summary** / **AI Detail** / **AI Compare** / **Novelty Detection** → get instant analysis.
@@ -195,7 +193,6 @@ PaperLens/
 - [x] AI Paper Analysis (summary / detail / compare / novelty)
 - [x] Citation Network Graph (interactive D3.js visualization)
 - [x] Floating Citation Graph (draggable windows with full AI toolbar)
-- [x] Related Work Discovery (find papers through citation patterns)
 - [x] Novelty Detection (AI identifies research gaps)
 - [x] Batch DOI Import
 - [x] Multi-format Export (RIS / BibTeX / CSV)
