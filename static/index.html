@@ -338,6 +338,7 @@ body {
 <div class="header">
   <h1>PaperLens</h1>
   <div class="header-actions">
+    <button class="btn-icon" id="langBtn" onclick="setLang(currentLang==='zh'?'en':'zh')" title="Language">EN</button>
     <button class="btn-icon" onclick="toggleAI()" title="AI 助手">AI</button>
     <button class="btn-icon" onclick="toggleSettings()" title="设置">⚙</button>
   </div>
@@ -357,7 +358,7 @@ body {
     <span style="margin-left:auto">输入中文或自然语言自动触发 AI 检索，输入英文关键词为普通检索</span>
   </div>
   <div id="suggestionBar" style="max-width:900px;margin:8px auto 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:24px">
-    <span style="font-size:12px;color:var(--text-secondary);margin-right:4px">试试：</span>
+    <span id="trySearchLabel" style="font-size:12px;color:var(--text-secondary);margin-right:4px">试试：</span>
   </div>
   <div class="filters">
     <div class="filter-group">
@@ -365,38 +366,38 @@ body {
       <label><input type="checkbox" id="useOpenalex" checked> OpenAlex</label>
     </div>
     <div class="filter-group">
-      期刊: <input type="text" id="filterJournal" placeholder="如 Nature Methods" style="width:140px">
+      <span data-i18n="journal">期刊</span>: <input type="text" id="filterJournal" placeholder="如 Nature Methods" style="width:140px">
     </div>
     <div class="filter-group">
-      字段: <select id="filterField" style="width:80px">
-        <option value="">默认</option>
-        <option value="ti">标题</option>
-        <option value="tiab">标题+摘要</option>
-        <option value="au">作者</option>
-        <option value="tw">自由词</option>
+      <span data-i18n="field">字段</span>: <select id="filterField" style="width:80px">
+        <option value="" data-i18n="fieldDefault">默认</option>
+        <option value="ti" data-i18n="fieldTitle">标题</option>
+        <option value="tiab" data-i18n="fieldTitleAbstract">标题+摘要</option>
+        <option value="au" data-i18n="fieldAuthor">作者</option>
+        <option value="tw" data-i18n="fieldFree">自由词</option>
       </select>
     </div>
     <div class="filter-group">
-      年份: <input type="number" id="yearFrom" min="1900" max="2099" style="width:65px"> —
+      <span data-i18n="year">年份</span>: <input type="number" id="yearFrom" min="1900" max="2099" style="width:65px"> —
       <input type="number" id="yearTo" min="1900" max="2099" style="width:65px">
     </div>
     <div class="filter-group">
-      类型: <select id="filterPubType" style="width:80px">
-        <option value="">全部</option>
-        <option value="review">综述</option>
-        <option value="clinical trial">临床试验</option>
-        <option value="meta-analysis">Meta分析</option>
+      <span data-i18n="type">类型</span>: <select id="filterPubType" style="width:80px">
+        <option value="" data-i18n="typeAll">全部</option>
+        <option value="review" data-i18n="typeReview">综述</option>
+        <option value="clinical trial" data-i18n="typeClinical">临床试验</option>
+        <option value="meta-analysis" data-i18n="typeMeta">Meta分析</option>
       </select>
     </div>
     <div class="filter-group">
-      排序: <select id="sortBy">
-        <option value="relevance">相关度</option>
-        <option value="date">时间</option>
-        <option value="citations">引用</option>
+      <span data-i18n="sort">排序</span>: <select id="sortBy">
+        <option value="relevance" data-i18n="sortRelevance">相关度</option>
+        <option value="date" data-i18n="sortDate">时间</option>
+        <option value="citations" data-i18n="sortCitations">引用</option>
       </select>
     </div>
     <div class="filter-group">
-      数量: <select id="maxResults">
+      <span data-i18n="count">数量</span>: <select id="maxResults">
         <option value="20">20</option>
         <option value="50" selected>50</option>
         <option value="100">100</option>
@@ -557,7 +558,329 @@ let allPapers = [];
 let currentPage = 1;
 const pageSize = 20;
 let checkedSet = new Set();
-let currentSort = ""; // 当前排序方式
+let currentSort = "";
+
+// ========== 多语言支持 ==========
+const LANGS = {
+  zh: {
+    // 通用
+    search: "检索", searching: "检索中...", retry: "重试", cancel: "取消", save: "保存", close: "关闭",
+    confirm: "确定", reset: "重置默认", copy: "复制", regenerate: "重新生成",
+    // 头部
+    aiAssistant: "AI 助手", settings: "设置",
+    // 搜索
+    searchPlaceholder: "输入检索词或自然语言描述，如：定量相位成像最新进展...",
+    searchHint: "输入中文或自然语言自动触发 AI 检索，输入英文关键词为普通检索",
+    trySearch: "试试：", enterQuery: "请输入检索词",
+    // 筛选
+    journal: "期刊", field: "字段", year: "年份", type: "类型", sort: "排序", count: "数量",
+    fieldDefault: "默认", fieldTitle: "标题", fieldTitleAbstract: "标题+摘要", fieldAuthor: "作者", fieldFree: "自由词",
+    typeAll: "全部", typeReview: "综述", typeClinical: "临床试验", typeMeta: "Meta分析",
+    sortRelevance: "相关度", sortDate: "时间", sortCitations: "引用",
+    // 数据源
+    pubmed: "PubMed", openalex: "OpenAlex",
+    // 结果
+    totalPapers: "共", papers: "篇", showing: "显示", selected: "已选",
+    sortBtn: "排序：", cited: "被引", date: "时间", title: "标题",
+    selectAll: "全选/取消", aiSummary: "AI 总结", aiDetail: "AI 详析", aiCompare: "AI 对比",
+    exportRIS: "导出 RIS", bibtex: "BibTeX", csv: "CSV", all: "全部",
+    noTitle: "无标题", noAbstract: "该数据源无摘要，点击原文链接查看",
+    abstract: "摘要", original: "原文", downloadPDF: "下载PDF",
+    prevPage: "上一页", nextPage: "下一页", page: "第", of: "页",
+    // 空状态
+    noResults: "未找到相关文献", enterToSearch: "输入检索词开始搜索文献",
+    dualSource: "支持 PubMed 和 OpenAlex 双数据源",
+    networkError: "网络连接异常，请检查网络或代理设置后重试",
+    searchTips: "试试更短的关键词 · 检查拼写 · 扩大年份范围 · 换一个数据源试试",
+    // AI
+    aiAnalyzing: "AI 正在分析...", aiWaiting: "AI 正在分析中... 已等待", seconds: "秒",
+    aiSearchStrategy: "AI 检索策略：", suggestedKeywords: "推荐关键词：", actualQuery: "实际检索式：",
+    aiSearchComplete: "AI 智能检索完成，找到", papersFound: "篇文献（耗时",
+    aiSummarizing: "AI 总结中...", aiDetailing: "AI 详析中...", aiComparing: "AI 对比中...",
+    resultFor: "结果（", papersCount: "篇）", cached: "缓存",
+    copied: "已复制到剪贴板", copyFailed: "复制失败，请手动选择复制",
+    // 搜索模式
+    normalSearch: "● 普通检索模式", aiSearchMode: "● AI 智能检索模式",
+    // 状态
+    ready: "就绪", searching: "正在检索...", searchFailed: "检索失败",
+    networkErrorRetry: "网络错误 - 点击重试", noResultsFound: "未找到相关文献",
+    dataSource: "数据源: PubMed + OpenAlex",
+    // 历史
+    noHistory: "暂无搜索历史", papersCount2: "篇",
+    // DOI
+    batchDOI: "批量 DOI 导入", doiHint: "每行一个 DOI，支持带 \"doi:\" 前缀",
+    enterDOI: "请输入 DOI", noValidDOI: "未识别到有效 DOI",
+    queryingDOI: "正在查询", doiQuery: "个 DOI...",
+    foundPapers: "找到", doiNotFound: "个 DOI 未匹配到（已替换之前的结果）",
+    doiReplaced: "（已替换之前的结果）", queryFailed: "查询失败",
+    // PDF
+    verifyingPDF: "正在验证 PDF 链接...", openingPDF: "正在打开:",
+    notPDF: "该链接返回的不是 PDF 文件，可能需要机构权限",
+    linkVerifyFailed: "链接验证失败，正在直接打开...",
+    networkErrorOpening: "网络异常，正在直接打开链接...",
+    cannotDownload: "无法下载",
+    // 导出
+    exported: "已导出", exportFailed: "导出失败", exportError: "导出错误:",
+    // 设置
+    settingsTitle: "⚙ 设置", dataSourceConfig: "数据源配置",
+    pubmedEmail: "PubMed Email", pubmedEmailHint: "可选，提高 NCBI API 速率限制",
+    pubmedAPIKey: "PubMed API Key", optional: "可选",
+    aiSearchModel: "AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）",
+    enableSearchAI: "启用检索 AI", provider: "提供商",
+    apiKey: "API Key", modelName: "模型名称", endpointURL: "端点 URL",
+    searchAIHint: "推荐：deepseek-chat / gpt-4o-mini",
+    endpointHint: "留空使用默认端点",
+    aiAnalysisModel: "AI 论文分析模型（总结/详析/对比，建议用高质量模型）",
+    enableAnalysisAI: "启用分析 AI",
+    analysisAIHint: "推荐：deepseek-reasoner / gpt-4o / claude-sonnet",
+    networkProxy: "网络代理", httpProxy: "HTTP 代理", httpsProxy: "HTTPS 代理",
+    dataStorage: "数据存储", dataDir: "配置与历史数据目录",
+    openFolder: "打开文件夹", dataDirHint: "搜索历史、偏好设置、AI 配置均存储在此目录",
+    resetConfirm: "确定要重置所有设置为默认值吗？", settingsSaved: "设置已保存",
+    settingsReset: "已重置为默认设置", saveFailed: "保存失败:", resetFailed: "重置失败:",
+    cannotOpenFolder: "无法打开文件夹", openFailed: "打开失败:",
+    // AI 功能
+    pleaseSearchFirst: "请先检索文献", pleaseSelectPapers: "请先勾选要分析的论文",
+    aiFailed: "AI 检索失败", analysisFailed: "分析失败", serverError: "分析失败（服务器错误）",
+    requestFailed: "请求失败:",
+    // 建议
+    replaceConfirm: "当前搜索框有内容，是否替换为：",
+    // 语言
+    language: "语言", chinese: "中文", english: "English",
+  },
+  en: {
+    // General
+    search: "Search", searching: "Searching...", retry: "Retry", cancel: "Cancel", save: "Save", close: "Close",
+    confirm: "OK", reset: "Reset Default", copy: "Copy", regenerate: "Regenerate",
+    // Header
+    aiAssistant: "AI Assistant", settings: "Settings",
+    // Search
+    searchPlaceholder: "Enter keywords or natural language description...",
+    searchHint: "Enter Chinese or natural language for AI search, English keywords for regular search",
+    trySearch: "Try:", enterQuery: "Please enter search query",
+    // Filters
+    journal: "Journal", field: "Field", year: "Year", type: "Type", sort: "Sort", count: "Count",
+    fieldDefault: "Default", fieldTitle: "Title", fieldTitleAbstract: "Title+Abstract", fieldAuthor: "Author", fieldFree: "Free Word",
+    typeAll: "All", typeReview: "Review", typeClinical: "Clinical Trial", typeMeta: "Meta-analysis",
+    sortRelevance: "Relevance", sortDate: "Date", sortCitations: "Citations",
+    // Data sources
+    pubmed: "PubMed", openalex: "OpenAlex",
+    // Results
+    totalPapers: "Total", papers: "papers", showing: "Showing", selected: "Selected",
+    sortBtn: "Sort:", cited: "Cited", date: "Date", title: "Title",
+    selectAll: "Select All", aiSummary: "AI Summary", aiDetail: "AI Detail", aiCompare: "AI Compare",
+    exportRIS: "Export RIS", bibtex: "BibTeX", csv: "CSV", all: "All",
+    noTitle: "No Title", noAbstract: "No abstract available for this source, click original link to view",
+    abstract: "Abstract", original: "Original", downloadPDF: "Download PDF",
+    prevPage: "Previous", nextPage: "Next", page: "Page", of: "of",
+    // Empty state
+    noResults: "No papers found", enterToSearch: "Enter search query to start searching papers",
+    dualSource: "Supports PubMed and OpenAlex dual data sources",
+    networkError: "Network error, please check network or proxy settings and retry",
+    searchTips: "Try shorter keywords · Check spelling · Expand year range · Try another data source",
+    // AI
+    aiAnalyzing: "AI is analyzing...", aiWaiting: "AI analyzing... waited", seconds: "s",
+    aiSearchStrategy: "AI Search Strategy:", suggestedKeywords: "Suggested Keywords:", actualQuery: "Actual Query:",
+    aiSearchComplete: "AI search complete, found", papersFound: "papers (took",
+    aiSummarizing: "AI Summarizing...", aiDetailing: "AI Detailing...", aiComparing: "AI Comparing...",
+    resultFor: "Result (", papersCount: " papers)", cached: "Cached",
+    copied: "Copied to clipboard", copyFailed: "Copy failed, please select and copy manually",
+    // Search mode
+    normalSearch: "● Normal Search", aiSearchMode: "● AI Smart Search",
+    // Status
+    ready: "Ready", searching: "Searching...", searchFailed: "Search failed",
+    networkErrorRetry: "Network error - click to retry", noResultsFound: "No papers found",
+    dataSource: "Data Source: PubMed + OpenAlex",
+    // History
+    noHistory: "No search history", papersCount2: " papers",
+    // DOI
+    batchDOI: "Batch DOI Import", doiHint: "One DOI per line, supports \"doi:\" prefix",
+    enterDOI: "Please enter DOI", noValidDOI: "No valid DOI recognized",
+    queryingDOI: "Querying", doiQuery: " DOIs...",
+    foundPapers: "Found", doiNotFound: " DOIs not matched (replaced previous results)",
+    doiReplaced: " (replaced previous results)", queryFailed: "Query failed",
+    // PDF
+    verifyingPDF: "Verifying PDF link...", openingPDF: "Opening:",
+    notPDF: "The link does not return a PDF file, institutional access may be required",
+    linkVerifyFailed: "Link verification failed, opening directly...",
+    networkErrorOpening: "Network error, opening link directly...",
+    cannotDownload: "Cannot download",
+    // Export
+    exported: "Exported", exportFailed: "Export failed", exportError: "Export error:",
+    // Settings
+    settingsTitle: "⚙ Settings", dataSourceConfig: "Data Source Configuration",
+    pubmedEmail: "PubMed Email", pubmedEmailHint: "Optional, improves NCBI API rate limit",
+    pubmedAPIKey: "PubMed API Key", optional: "Optional",
+    aiSearchModel: "AI Search Model (parses natural language → generates search queries, recommend fast model)",
+    enableSearchAI: "Enable Search AI", provider: "Provider",
+    apiKey: "API Key", modelName: "Model Name", endpointURL: "Endpoint URL",
+    searchAIHint: "Recommended: deepseek-chat / gpt-4o-mini",
+    endpointHint: "Leave empty to use default endpoint",
+    aiAnalysisModel: "AI Analysis Model (summary/detail/comparison, recommend high-quality model)",
+    enableAnalysisAI: "Enable Analysis AI",
+    analysisAIHint: "Recommended: deepseek-reasoner / gpt-4o / claude-sonnet",
+    networkProxy: "Network Proxy", httpProxy: "HTTP Proxy", httpsProxy: "HTTPS Proxy",
+    dataStorage: "Data Storage", dataDir: "Config & History Data Directory",
+    openFolder: "Open Folder", dataDirHint: "Search history, preferences, AI config are stored here",
+    resetConfirm: "Are you sure to reset all settings to default?", settingsSaved: "Settings saved",
+    settingsReset: "Settings reset to default", saveFailed: "Save failed:", resetFailed: "Reset failed:",
+    cannotOpenFolder: "Cannot open folder", openFailed: "Open failed:",
+    // AI features
+    pleaseSearchFirst: "Please search papers first", pleaseSelectPapers: "Please select papers to analyze first",
+    aiFailed: "AI search failed", analysisFailed: "Analysis failed", serverError: "Analysis failed (server error)",
+    requestFailed: "Request failed:",
+    // Suggestions
+    replaceConfirm: "Search box has content, replace with: ",
+    // Language
+    language: "Language", chinese: "中文", english: "English",
+  }
+};
+
+let currentLang = localStorage.getItem("paperlang") || "zh";
+
+function t(key) {
+  return LANGS[currentLang]?.[key] || LANGS.zh[key] || key;
+}
+
+function setLang(lang) {
+  currentLang = lang;
+  localStorage.setItem("paperlang", lang);
+  applyLang();
+}
+
+function applyLang() {
+  // 搜索框
+  const input = document.getElementById("searchInput");
+  if (input && !input.value) input.placeholder = t("searchPlaceholder");
+
+  // 按钮
+  const searchBtn = document.getElementById("searchBtn");
+  if (searchBtn && !searchBtn.disabled) searchBtn.textContent = t("search");
+
+  // 提示文字
+  const hintEl = document.querySelector(".search-section > div:nth-child(2) > span:last-child");
+  if (hintEl) hintEl.textContent = t("searchHint");
+
+  // 筛选标签
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    if (el.tagName === "OPTION") el.textContent = t(key);
+    else if (el.tagName === "INPUT") el.placeholder = t(key);
+    else el.textContent = t(key);
+  });
+
+  // 状态栏
+  const statusEl = document.getElementById("statusText");
+  if (statusEl && statusEl.textContent === "就绪" || statusEl?.textContent === "Ready") {
+    statusEl.textContent = t("ready");
+  }
+
+  // 空状态
+  const resultsDiv = document.getElementById("results");
+  if (resultsDiv && resultsDiv.querySelector(".empty-state")) {
+    resultsDiv.innerHTML = `<div class="empty-state"><div class="icon">📚</div><p>${t("enterToSearch")}</p>
+      <p style="font-size:12px;margin-top:8px;color:#94a3b8">${t("dualSource")}</p></div>`;
+  }
+
+  // 设置面板标题
+  const settingsTitle = document.querySelector("#settingsPanel h2");
+  if (settingsTitle) settingsTitle.textContent = t("settingsTitle");
+
+  // AI 面板
+  const aiPanelTitle = document.querySelector("#aiPanel strong");
+  if (aiPanelTitle) aiPanelTitle.textContent = t("aiAssistant");
+
+  // AI 面板按钮
+  const aiSummarizeBtn = document.querySelector("#aiPanel button:first-child");
+  if (aiSummarizeBtn) aiSummarizeBtn.textContent = t("aiSummary");
+
+  // AI 关闭按钮
+  const aiCloseBtn = document.querySelector("#aiPanel button:last-child");
+  if (aiCloseBtn) aiCloseBtn.textContent = `✕ ${t("close")}`;
+
+  // AI 内容
+  const aiContent = document.getElementById("aiContent");
+  if (aiContent && (aiContent.textContent === "等待操作..." || aiContent.textContent === "Waiting...")) {
+    aiContent.textContent = currentLang === "zh" ? "等待操作..." : "Waiting...";
+  }
+
+  // 试试标签
+  const tryLabel = document.getElementById("trySearchLabel");
+  if (tryLabel) tryLabel.textContent = t("trySearch");
+
+  // 状态栏
+  const dataSourceSpan = document.querySelector(".status-bar span:last-child");
+  if (dataSourceSpan) dataSourceSpan.textContent = t("dataSource");
+
+  // 批量 DOI 模态框
+  const doiTitle = document.querySelector("#doiModal h3");
+  if (doiTitle) doiTitle.textContent = t("batchDOI");
+  const doiHint = document.querySelector("#doiModal p");
+  if (doiHint) doiHint.textContent = t("doiHint");
+  const doiBtnEl = document.getElementById("doiBtn");
+  if (doiBtnEl && !doiBtnEl.disabled) doiBtnEl.textContent = t("confirm");
+  const doiCancelBtn = document.querySelector("#doiModal .btn-outline");
+  if (doiCancelBtn) doiCancelBtn.textContent = t("cancel");
+
+  // 设置面板内容
+  applySettingsLang();
+
+  // 语言按钮
+  const langBtn = document.getElementById("langBtn");
+  if (langBtn) langBtn.textContent = currentLang === "zh" ? "EN" : "中";
+}
+
+function applySettingsLang() {
+  const section = document.getElementById("settingsPanel");
+  if (!section) return;
+
+  // 数据源配置
+  const h3s = section.querySelectorAll("h3");
+  if (h3s[0]) h3s[0].textContent = t("dataSourceConfig");
+  if (h3s[1]) h3s[1].textContent = t("aiSearchModel");
+  if (h3s[2]) h3s[2].textContent = t("aiAnalysisModel");
+  if (h3s[3]) h3s[3].textContent = t("networkProxy");
+  if (h3s[4]) h3s[4].textContent = t("dataStorage");
+
+  // 标签
+  const labels = section.querySelectorAll(".form-group label");
+  const labelKeys = [
+    "pubmedEmail", "pubmedAPIKey",
+    "enableSearchAI", "provider", "apiKey", "modelName", "endpointURL",
+    "enableAnalysisAI", "provider", "apiKey", "modelName", "endpointURL",
+    "httpProxy", "httpsProxy",
+    "dataDir"
+  ];
+  labels.forEach((el, i) => {
+    if (labelKeys[i]) el.textContent = t(labelKeys[i]);
+  });
+
+  // 提示
+  const hints = section.querySelectorAll(".hint");
+  const hintKeys = [
+    "pubmedEmailHint", "optional",
+    "searchAIHint", "endpointHint",
+    "analysisAIHint", "endpointHint",
+    "dataDirHint"
+  ];
+  hints.forEach((el, i) => {
+    if (hintKeys[i]) el.textContent = t(hintKeys[i]);
+  });
+
+  // 按钮
+  const buttons = section.querySelectorAll("button");
+  buttons.forEach(btn => {
+    if (btn.textContent === "保存" || btn.textContent === "Save") btn.textContent = t("save");
+    if (btn.textContent === "取消" || btn.textContent === "Cancel") btn.textContent = t("cancel");
+    if (btn.textContent === "重置默认" || btn.textContent === "Reset Default") btn.textContent = t("reset");
+    if (btn.textContent === "打开文件夹" || btn.textContent === "Open Folder") btn.textContent = t("openFolder");
+  });
+
+  // Checkbox labels
+  const toggleLabels = section.querySelectorAll(".toggle-row label");
+  if (toggleLabels[0]) toggleLabels[0].textContent = t("enableSearchAI");
+  if (toggleLabels[1]) toggleLabels[1].textContent = t("enableAnalysisAI");
+}
 
 // 初始化：加载偏好和历史
 (async function init() {
@@ -578,6 +901,10 @@ let currentSort = ""; // 当前排序方式
       if (prefs.filterJournal) document.getElementById("filterJournal").value = prefs.filterJournal;
       if (prefs.filterField) document.getElementById("filterField").value = prefs.filterField;
       if (prefs.filterPubType) document.getElementById("filterPubType").value = prefs.filterPubType;
+      if (prefs.lang) {
+        currentLang = prefs.lang;
+        localStorage.setItem("paperlang", prefs.lang);
+      }
     }
   } catch { /* 忽略 */ }
 
@@ -586,6 +913,9 @@ let currentSort = ""; // 当前排序方式
 
   // 初始化搜索建议
   initSuggestions();
+
+  // 应用语言
+  applyLang();
 })();
 
 // ========== 动态 Placeholder + 搜索建议 ==========
@@ -605,14 +935,15 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 function getPlaceholderText() {
+  const prefix = currentLang === "zh" ? "试试搜索：" : "Try: ";
   // 优先用搜索历史
   if (_historyCache.length > 0) {
     const item = _historyCache[Math.floor(Math.random() * Math.min(_historyCache.length, 10))];
-    return `试试搜索：${item.q}`;
+    return `${prefix}${item.q}`;
   }
   // 没有历史则用默认建议
   const tip = DEFAULT_SUGGESTIONS[Math.floor(Math.random() * DEFAULT_SUGGESTIONS.length)];
-  return `试试搜索：${tip}`;
+  return `${prefix}${tip}`;
 }
 
 function initSuggestions() {
@@ -645,7 +976,7 @@ function initSuggestions() {
     chip.onclick = () => {
       const input = document.getElementById("searchInput");
       if (input.value.trim() && input.value.trim() !== item.text) {
-        if (!confirm(`当前搜索框有内容，是否替换为：${item.text}？`)) return;
+        if (!confirm(`${t("replaceConfirm")}${item.text}？`)) return;
       }
       input.value = item.text;
       doSmartSearch();
@@ -688,6 +1019,7 @@ function savePreferences() {
       filterJournal: document.getElementById("filterJournal").value,
       filterField: document.getElementById("filterField").value,
       filterPubType: document.getElementById("filterPubType").value,
+      lang: currentLang,
     };
     try {
       await fetch(`${API}/api/preferences`, {
@@ -832,13 +1164,13 @@ async function doSmartSearch() {
   // 搜索框为空时，自动使用 placeholder 中的推荐内容
   if (!query) {
     const ph = input.placeholder || "";
-    const match = ph.match(/^试试搜索[：:]\s*(.+)$/);
+    const match = ph.match(/^(?:试试搜索|Try)[:：]\s*(.+)$/);
     if (match) {
       query = match[1].trim();
       input.value = query;
     }
   }
-  if (!query) { showToast("请输入检索词"); return; }
+  if (!query) { showToast(t("enterQuery")); return; }
   if (detectNeedAI(query)) await doAISearch();
   else await doSearch();
 }
@@ -849,10 +1181,10 @@ async function doSearch() {
   if (!query) return;
   const btn = document.getElementById("searchBtn");
   btn.disabled = true;
-  btn.textContent = "检索中...";
-  setStatus("正在检索...");
+  btn.textContent = t("searching");
+  setStatus(t("searching"));
   const modeEl = document.getElementById("searchMode");
-  if (modeEl) modeEl.innerHTML = '<span style="color:#2563eb">● 普通检索模式</span>';
+  if (modeEl) modeEl.innerHTML = `<span style="color:#2563eb">${t("normalSearch")}</span>`;
 
   const body = {
     query,
@@ -880,19 +1212,19 @@ async function doSearch() {
       checkedSet.clear();
       currentSort = "";
       renderResults();
-      setStatus(`找到 ${data.total} 篇文献`);
+      setStatus(`${t("totalPapers")} ${data.total} ${t("papers")}`);
     } else {
-      showToast(data.error || "检索失败");
-      setStatus("检索失败");
+      showToast(data.error || t("searchFailed"));
+      setStatus(t("searchFailed"));
     }
   } catch (e) {
-    showToast("网络错误: " + e.message);
-    setStatus("网络错误 - 点击重试");
-    btn.textContent = "重试";
+    showToast(`${t("networkError")}: ${e.message}`);
+    setStatus(t("networkErrorRetry"));
+    btn.textContent = t("retry");
     btn.onclick = () => { btn.onclick = doSmartSearch; doSmartSearch(); };
   } finally {
     btn.disabled = false;
-    if (!btn.onclick || btn.onclick === doSmartSearch) btn.textContent = "检索";
+    if (!btn.onclick || btn.onclick === doSmartSearch) btn.textContent = t("search");
   }
 }
 
@@ -902,15 +1234,15 @@ async function doAISearch() {
   if (!query) return;
   const btn = document.getElementById("searchBtn");
   btn.disabled = true;
-  btn.textContent = "AI 分析中...";
+  btn.textContent = t("aiAnalyzing");
   const modeEl = document.getElementById("searchMode");
-  if (modeEl) modeEl.innerHTML = '<span style="color:#8b5cf6">● AI 智能检索模式</span>';
+  if (modeEl) modeEl.innerHTML = `<span style="color:#8b5cf6">${t("aiSearchMode")}</span>`;
 
   // 计时器
   let elapsed = 0;
   const timer = setInterval(() => {
     elapsed++;
-    setStatus(`AI 正在分析中... 已等待 ${elapsed} 秒`);
+    setStatus(`${t("aiWaiting")} ${elapsed} ${t("seconds")}`);
   }, 1000);
 
   const body = {
@@ -921,7 +1253,7 @@ async function doAISearch() {
   };
 
   try {
-    setStatus("AI 正在联网分析检索意图...");
+    setStatus(t("aiAnalyzing"));
     const r = await fetch(`${API}/api/ai-search`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
@@ -941,22 +1273,22 @@ async function doAISearch() {
         const aiPanel = document.getElementById("aiPanel");
         const aiContent = document.getElementById("aiContent");
         aiPanel.classList.add("show");
-        aiContent.innerHTML = `<b>AI 检索策略：</b>${data.explanation}` +
-          (data.analysis?.suggested_keywords ? `<br><b>推荐关键词：</b>${data.analysis.suggested_keywords.join(", ")}` : "") +
-          `<br><b>实际检索式：</b><code>${data.query}</code>`;
+        aiContent.innerHTML = `<b>${t("aiSearchStrategy")}</b>${data.explanation}` +
+          (data.analysis?.suggested_keywords ? `<br><b>${t("suggestedKeywords")}</b>${data.analysis.suggested_keywords.join(", ")}` : "") +
+          `<br><b>${t("actualQuery")}</b><code>${data.query}</code>`;
       }
-      setStatus(`AI 智能检索完成，找到 ${data.total} 篇文献（耗时 ${elapsed} 秒）`);
+      setStatus(`${t("aiSearchComplete")} ${data.total} ${t("papersFound")} ${elapsed} ${t("seconds")})`);
     } else {
-      showToast(data.error || "AI 检索失败");
-      setStatus("AI 检索失败");
+      showToast(data.error || t("aiFailed"));
+      setStatus(t("aiFailed"));
     }
   } catch (e) {
     clearInterval(timer);
-    showToast("网络错误: " + e.message);
-    setStatus("网络错误");
+    showToast(`${t("networkError")}: ${e.message}`);
+    setStatus(t("networkError"));
   } finally {
     btn.disabled = false;
-    btn.textContent = "检索";
+    btn.textContent = t("search");
   }
 }
 
@@ -965,13 +1297,11 @@ function renderResults() {
   const div = document.getElementById("results");
   if (!allPapers.length) {
     const lastStatus = document.getElementById("statusText")?.textContent || "";
-    const isNetworkError = lastStatus.includes("网络") || lastStatus.includes("错误");
-    const hint = isNetworkError
-      ? "网络连接异常，请检查网络或代理设置后重试"
-      : "试试更短的关键词 · 检查拼写 · 扩大年份范围 · 换一个数据源试试";
-    div.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>未找到相关文献</p>
+    const isNetworkError = lastStatus.includes("网络") || lastStatus.includes("Network") || lastStatus.includes("错误") || lastStatus.includes("error");
+    const hint = isNetworkError ? t("networkError") : t("searchTips");
+    div.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>${t("noResults")}</p>
       <p style="font-size:12px;margin-top:12px;color:#94a3b8">${hint}</p></div>`;
-    setStatus("未找到相关文献");
+    setStatus(t("noResultsFound"));
     return;
   }
 
@@ -980,24 +1310,24 @@ function renderResults() {
   const end = Math.min(start + pageSize, allPapers.length);
   const page = allPapers.slice(start, end);
   const selCount = checkedSet.size;
-  const exportLabel = (fmt, name) => selCount > 0 ? `${name} (${selCount}篇)` : `${name} (全部)`;
+  const exportLabel = (fmt, name) => selCount > 0 ? `${name} (${selCount} ${t("papers")})` : `${name} (${t("all")})`;
 
   let html = `<div class="toolbar">
-    <div class="toolbar-left">共 ${allPapers.length} 篇，显示 ${start+1}-${end} <span id="selectedCount" style="color:var(--primary);font-weight:500">${selCount > 0 ? `（已选 ${selCount} 篇）` : ""}</span>
+    <div class="toolbar-left">${t("totalPapers")} ${allPapers.length} ${t("papers")}, ${t("showing")} ${start+1}-${end} <span id="selectedCount" style="color:var(--primary);font-weight:500">${selCount > 0 ? `(${t("selected")} ${selCount} ${t("papers")})` : ""}</span>
       <span style="margin-left:16px;font-size:12px" id="sortBtns">
-        排序: <span class="sort-btn${currentSort==='citations'?' active':''}" onclick="sortPapers('citations')">被引↓</span>
-        <span class="sort-btn${currentSort==='date'?' active':''}" onclick="sortPapers('date')">时间↓</span>
-        <span class="sort-btn${currentSort==='title'?' active':''}" onclick="sortPapers('title')">标题↑</span>
+        ${t("sortBtn")} <span class="sort-btn${currentSort==='citations'?' active':''}" onclick="sortPapers('citations')">${t("cited")}↓</span>
+        <span class="sort-btn${currentSort==='date'?' active':''}" onclick="sortPapers('date')">${t("date")}↓</span>
+        <span class="sort-btn${currentSort==='title'?' active':''}" onclick="sortPapers('title')">${t("title")}↑</span>
       </span>
     </div>
     <div class="toolbar-right">
-      <button class="btn btn-sm btn-outline" onclick="selectAll()">全选/取消</button>
-      <button class="btn btn-sm btn-ai" id="btnSummary" onclick="aiAnalyzePapers('summary')" ${selCount > 1 ? 'style="display:none"' : ''}>AI 总结</button>
-      <button class="btn btn-sm btn-ai" id="btnDetail" onclick="aiAnalyzePapers('detail')" ${selCount > 1 ? 'style="display:none"' : ''}>AI 详析</button>
-      <button class="btn btn-sm btn-ai" id="btnCompare" onclick="aiAnalyzePapers('compare')" ${selCount < 2 ? 'style="display:none"' : ''}>AI 对比</button>
-      <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${exportLabel('ris', '导出 RIS')}</button>
-      <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${exportLabel('bibtex', 'BibTeX')}</button>
-      <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', 'CSV')}</button>
+      <button class="btn btn-sm btn-outline" onclick="selectAll()">${t("selectAll")}</button>
+      <button class="btn btn-sm btn-ai" id="btnSummary" onclick="aiAnalyzePapers('summary')" ${selCount > 1 ? 'style="display:none"' : ''}>${t("aiSummary")}</button>
+      <button class="btn btn-sm btn-ai" id="btnDetail" onclick="aiAnalyzePapers('detail')" ${selCount > 1 ? 'style="display:none"' : ''}>${t("aiDetail")}</button>
+      <button class="btn btn-sm btn-ai" id="btnCompare" onclick="aiAnalyzePapers('compare')" ${selCount < 2 ? 'style="display:none"' : ''}>${t("aiCompare")}</button>
+      <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${exportLabel('ris', t("exportRIS"))}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${exportLabel('bibtex', t("bibtex"))}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', t("csv"))}</button>
     </div>
   </div>`;
 
@@ -1008,14 +1338,14 @@ function renderResults() {
     const authors = p.authors.length > 3 ? p.authors.slice(0, 3).join(", ") + " et al." : p.authors.join(", ");
     const doiLink = p.doi ? `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" style="color:var(--primary);text-decoration:none">${p.doi}</a>` : "";
     const oaLink = p.oa_url ? `<a href="${p.oa_url}" target="_blank" class="badge badge-green">OA</a>` : "";
-    const citationTag = p.citation_count > 0 ? `<span class="badge">被引 ${p.citation_count}</span>` : "";
+    const citationTag = p.citation_count > 0 ? `<span class="badge">${t("cited")} ${p.citation_count}</span>` : "";
 
     html += `
     <div class="paper-card${isChecked ? ' selected' : ''}" id="card-${idx}">
       <div class="paper-header">
         <input type="checkbox" class="paper-checkbox" data-idx="${idx}"${isChecked ? ' checked' : ''}>
         <div class="paper-content">
-          <div class="paper-title" onclick="toggleAbstract(${idx})">${p.title || "无标题"}</div>
+          <div class="paper-title" onclick="toggleAbstract(${idx})">${p.title || t("noTitle")}</div>
           <div class="paper-meta">
             <span class="tag">${authors}</span>
             <span class="tag"><b>${p.journal || ""}</b></span>
@@ -1025,11 +1355,11 @@ function renderResults() {
             ${citationTag}
             ${oaLink}
           </div>
-          <div class="paper-abstract" id="abs-${idx}">${p.abstract || "<i style='color:#94a3b8'>该数据源无摘要，点击原文链接查看</i>"}</div>
+          <div class="paper-abstract" id="abs-${idx}">${p.abstract || `<i style='color:#94a3b8'>${t("noAbstract")}</i>`}</div>
           <div class="paper-actions">
-            <button class="btn btn-sm btn-outline" onclick="toggleAbstract(${idx})">摘要</button>
-            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="window.open('https://doi.org/${encodeURIComponent(p.doi)}')">原文</button>` : ""}
-            ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title)}')">下载PDF</button>` : ""}
+            <button class="btn btn-sm btn-outline" onclick="toggleAbstract(${idx})">${t("abstract")}</button>
+            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="window.open('https://doi.org/${encodeURIComponent(p.doi)}')">${t("original")}</button>` : ""}
+            ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title)}')">${t("downloadPDF")}</button>` : ""}
           </div>
         </div>
       </div>
@@ -1039,9 +1369,9 @@ function renderResults() {
 
   if (totalPages > 1) {
     html += `<div class="pagination">
-      <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>上一页</button>
-      <span>第 ${currentPage}/${totalPages} 页</span>
-      <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>下一页</button>
+      <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>${t("prevPage")}</button>
+      <span>${t("page")} ${currentPage}/${totalPages} ${t("of")}</span>
+      <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>${t("nextPage")}</button>
     </div>`;
   }
 
@@ -1111,12 +1441,12 @@ async function exportSelected(fmt) {
     const data = await r.json();
     if (r.ok) {
       downloadFile(data.content, data.filename, data.mime);
-      showToast(`已导出 ${data.filename}（${indices.length > 0 ? indices.length + '篇' : '全部'}）`);
+      showToast(`${t("exported")} ${data.filename}（${indices.length > 0 ? indices.length + t("papers") : t("all")}）`);
     } else {
-      showToast(data.error || "导出失败");
+      showToast(data.error || t("exportFailed"));
     }
   } catch (e) {
-    showToast("导出错误: " + e.message);
+    showToast(`${t("exportError")} ${e.message}`);
   }
 }
 
@@ -1222,14 +1552,14 @@ async function saveSettings() {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(cfg),
     });
-    if (r.ok) { showToast("设置已保存"); toggleSettings(); }
+    if (r.ok) { showToast(t("settingsSaved")); toggleSettings(); }
   } catch (e) {
-    showToast("保存失败: " + e.message);
+    showToast(`${t("saveFailed")} ${e.message}`);
   }
 }
 
 async function resetSettings() {
-  if (!confirm("确定要重置所有设置为默认值吗？")) return;
+  if (!confirm(t("resetConfirm"))) return;
   const cfg = {
     sources: {
       pubmed: { enabled: true, email: "", api_key: "" },
@@ -1246,11 +1576,11 @@ async function resetSettings() {
       body: JSON.stringify(cfg),
     });
     if (r.ok) {
-      showToast("已重置为默认设置");
+      showToast(t("settingsReset"));
       loadSettings();
     }
   } catch (e) {
-    showToast("重置失败: " + e.message);
+    showToast(`${t("resetFailed")} ${e.message}`);
   }
 }
 
@@ -1259,10 +1589,10 @@ async function openDataDir() {
     const r = await fetch(`${API}/api/open-data-dir`, {method: "POST"});
     if (!r.ok) {
       const data = await r.json();
-      showToast(data.error || "无法打开文件夹");
+      showToast(data.error || t("cannotOpenFolder"));
     }
   } catch (e) {
-    showToast("打开失败: " + e.message);
+    showToast(`${t("openFailed")} ${e.message}`);
   }
 }
 
@@ -1278,26 +1608,26 @@ function toggleAI() { document.getElementById("aiPanel").classList.toggle("show"
 function closeAiPanel() { document.getElementById("aiPanel").classList.remove("show"); }
 
 async function aiSummarize() {
-  if (!allPapers.length) { showToast("请先检索文献"); return; }
+  if (!allPapers.length) { showToast(t("pleaseSearchFirst")); return; }
   const el = document.getElementById("aiContent");
   const panel = document.getElementById("aiPanel");
   panel.classList.add("show");
-  el.textContent = "AI 正在分析...";
+  el.textContent = t("aiAnalyzing");
   try {
     const r = await fetch(`${API}/api/ai/summarize`, {method: "POST"});
     const data = await r.json();
-    el.innerHTML = formatAIText(data.response || data.error || "无结果");
+    el.innerHTML = formatAIText(data.response || data.error || currentLang === "zh" ? "无结果" : "No result");
   } catch (e) {
-    el.textContent = "请求失败: " + e.message;
+    el.textContent = `${t("requestFailed")} ${e.message}`;
   }
 }
 
 // AI 论文分析（流式输出）
 async function aiAnalyzePapers(mode, forceRefresh) {
   const indices = getSelectedIndices();
-  if (!indices.length) { showToast("请先勾选要分析的论文"); return; }
+  if (!indices.length) { showToast(t("pleaseSelectPapers")); return; }
 
-  const modeNames = {summary: "AI 总结", detail: "AI 详析", compare: "AI 对比"};
+  const modeNames = {summary: t("aiSummarizing"), detail: t("aiDetailing"), compare: t("aiComparing")};
   const el = document.getElementById("aiContent");
   const panel = document.getElementById("aiPanel");
   panel.classList.add("show");
@@ -1306,15 +1636,15 @@ async function aiAnalyzePapers(mode, forceRefresh) {
   let elapsed = 0;
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <b><span class="spinner" style="width:16px;height:16px;border-width:2px;vertical-align:middle"></span> ${modeNames[mode]}中...</b>
-      <span id="aiTimer" style="color:#94a3b8;font-size:12px">0 秒</span>
+      <b><span class="spinner" style="width:16px;height:16px;border-width:2px;vertical-align:middle"></span> ${modeNames[mode]}...</b>
+      <span id="aiTimer" style="color:#94a3b8;font-size:12px">0 ${t("seconds")}</span>
     </div>
     <div id="aiStreamText" style="line-height:1.8;font-size:14px;white-space:pre-wrap"></div>`;
 
   const timer = setInterval(() => {
     elapsed++;
     const tEl = document.getElementById("aiTimer");
-    if (tEl) tEl.textContent = `${elapsed} 秒`;
+    if (tEl) tEl.textContent = `${elapsed} ${t("seconds")}`;
   }, 1000);
 
   try {
@@ -1329,9 +1659,9 @@ async function aiAnalyzePapers(mode, forceRefresh) {
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
         const err = await r.json();
-        el.textContent = err.error || "分析失败";
+        el.textContent = err.error || t("analysisFailed");
       } else {
-        el.textContent = "分析失败（服务器错误）";
+        el.textContent = t("serverError");
       }
       return;
     }
@@ -1356,7 +1686,7 @@ async function aiAnalyzePapers(mode, forceRefresh) {
         fullText += chunk;
         streamEl.innerHTML = formatAIText(fullText);
         const tEl = document.getElementById("aiTimer");
-        if (tEl) tEl.textContent = `${fullText.length} 字`;
+        if (tEl) tEl.textContent = `${fullText.length} ${currentLang === "zh" ? "字" : "chars"}`;
         panel.scrollTop = panel.scrollHeight;
       }
 
@@ -1364,20 +1694,20 @@ async function aiAnalyzePapers(mode, forceRefresh) {
     }
   } catch (e) {
     clearInterval(timer);
-    el.textContent = "请求失败: " + e.message;
+    el.textContent = `${t("requestFailed")} ${e.message}`;
   }
 }
 
 function renderAIResult(el, modeName, text, count, cached) {
-  const cachedTag = cached ? ' <span style="color:#10b981;font-size:12px">(缓存)</span>' : '';
-  const modeKey = modeName === "AI 总结" ? "summary" : modeName === "AI 详析" ? "detail" : "compare";
+  const cachedTag = cached ? ` <span style="color:#10b981;font-size:12px">(${t("cached")})</span>` : '';
+  const modeKey = modeName === t("aiSummarizing") ? "summary" : modeName === t("aiDetailing") ? "detail" : "compare";
   window._lastAIText = text;
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <b>${modeName}结果（${count} 篇）${cachedTag}</b>
+      <b>${modeName}${t("resultFor")}${count}${t("papersCount")}${cachedTag}</b>
       <div>
-        <button class="btn btn-sm btn-outline" onclick="copyAIText()">复制</button>
-        <button class="btn btn-sm btn-outline" onclick="aiAnalyzePapers('${modeKey}', true)">重新生成</button>
+        <button class="btn btn-sm btn-outline" onclick="copyAIText()">${t("copy")}</button>
+        <button class="btn btn-sm btn-outline" onclick="aiAnalyzePapers('${modeKey}', true)">${t("regenerate")}</button>
       </div>
     </div>
     <div style="line-height:1.8;font-size:14px">${formatAIText(text)}</div>`;
@@ -1386,9 +1716,9 @@ function renderAIResult(el, modeName, text, count, cached) {
 function copyAIText() {
   if (!window._lastAIText) return;
   navigator.clipboard.writeText(window._lastAIText).then(() => {
-    showToast("已复制到剪贴板");
+    showToast(t("copied"));
   }).catch(() => {
-    showToast("复制失败，请手动选择复制");
+    showToast(t("copyFailed"));
   });
 }
 
@@ -1446,7 +1776,7 @@ async function saveHistory(query, total) {
 function toggleHistory() {
   const dd = document.getElementById("historyDropdown");
   if (dd.classList.contains("show")) { dd.classList.remove("show"); return; }
-  if (!_historyCache.length) { showToast("暂无搜索历史"); return; }
+  if (!_historyCache.length) { showToast(t("noHistory")); return; }
   dd.innerHTML = "";
   _historyCache.forEach((item, i) => {
     const div = document.createElement("div");
@@ -1457,7 +1787,7 @@ function toggleHistory() {
     spanQ.textContent = item.q;
     const spanN = document.createElement("span");
     spanN.className = "ht";
-    spanN.textContent = `${item.n}篇`;
+    spanN.textContent = `${item.n}${t("papersCount2")}`;
     const spanD = document.createElement("span");
     spanD.className = "hd";
     spanD.textContent = "✕";
@@ -1528,14 +1858,14 @@ function closeDoiModal() {
 }
 async function batchDoiLookup() {
   const raw = document.getElementById("doiTextarea").value.trim();
-  if (!raw) { showToast("请输入 DOI"); return; }
+  if (!raw) { showToast(t("enterDOI")); return; }
   const dois = raw.split("\n").map(l => l.trim().replace(/^doi:\s*/i, "")).filter(l => l);
-  if (!dois.length) { showToast("未识别到有效 DOI"); return; }
+  if (!dois.length) { showToast(t("noValidDOI")); return; }
 
   const btn = document.getElementById("doiBtn");
   btn.disabled = true;
-  btn.textContent = "查询中...";
-  document.getElementById("doiResult").textContent = `正在查询 ${dois.length} 个 DOI...`;
+  btn.textContent = currentLang === "zh" ? "查询中..." : "Querying...";
+  document.getElementById("doiResult").textContent = `${t("queryingDOI")} ${dois.length} ${t("doiQuery")}`;
 
   try {
     const r = await fetch(`${API}/api/batch-doi`, {
@@ -1550,19 +1880,19 @@ async function batchDoiLookup() {
       currentPage = 1;
       renderResults();
       const msg = data.not_found > 0
-        ? `找到 ${data.total} 篇，${data.not_found} 个 DOI 未匹配到（已替换之前的结果）`
-        : `找到 ${data.total} 篇（已替换之前的结果）`;
+        ? `${t("foundPapers")} ${data.total} ${t("papers")}, ${data.not_found} ${t("doiNotFound")}`
+        : `${t("foundPapers")} ${data.total} ${t("papers")}${t("doiReplaced")}`;
       document.getElementById("doiResult").textContent = msg;
-      setStatus(`批量导入完成，${data.total} 篇文献`);
+      setStatus(`${t("batchDOI")} ${t("exported")}, ${data.total} ${t("papers")}`);
       setTimeout(closeDoiModal, 2000);
     } else {
-      document.getElementById("doiResult").textContent = data.error || "查询失败";
+      document.getElementById("doiResult").textContent = data.error || t("queryFailed");
     }
   } catch (e) {
-    document.getElementById("doiResult").textContent = "网络错误: " + e.message;
+    document.getElementById("doiResult").textContent = `${t("networkError")}: ${e.message}`;
   } finally {
     btn.disabled = false;
-    btn.textContent = "查询";
+    btn.textContent = currentLang === "zh" ? "查询" : "Query";
   }
 }
 
@@ -1591,7 +1921,7 @@ function sortPapers(by) {
 async function downloadOA(encodedUrl, encodedTitle) {
   const url = decodeURIComponent(encodedUrl);
   const title = decodeURIComponent(encodedTitle);
-  showToast("正在验证 PDF 链接...");
+  showToast(t("verifyingPDF"));
   try {
     const r = await fetch(`${API}/api/download-pdf`, {
       method: "POST",
@@ -1600,21 +1930,21 @@ async function downloadOA(encodedUrl, encodedTitle) {
     });
     const data = await r.json();
     if (r.ok) {
-      showToast(`正在打开: ${data.filename}`);
+      showToast(`${t("openingPDF")} ${data.filename}`);
       window.open(data.url, "_blank");
     } else {
-      const errMsg = data.error || "无法下载";
-      if (errMsg.includes("不是 PDF")) {
-        showToast("该链接返回的不是 PDF 文件，可能需要机构权限");
-      } else if (errMsg.includes("验证失败")) {
-        showToast("链接验证失败，正在直接打开...");
+      const errMsg = data.error || t("cannotDownload");
+      if (errMsg.includes("不是 PDF") || errMsg.includes("not PDF")) {
+        showToast(t("notPDF"));
+      } else if (errMsg.includes("验证失败") || errMsg.includes("verification failed")) {
+        showToast(t("linkVerifyFailed"));
         window.open(url, "_blank");
       } else {
         showToast(errMsg);
       }
     }
   } catch {
-    showToast("网络异常，正在直接打开链接...");
+    showToast(t("networkErrorOpening"));
     window.open(url, "_blank");
   }
 }
