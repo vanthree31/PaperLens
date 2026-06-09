@@ -339,6 +339,7 @@ def create_app():
                 use_cnki=data.get("use_cnki", False),
                 use_wanfang=data.get("use_wanfang", False),
                 use_vip=data.get("use_vip", False),
+                use_bing_academic=data.get("use_bing_academic", False),
                 journal=data.get("journal", "").strip(), field=data.get("field", "").strip(),
                 mesh_term=data.get("mesh_term", "").strip(), pub_type=data.get("pub_type", "").strip(),
             )
@@ -373,6 +374,7 @@ def create_app():
                 use_cnki=data.get("use_cnki", False),
                 use_wanfang=data.get("use_wanfang", False),
                 use_vip=data.get("use_vip", False),
+                use_bing_academic=data.get("use_bing_academic", False),
                 journal=analysis.get("journal", ""), field=analysis.get("field", ""),
                 mesh_term=analysis.get("mesh_term", ""), pub_type=analysis.get("pub_type", ""),
             )
@@ -791,6 +793,188 @@ def create_app():
         except Exception as e:
             return jsonify({"error": "link_verify_failed", "detail": str(e)}), 500
 
+    @app.route("/api/reading-history", methods=["POST"])
+    def save_reading_history():
+        """记录用户阅读行为（点击、查看摘要、下载等）"""
+        data = request.json or {}
+        action = data.get("action", "")  # view, abstract, download, cite
+        paper = data.get("paper", {})
+        if not paper.get("doi") and not paper.get("title"):
+            return jsonify({"error": "missing_paper_info"}), 400
+
+        path = _get_user_data_path("reading_history.json")
+        history = []
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            except Exception:
+                history = []
+
+        # 添加记录
+        record = {
+            "action": action,
+            "timestamp": datetime.now().isoformat(),
+            "doi": paper.get("doi", ""),
+            "title": paper.get("title", ""),
+            "journal": paper.get("journal", ""),
+            "year": paper.get("year", 0),
+            "authors": paper.get("authors", []),
+            "keywords": paper.get("keywords", []),
+            "abstract": paper.get("abstract", "")[:500],  # 只保存前500字符
+        }
+        history.append(record)
+
+        # 只保留最近500条记录
+        history = history[-500:]
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(history, f, ensure_ascii=False)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/recommendations", methods=["GET"])
+    def get_recommendations():
+        """基于阅读历史推荐论文"""
+        path = _get_user_data_path("reading_history.json")
+        if not os.path.exists(path):
+            return jsonify({"papers": [], "keywords": []})
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except Exception:
+            return jsonify({"papers": [], "keywords": []})
+
+        if not history:
+            return jsonify({"papers": [], "keywords": []})
+
+        # 分析阅读历史，提取关键词和主题
+        from collections import Counter
+        keyword_counter = Counter()
+        journal_counter = Counter()
+        recent_dois = set()
+
+        for record in history[-100:]:  # 分析最近100条记录
+            # 统计关键词
+            for kw in record.get("keywords", []):
+                if kw:
+                    keyword_counter[kw.lower()] += 1
+
+            # 统计期刊
+            journal = record.get("journal", "")
+            if journal:
+                journal_counter[journal] += 1
+
+            # 记录最近查看的DOI
+            doi = record.get("doi", "")
+            if doi:
+                recent_dois.add(doi.lower())
+
+        # 提取Top关键词
+        top_keywords = [kw for kw, _ in keyword_counter.most_common(10)]
+        top_journals = [j for j, _ in journal_counter.most_common(5)]
+
+        if not top_keywords and not top_journals:
+            return jsonify({"papers": [], "keywords": []})
+
+        # 构建推荐查询
+        # 策略1：基于高频关键词
+        # 策略2：基于高频期刊
+        # 策略3：结合关键词和期刊
+
+        recommended_papers = []
+
+        # 策略1：基于关键词推荐
+        if top_keywords:
+            query = " OR ".join(top_keywords[:5])
+            try:
+                papers = engine.search(
+                    query=query,
+                    year_from=datetime.now().year - 2,  # 最近2年
+                    year_to=datetime.now().year,
+                    sort="citations",
+                    max_results=20,
+                    use_pubmed=True,
+                    use_openalex=True,
+                )
+                # 过滤掉已经看过的论文
+                for p in papers:
+                    if p.doi and p.doi.lower() not in recent_dois:
+                        recommended_papers.append(p)
+            except Exception as e:
+                print(f"Recommendation search error: {e}")
+
+        # 策略2：基于期刊推荐（如果关键词推荐不够）
+        if len(recommended_papers) < 10 and top_journals:
+            for journal in top_journals[:2]:
+                try:
+                    # 用关键词作为查询，结合期刊过滤
+                    journal_query = " OR ".join(top_keywords[:3]) if top_keywords else "research"
+                    papers = engine.search(
+                        query=journal_query,
+                        year_from=datetime.now().year - 1,
+                        year_to=datetime.now().year,
+                        sort="citations",
+                        max_results=10,
+                        use_pubmed=True,
+                        use_openalex=True,
+                        journal=journal,
+                    )
+                    for p in papers:
+                        if p.doi and p.doi.lower() not in recent_dois:
+                            # 检查是否已经存在
+                            if not any(r.doi == p.doi for r in recommended_papers):
+                                recommended_papers.append(p)
+                except Exception:
+                    continue
+
+        # 限制推荐数量
+        recommended_papers = recommended_papers[:15]
+
+        # 转换为前端格式
+        results = [_escape_paper(p) for p in recommended_papers]
+
+        return jsonify({
+            "papers": results,
+            "keywords": top_keywords,
+            "journals": top_journals,
+            "total": len(results),
+        })
+
+    @app.route("/api/reading-history", methods=["GET"])
+    def get_reading_history():
+        """获取阅读历史统计"""
+        path = _get_user_data_path("reading_history.json")
+        if not os.path.exists(path):
+            return jsonify({"total": 0, "keywords": [], "journals": []})
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        except Exception:
+            return jsonify({"total": 0, "keywords": [], "journals": []})
+
+        from collections import Counter
+        keyword_counter = Counter()
+        journal_counter = Counter()
+
+        for record in history:
+            for kw in record.get("keywords", []):
+                if kw:
+                    keyword_counter[kw.lower()] += 1
+            journal = record.get("journal", "")
+            if journal:
+                journal_counter[journal] += 1
+
+        return jsonify({
+            "total": len(history),
+            "keywords": [kw for kw, _ in keyword_counter.most_common(20)],
+            "journals": [j for j, _ in journal_counter.most_common(10)],
+        })
+
     @app.route("/api/export", methods=["POST"])
     def export():
         data = request.json or {}
@@ -1025,6 +1209,155 @@ def create_app():
         except Exception as e:
             print(f"[ERROR] AI summarize failed: {e}")
             return jsonify({"error": "request_failed", "detail": str(e)}), 500
+
+    @app.route("/api/zotero/test", methods=["POST"])
+    def zotero_test():
+        """测试 Zotero API 连接"""
+        data = request.json or {}
+        api_key = data.get("api_key", "").strip()
+        user_id = data.get("user_id", "").strip()
+        if not api_key or not user_id:
+            return jsonify({"error": "missing_zotero_config"}), 400
+
+        try:
+            import requests as req
+            headers = {"Zotero-API-Key": api_key}
+            r = req.get(f"https://api.zotero.org/users/{user_id}/collections?limit=1",
+                       headers=headers, timeout=10)
+            if r.status_code == 200:
+                return jsonify({"ok": True})
+            elif r.status_code == 403:
+                return jsonify({"error": "zotero_auth_failed"}), 403
+            else:
+                return jsonify({"error": "zotero_connection_failed", "status": r.status_code}), 400
+        except Exception as e:
+            return jsonify({"error": "zotero_connection_failed", "detail": str(e)}), 500
+
+    @app.route("/api/zotero/collections", methods=["POST"])
+    def zotero_get_collections():
+        """获取用户的 Zotero 收藏夹列表"""
+        data = request.json or {}
+        api_key = data.get("api_key", "").strip()
+        user_id = data.get("user_id", "").strip()
+        if not api_key or not user_id:
+            return jsonify({"error": "missing_zotero_config"}), 400
+
+        try:
+            import requests as req
+            headers = {"Zotero-API-Key": api_key}
+            r = req.get(f"https://api.zotero.org/users/{user_id}/collections?limit=100&sort=title",
+                       headers=headers, timeout=15)
+            if r.status_code != 200:
+                return jsonify({"error": "zotero_fetch_failed"}), 400
+
+            collections = []
+            for col in r.json():
+                data_col = col.get("data", {})
+                collections.append({
+                    "key": data_col.get("key", ""),
+                    "name": data_col.get("name", ""),
+                    "parentCollection": data_col.get("parentCollection", ""),
+                    "numItems": col.get("meta", {}).get("numItems", 0),
+                })
+
+            return jsonify({"collections": collections})
+        except Exception as e:
+            return jsonify({"error": "zotero_fetch_failed", "detail": str(e)}), 500
+
+    @app.route("/api/zotero/sync", methods=["POST"])
+    def zotero_sync():
+        """将论文同步到 Zotero"""
+        data = request.json or {}
+        api_key = data.get("api_key", "").strip()
+        user_id = data.get("user_id", "").strip()
+        collection_key = data.get("collection_key", "").strip()
+        papers = data.get("papers", [])
+
+        if not api_key or not user_id:
+            return jsonify({"error": "missing_zotero_config"}), 400
+        if not papers:
+            return jsonify({"error": "no_papers"}), 400
+
+        try:
+            import requests as req
+            headers = {
+                "Zotero-API-Key": api_key,
+                "Content-Type": "application/json",
+            }
+
+            # 构建 Zotero items
+            items = []
+            for p in papers[:50]:  # 限制每次最多50篇
+                item = {
+                    "itemType": "journalArticle",
+                    "title": p.get("title", ""),
+                    "creators": [
+                        {"creatorType": "author", "name": author}
+                        for author in p.get("authors", [])[:10]
+                    ],
+                    "publicationTitle": p.get("journal", ""),
+                    "date": str(p.get("year", "")),
+                    "DOI": p.get("doi", ""),
+                    "abstractNote": p.get("abstract", ""),
+                    "tags": [
+                        {"tag": kw} for kw in p.get("keywords", [])[:5]
+                    ],
+                }
+                if collection_key:
+                    item["collections"] = [collection_key]
+                items.append(item)
+
+            # 批量创建 items
+            r = req.post(
+                f"https://api.zotero.org/users/{user_id}/items",
+                headers=headers,
+                json=items,
+                timeout=30,
+            )
+
+            # Zotero API 返回 200 成功，409 表示部分冲突（重复项）
+            if r.status_code in (200, 201, 409):
+                result = r.json()
+                successful = len(result.get("successful", []))
+                failed = len(result.get("failed", []))
+                # 409 时 successful 中仍包含已存在的项，算作成功
+                return jsonify({
+                    "ok": True,
+                    "successful": successful,
+                    "failed": failed,
+                    "total": len(items),
+                })
+            else:
+                return jsonify({"error": "zotero_sync_failed", "status": r.status_code}), 400
+        except Exception as e:
+            return jsonify({"error": "zotero_sync_failed", "detail": str(e)}), 500
+
+    @app.route("/api/zotero/config", methods=["GET"])
+    def zotero_get_config():
+        """获取 Zotero 配置"""
+        path = _get_user_data_path("zotero_config.json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return jsonify(json.load(f))
+            except Exception:
+                pass
+        return jsonify({"api_key": "", "user_id": ""})
+
+    @app.route("/api/zotero/config", methods=["POST"])
+    def zotero_save_config():
+        """保存 Zotero 配置"""
+        data = request.json or {}
+        path = _get_user_data_path("zotero_config.json")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "api_key": data.get("api_key", ""),
+                    "user_id": data.get("user_id", ""),
+                }, f, ensure_ascii=False)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     return app
 

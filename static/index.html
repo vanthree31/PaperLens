@@ -432,6 +432,7 @@ body {
 <div class="header">
   <h1>PaperLens</h1>
   <div class="header-actions">
+    <button class="btn-icon" onclick="toggleRecommend()" id="recommendBtn" title="推荐">📖</button>
     <button class="btn-icon" onclick="toggleCollections()" id="collectionsBtn" title="Collections">★</button>
     <button class="btn-icon" id="langBtn" onclick="setLang(currentLang==='zh'?'en':'zh')" title="Language">EN</button>
     <button class="btn-icon" onclick="toggleAI()" id="aiBtn" title="AI 助手">AI</button>
@@ -460,6 +461,7 @@ body {
       <label><input type="checkbox" id="usePubmed" checked> PubMed</label>
       <label><input type="checkbox" id="useOpenalex" checked> OpenAlex</label>
       <label><input type="checkbox" id="useGoogleScholar"> Google Scholar <span style="color:#f59e0b;font-size:10px">β</span></label>
+      <label><input type="checkbox" id="useBingAcademic"> Bing Academic <span style="color:#f59e0b;font-size:10px">β</span></label>
       <label><input type="checkbox" id="useCNKI"> CNKI <span style="color:#f59e0b;font-size:10px">β</span></label>
       <label><input type="checkbox" id="useWanfang"> 万方 <span style="color:#f59e0b;font-size:10px">β</span></label>
       <label><input type="checkbox" id="useVIP"> 维普 <span style="color:#f59e0b;font-size:10px">β</span></label>
@@ -636,6 +638,23 @@ body {
       <div class="hint" data-i18n="exportPathHint">导出 RIS/BibTeX/CSV 和下载 PDF 时自动保存到此目录</div>
     </div>
   </div>
+  <div class="settings-section">
+    <h3 data-i18n="zoteroSync">Zotero 同步</h3>
+    <div class="form-group">
+      <label data-i18n="zoteroApiKey">Zotero API Key</label>
+      <input type="password" id="cfgZoteroKey" placeholder="在 zotero.org/settings/keys 生成">
+      <div class="hint" data-i18n="zoteroApiKeyHint">需要在 Zotero 设置中生成 API Key</div>
+    </div>
+    <div class="form-group">
+      <label data-i18n="zoteroUserId">Zotero User ID</label>
+      <input type="text" id="cfgZoteroUserId" placeholder="在 zotero.org/settings/keys 查看">
+      <div class="hint" data-i18n="zoteroUserIdHint">在 Zotero 设置页面的 API Keys 部分查看</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-sm btn-outline" onclick="testZoteroConnection()" data-i18n="testConnection">测试连接</button>
+      <span id="zoteroStatus" style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center"></span>
+    </div>
+  </div>
   <div style="display:flex;gap:8px;margin-top:20px">
     <button class="btn btn-primary" onclick="saveSettings()" data-i18n="save">保存</button>
     <button class="btn btn-outline" onclick="toggleSettings()" data-i18n="cancel">取消</button>
@@ -660,6 +679,25 @@ body {
     <div class="collections-empty">
       <div class="icon">📚</div>
       <p id="collectionsEmptyText">暂无收藏，点击论文卡片上的 ☆ 添加</p>
+    </div>
+  </div>
+</div>
+
+<!-- 推荐面板 -->
+<div class="settings-overlay" id="recommendOverlay" onclick="toggleRecommend()"></div>
+<div class="collections-panel" id="recommendPanel">
+  <h2>
+    <span id="recommendTitle">📖 为你推荐</span>
+    <span>
+      <button class="btn btn-sm btn-outline" onclick="loadRecommendations()" title="刷新推荐">🔄</button>
+      <button class="btn btn-sm btn-outline" onclick="toggleRecommend()">✕</button>
+    </span>
+  </h2>
+  <div class="collections-body" id="recommendBody">
+    <div class="collections-empty">
+      <div class="icon">🔍</div>
+      <p id="recommendEmptyText">基于你的阅读历史推荐论文</p>
+      <p style="font-size:12px;margin-top:8px;color:#94a3b8" id="recommendHintText">开始搜索和阅读论文后，这里会显示个性化推荐</p>
     </div>
   </div>
 </div>
@@ -755,7 +793,7 @@ const LANGS = {
     typeAll: "全部", typeReview: "综述", typeClinical: "临床试验", typeMeta: "Meta分析",
     sortRelevance: "相关度", sortDate: "时间", sortCitations: "引用",
     // 数据源
-    pubmed: "PubMed", openalex: "OpenAlex",
+    pubmed: "PubMed", openalex: "OpenAlex", bing_academic: "Bing 学术",
     // 结果
     totalPapers: "共", papers: "篇", showing: "显示", selected: "已选",
     sortBtn: "排序：", cited: "被引", date: "时间", title: "标题",
@@ -852,6 +890,21 @@ const LANGS = {
     defaultGroup: "默认收藏夹", newGroup: "+ 新建", deleteGroup: "删除收藏夹",
     enterGroupName: "输入收藏夹名称：", deleteGroupConfirm: "确定要删除收藏夹\"{name}\"吗？\n该收藏夹内的所有收藏也将被删除，此操作不可撤销。",
     refreshCollections: "刷新",
+    // 推荐
+    recommendations: "为你推荐", recommendLoading: "正在加载推荐...", recommendEmpty: "暂无推荐",
+    recommendHint: "开始搜索和阅读论文后，这里会显示个性化推荐",
+    recommendAdded: "已添加到结果列表", recommendFailed: "加载推荐失败",
+    yourInterests: "你的研究兴趣", interestKeywords: "你的兴趣关键词",
+    // Zotero 同步
+    zoteroSync: "Zotero 同步", zoteroApiKey: "Zotero API Key", zoteroApiKeyHint: "需要在 Zotero 设置中生成 API Key",
+    zoteroUserId: "Zotero User ID", zoteroUserIdHint: "在 Zotero 设置页面的 API Keys 部分查看",
+    testConnection: "测试连接", configureZoteroFirst: "请先在设置中配置 Zotero API Key 和 User ID",
+    syncToZotero: "同步到 Zotero", syncToZoteroHint: "将 {count} 篇选中的论文同步到 Zotero",
+    zoteroCollection: "选择 Zotero 收藏夹", zoteroDefaultLibrary: "默认文献库",
+    sync: "同步", syncingToZotero: "正在同步到 Zotero...",
+    zoteroSyncSuccess: "同步成功", zoteroSyncFailed: "同步失败",
+    zoteroFetchFailed: "获取 Zotero 收藏夹失败", loadingZoteroCollections: "正在加载 Zotero 收藏夹...",
+    testingConnection: "测试中...", connectionSuccess: "连接成功", connectionFailed: "连接失败",
     // 图谱面板
     noOALink: "无 OA 链接", analyzingResearchGaps: "AI 正在分析研究空白...",
     noDOILoadGraph: "该论文无 DOI，无法加载引用关系",
@@ -887,7 +940,7 @@ const LANGS = {
     typeAll: "All", typeReview: "Review", typeClinical: "Clinical Trial", typeMeta: "Meta-analysis",
     sortRelevance: "Relevance", sortDate: "Date", sortCitations: "Citations",
     // Data sources
-    pubmed: "PubMed", openalex: "OpenAlex",
+    pubmed: "PubMed", openalex: "OpenAlex", bing_academic: "Bing Academic",
     // Results
     totalPapers: "Total", papers: "papers", showing: "Showing", selected: "Selected",
     sortBtn: "Sort:", cited: "Cited", date: "Date", title: "Title",
@@ -984,6 +1037,21 @@ const LANGS = {
     defaultGroup: "Default", newGroup: "+ New", deleteGroup: "Delete Collection",
     enterGroupName: "Enter collection name:", deleteGroupConfirm: "Are you sure you want to delete \"{name}\"?\nAll items in this collection will also be deleted. This action cannot be undone.",
     refreshCollections: "Refresh",
+    // Recommendations
+    recommendations: "For You", recommendLoading: "Loading recommendations...", recommendEmpty: "No recommendations yet",
+    recommendHint: "Start searching and reading papers to get personalized recommendations",
+    recommendAdded: "Added to results", recommendFailed: "Failed to load recommendations",
+    yourInterests: "Your Research Interests", interestKeywords: "Your interest keywords",
+    // Zotero sync
+    zoteroSync: "Zotero Sync", zoteroApiKey: "Zotero API Key", zoteroApiKeyHint: "Generate API Key in Zotero settings",
+    zoteroUserId: "Zotero User ID", zoteroUserIdHint: "Found in Zotero settings page under API Keys section",
+    testConnection: "Test Connection", configureZoteroFirst: "Please configure Zotero API Key and User ID in Settings first",
+    syncToZotero: "Sync to Zotero", syncToZoteroHint: "Sync {count} selected papers to Zotero",
+    zoteroCollection: "Select Zotero Collection", zoteroDefaultLibrary: "Default Library",
+    sync: "Sync", syncingToZotero: "Syncing to Zotero...",
+    zoteroSyncSuccess: "Sync successful", zoteroSyncFailed: "Sync failed",
+    zoteroFetchFailed: "Failed to fetch Zotero collections", loadingZoteroCollections: "Loading Zotero collections...",
+    testingConnection: "Testing...", connectionSuccess: "Connection successful", connectionFailed: "Connection failed",
     // Graph panel
     noOALink: "No OA link available", analyzingResearchGaps: "AI is analyzing research gaps...",
     noDOILoadGraph: "This paper has no DOI, cannot load citation graph",
@@ -1108,9 +1176,20 @@ function applyLang() {
   const tryLabel = document.getElementById("trySearchLabel");
   if (tryLabel) tryLabel.textContent = t("trySearch");
 
-  // 状态栏
+  // 状态栏 - 动态显示启用的数据源
   const dataSourceSpan = document.querySelector(".status-bar span:last-child");
-  if (dataSourceSpan) dataSourceSpan.textContent = t("dataSource");
+  if (dataSourceSpan) {
+    const sources = [];
+    if (document.getElementById("usePubmed")?.checked) sources.push("PubMed");
+    if (document.getElementById("useOpenalex")?.checked) sources.push("OpenAlex");
+    if (document.getElementById("useGoogleScholar")?.checked) sources.push("Google Scholar");
+    if (document.getElementById("useBingAcademic")?.checked) sources.push("Bing Academic");
+    if (document.getElementById("useCNKI")?.checked) sources.push("CNKI");
+    if (document.getElementById("useWanfang")?.checked) sources.push("万方");
+    if (document.getElementById("useVIP")?.checked) sources.push("维普");
+    const dataSourceLabel = currentLang === "en" ? "Data Source" : "数据源";
+    dataSourceSpan.textContent = sources.length > 0 ? `${dataSourceLabel}: ${sources.join(" + ")}` : t("dataSource");
+  }
 
   // Placeholder 切换（settings 面板的 placeholder 已通过 data-i18n-placeholder 处理）
   const placeholders = {
@@ -1129,6 +1208,7 @@ function applyLang() {
     settingsBtn: t("settings"),
     historyBtn: t("searchHistory"),
     doiBtn2: t("batchDOI"),
+    recommendBtn: t("recommendations"),
   };
   for (const [id, title] of Object.entries(titles)) {
     const el = document.getElementById(id);
@@ -1235,6 +1315,9 @@ function applySettingsLang() {
 
   // 加载收藏数据
   await loadCollections();
+
+  // 加载 Zotero 配置
+  await loadZoteroConfig();
 
   // 初始化搜索建议
   initSuggestions();
@@ -1531,6 +1614,7 @@ async function doSearch() {
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
     use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
+    use_bing_academic: document.getElementById("useBingAcademic")?.checked || false,
     use_cnki: document.getElementById("useCNKI")?.checked || false,
     use_wanfang: document.getElementById("useWanfang")?.checked || false,
     use_vip: document.getElementById("useVIP")?.checked || false,
@@ -1591,6 +1675,7 @@ async function doAISearch() {
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
     use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
+    use_bing_academic: document.getElementById("useBingAcademic")?.checked || false,
     use_cnki: document.getElementById("useCNKI")?.checked || false,
     use_wanfang: document.getElementById("useWanfang")?.checked || false,
     use_vip: document.getElementById("useVIP")?.checked || false,
@@ -1674,6 +1759,7 @@ function renderResults() {
       <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${exportLabel('bibtex', t("bibtex"))}</button>
       <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', t("csv"))}</button>
       <button class="btn btn-sm btn-outline" onclick="exportSelected('endnotexml')">${exportLabel('endnotexml', t("endnotexml"))}</button>
+      <button class="btn btn-sm btn-outline" onclick="syncToZotero()" title="${t("syncToZotero")}">📤 Zotero</button>
       <button class="btn btn-sm btn-outline" onclick="showKeywordNetwork()">${t("keywordNetwork")}</button>
       <button class="btn btn-sm btn-outline" onclick="showAuthorNetwork()">${t("authorNetwork")}</button>
     </div>
@@ -1711,8 +1797,8 @@ function renderResults() {
           <div class="paper-abstract" id="abs-${idx}">${p.abstract || `<i style='color:#94a3b8'>${t("noAbstract")}</i>`}</div>
           <div class="paper-actions">
             <button class="btn btn-sm btn-outline" onclick="toggleAbstract(${idx})">${t("abstract")}</button>
-            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="window.open('https://doi.org/${encodeURIComponent(p.doi)}')">${t("original")}</button>` : ""}
-            ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title)}')">${t("downloadPDF")}</button>` : ""}
+            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="recordReadingAction('view', allPapers[${idx}]); window.open('https://doi.org/${encodeURIComponent(p.doi)}')">${t("original")}</button>` : ""}
+            ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="recordReadingAction('download', allPapers[${idx}]); downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title)}')">${t("downloadPDF")}</button>` : ""}
             ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="showCitationGraph('${encodeURIComponent(p.doi)}','${encodeURIComponent(p.title)}')">${t("citationGraph")}</button>` : ""}
           </div>
         </div>
@@ -1735,7 +1821,13 @@ function renderResults() {
 
 function toggleAbstract(idx) {
   const el = document.getElementById(`abs-${idx}`);
-  if (el) el.classList.toggle("show");
+  if (el) {
+    el.classList.toggle("show");
+    // 记录查看摘要行为
+    if (el.classList.contains("show") && allPapers[idx]) {
+      recordReadingAction('abstract', allPapers[idx]);
+    }
+  }
 }
 
 function goPage(page) {
@@ -1929,7 +2021,20 @@ async function saveSettings() {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(cfg),
     });
-    if (r.ok) { showToast(t("settingsSaved")); toggleSettings(); }
+    if (r.ok) {
+      // 保存 Zotero 配置
+      const zoteroKey = document.getElementById("cfgZoteroKey").value.trim();
+      const zoteroUserId = document.getElementById("cfgZoteroUserId").value.trim();
+      await fetch(`${API}/api/zotero/config`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ api_key: zoteroKey, user_id: zoteroUserId }),
+      });
+      zoteroConfig = { api_key: zoteroKey, user_id: zoteroUserId };
+
+      showToast(t("settingsSaved"));
+      toggleSettings();
+    }
   } catch (e) {
     showToast(`${t("saveFailed")} ${e.message}`);
   }
@@ -1954,6 +2059,14 @@ async function resetSettings() {
       body: JSON.stringify(cfg),
     });
     if (r.ok) {
+      // 重置 Zotero 配置
+      await fetch(`${API}/api/zotero/config`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ api_key: "", user_id: "" }),
+      });
+      zoteroConfig = { api_key: "", user_id: "" };
+
       showToast(t("settingsReset"));
       loadSettings();
     }
@@ -2278,6 +2391,280 @@ function toggleCollections() {
   if (panel.classList.contains("show")) {
     // 打开面板时重新加载收藏数据
     loadCollections().then(() => renderCollections());
+  }
+}
+
+// ========== 推荐功能 ==========
+let recommendPapers = [];
+
+function toggleRecommend() {
+  const panel = document.getElementById("recommendPanel");
+  const overlay = document.getElementById("recommendOverlay");
+  panel.classList.toggle("show");
+  overlay.classList.toggle("show");
+  if (panel.classList.contains("show")) {
+    loadRecommendations();
+  }
+}
+
+async function loadRecommendations() {
+  const body = document.getElementById("recommendBody");
+  if (!body) return;
+
+  body.innerHTML = `<div class="collections-empty"><div class="spinner"></div><p>${t("recommendLoading")}</p></div>`;
+
+  try {
+    const r = await fetch(`${API}/api/recommendations`);
+    const data = await r.json();
+
+    if (data.papers && data.papers.length > 0) {
+      recommendPapers = data.papers;
+      renderRecommendations(data);
+    } else {
+      body.innerHTML = `<div class="collections-empty">
+        <div class="icon">📚</div>
+        <p>${t("recommendEmpty")}</p>
+        <p style="font-size:12px;margin-top:8px;color:#94a3b8">${t("recommendHint")}</p>
+        ${data.keywords && data.keywords.length > 0 ? `<p style="font-size:12px;margin-top:12px;color:#64748b">${t("interestKeywords")}：${data.keywords.slice(0, 5).join(" · ")}</p>` : ''}
+      </div>`;
+    }
+  } catch (e) {
+    body.innerHTML = `<div class="collections-empty">
+      <div class="icon">⚠️</div>
+      <p>${t("recommendFailed")}</p>
+      <p style="font-size:12px;margin-top:8px;color:#94a3b8">${e.message}</p>
+    </div>`;
+  }
+}
+
+function renderRecommendations(data) {
+  const body = document.getElementById("recommendBody");
+  if (!body) return;
+
+  let html = '';
+
+  // 显示兴趣关键词
+  if (data.keywords && data.keywords.length > 0) {
+    html += `<div style="padding:8px 12px;margin-bottom:12px;background:#f0f9ff;border-radius:8px;font-size:12px">
+      <div style="font-weight:600;color:#1e40af;margin-bottom:4px">${t("yourInterests")}</div>
+      <div style="color:#3b82f6">${data.keywords.slice(0, 8).join(" · ")}</div>
+    </div>`;
+  }
+
+  // 显示推荐论文
+  html += '<div style="display:flex;flex-direction:column;gap:8px">';
+  data.papers.forEach((paper, idx) => {
+    const title = escapeHtml(paper.title || "");
+    const authors = (paper.authors || []).slice(0, 3).map(a => escapeHtml(a)).join(", ");
+    const journal = escapeHtml(paper.journal || "");
+    const year = paper.year || "";
+    const citations = paper.citation_count || 0;
+    const doi = escapeHtml(paper.doi || "");
+
+    html += `<div class="collection-item" onclick="openRecommendPaper(${idx})" style="cursor:pointer">
+      <div class="title">${title}</div>
+      <div class="meta">
+        ${authors}${authors && journal ? ' · ' : ''}${journal}${year ? ` (${year})` : ''}
+        ${citations > 0 ? ` · <span style="color:#2563eb">${t("cited")} ${citations}</span>` : ''}
+      </div>
+      ${doi ? `<div class="meta" style="color:#64748b;font-size:11px;margin-top:2px">DOI: ${doi}</div>` : ''}
+    </div>`;
+  });
+  html += '</div>';
+
+  body.innerHTML = html;
+}
+
+function openRecommendPaper(idx) {
+  const paper = recommendPapers[idx];
+  if (!paper) return;
+
+  // 将论文添加到当前搜索结果并打开（通过 DOI 或标题去重）
+  const isDuplicate = paper.doi
+    ? allPapers.some(p => p.doi && p.doi.toLowerCase() === paper.doi.toLowerCase())
+    : allPapers.some(p => p.title === paper.title);
+  if (!isDuplicate) {
+    allPapers.unshift(paper);
+    currentPage = 1;
+    renderResults();
+  }
+
+  // 记录阅读行为
+  recordReadingAction('recommend_click', paper);
+
+  // 关闭推荐面板
+  toggleRecommend();
+
+  showToast(t("recommendAdded"));
+}
+
+// 记录阅读行为
+async function recordReadingAction(action, paper) {
+  try {
+    await fetch(`${API}/api/reading-history`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ action, paper }),
+    });
+  } catch { /* 忽略 */ }
+}
+
+// ========== Zotero 同步 ==========
+let zoteroConfig = { api_key: "", user_id: "" };
+let zoteroCollections = [];
+
+async function loadZoteroConfig() {
+  try {
+    const r = await fetch(`${API}/api/zotero/config`);
+    if (r.ok) {
+      zoteroConfig = await r.json();
+      const keyEl = document.getElementById("cfgZoteroKey");
+      const userIdEl = document.getElementById("cfgZoteroUserId");
+      if (keyEl) keyEl.value = zoteroConfig.api_key || "";
+      if (userIdEl) userIdEl.value = zoteroConfig.user_id || "";
+    }
+  } catch { /* 忽略 */ }
+}
+
+async function testZoteroConnection() {
+  const keyEl = document.getElementById("cfgZoteroKey");
+  const userIdEl = document.getElementById("cfgZoteroUserId");
+  const statusEl = document.getElementById("zoteroStatus");
+  if (!keyEl || !userIdEl || !statusEl) return;
+
+  const api_key = keyEl.value.trim();
+  const user_id = userIdEl.value.trim();
+  if (!api_key || !user_id) {
+    statusEl.innerHTML = `<span style="color:var(--danger)">${t("configureZoteroFirst")}</span>`;
+    return;
+  }
+
+  statusEl.innerHTML = `<div class="spinner" style="width:16px;height:16px"></div> ${t("testingConnection")}`;
+
+  try {
+    const r = await fetch(`${API}/api/zotero/test`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ api_key, user_id }),
+    });
+    const data = await r.json();
+    if (r.ok && data.ok) {
+      statusEl.innerHTML = `<span style="color:var(--success)">✓ ${t("connectionSuccess")}</span>`;
+    } else {
+      statusEl.innerHTML = `<span style="color:var(--danger)">✗ ${t("connectionFailed")}</span>`;
+    }
+  } catch (e) {
+    statusEl.innerHTML = `<span style="color:var(--danger)">✗ ${t("networkError")}</span>`;
+  }
+}
+
+async function syncToZotero() {
+  // 检查配置
+  if (!zoteroConfig.api_key || !zoteroConfig.user_id) {
+    showToast(t("configureZoteroFirst"));
+    toggleSettings();
+    return;
+  }
+
+  // 获取选中的论文
+  const selectedPapers = [];
+  checkedSet.forEach(idx => {
+    if (allPapers[idx]) selectedPapers.push(allPapers[idx]);
+  });
+
+  if (selectedPapers.length === 0) {
+    showToast(t("pleaseSelectPapers"));
+    return;
+  }
+
+  // 获取 Zotero 收藏夹列表
+  showToast(t("loadingZoteroCollections"));
+
+  try {
+    const r = await fetch(`${API}/api/zotero/collections`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(zoteroConfig),
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      showToast(t("zoteroFetchFailed"));
+      return;
+    }
+
+    zoteroCollections = data.collections || [];
+
+    // 显示选择收藏夹的对话框
+    showZoteroSyncDialog(selectedPapers);
+  } catch (e) {
+    showToast(t("zoteroFetchFailed"));
+  }
+}
+
+// 全局变量存储待同步的论文
+let _zoteroSyncPapers = [];
+
+function showZoteroSyncDialog(papers) {
+  _zoteroSyncPapers = papers;
+  // 创建模态框
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay show";
+  modal.id = "zoteroModal";
+  modal.innerHTML = `
+    <div class="modal" style="width:450px">
+      <h3>📤 ${t("syncToZotero")}</h3>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">
+        ${t("syncToZoteroHint").replace("{count}", papers.length)}
+      </p>
+      <div class="form-group">
+        <label>${t("zoteroCollection")}</label>
+        <select id="zoteroCollectionSelect" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px">
+          <option value="">${t("zoteroDefaultLibrary")}</option>
+          ${zoteroCollections.map(c => `<option value="${escapeHtml(c.key)}">${escapeHtml(c.name)} (${c.numItems})</option>`).join("")}
+        </select>
+      </div>
+      <div class="modal-btns">
+        <button class="btn btn-outline" onclick="closeZoteroModal()">${t("cancel")}</button>
+        <button class="btn btn-primary" onclick="doZoteroSync()">${t("sync")}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function closeZoteroModal() {
+  const modal = document.getElementById("zoteroModal");
+  if (modal) modal.remove();
+}
+
+async function doZoteroSync() {
+  const collectionSelect = document.getElementById("zoteroCollectionSelect");
+  const collection_key = collectionSelect ? collectionSelect.value : "";
+  const papers = _zoteroSyncPapers;
+
+  closeZoteroModal();
+  showToast(t("syncingToZotero"));
+
+  try {
+    const r = await fetch(`${API}/api/zotero/sync`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        ...zoteroConfig,
+        collection_key,
+        papers,
+      }),
+    });
+    const data = await r.json();
+
+    if (r.ok && data.ok) {
+      showToast(`${t("zoteroSyncSuccess")} ${data.successful}/${data.total}`);
+    } else {
+      showToast(t("zoteroSyncFailed"));
+    }
+  } catch (e) {
+    showToast(t("zoteroSyncFailed"));
   }
 }
 

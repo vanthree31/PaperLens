@@ -810,6 +810,114 @@ class VIPSearch:
             return []
 
 
+class BingScholarSearch:
+    """Bing 学术搜索（网页抓取）"""
+
+    BASE = "https://www.bing.com/academic"
+
+    def __init__(self, proxy=None):
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        self.session.headers["Accept-Language"] = "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"
+        if proxy:
+            self.session.proxies = proxy
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               max_results=20) -> list:
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            print("Bing Academic: beautifulsoup4 未安装，请运行 pip install beautifulsoup4")
+            return []
+
+        try:
+            # Bing Academic 搜索参数
+            params = {
+                "q": query,
+                "qs": "n",
+                "form": "QBRE",
+                "sp": "-1",
+                "pq": query.lower(),
+                "sc": "0-0",
+                "sk": "",
+            }
+            # 添加年份过滤
+            if year_from or year_to:
+                y_from = year_from if year_from else 1900
+                y_to = year_to if year_to else 2030
+                params["filters"] = f"ex1:\"ez5_{y_from}_{y_to}\""
+
+            r = self.session.get(self.BASE, params=params, timeout=15)
+            r.raise_for_status()
+            r.encoding = "utf-8"
+
+            soup = BeautifulSoup(r.text, "html.parser")
+            papers = []
+
+            # Bing 学术结果选择器
+            items = soup.select("li.b_algo, div.academic-card, div.sa_cc")
+
+            for item in items[:max_results]:
+                try:
+                    p = Paper(source="bing_academic")
+
+                    # 标题
+                    title_el = item.select_one("h2 a, h3 a, .ac-title a")
+                    if title_el:
+                        p.title = title_el.get_text(strip=True)
+                        # 尝试从链接获取 DOI
+                        href = title_el.get("href", "")
+                        doi_match = re.search(r'10\.\d{4,}/\S+', href)
+                        if doi_match:
+                            p.doi = doi_match.group()
+
+                    # 作者和期刊信息
+                    meta_el = item.select_one(".b_attribution, .ac-meta, .sa_uc")
+                    if meta_el:
+                        meta_text = meta_el.get_text(strip=True)
+                        # 尝试解析作者
+                        author_match = re.search(r'^([^-]+?)\s*[-–]', meta_text)
+                        if author_match:
+                            authors_str = author_match.group(1)
+                            p.authors = [a.strip() for a in re.split(r'[,;]', authors_str) if a.strip()]
+                        # 尝试解析期刊和年份
+                        journal_match = re.search(r'[-–]\s*(.+?)(?:\s*,\s*(\d{4}))?$', meta_text)
+                        if journal_match:
+                            p.journal = journal_match.group(1).strip()
+                            if journal_match.group(2):
+                                p.year = int(journal_match.group(2))
+
+                    # 摘要
+                    abstract_el = item.select_one(".b_caption p, .ac-abstract, .sa_sn")
+                    if abstract_el:
+                        p.abstract = abstract_el.get_text(strip=True)
+
+                    # 引用数
+                    cite_el = item.select_one(".ac-cite-count, .sa_cc strong")
+                    if cite_el:
+                        try:
+                            cite_text = cite_el.get_text(strip=True)
+                            p.citation_count = int(re.sub(r'[^\d]', '', cite_text))
+                        except ValueError:
+                            pass
+
+                    # 如果没有年份，尝试从摘要或其他地方提取
+                    if not p.year:
+                        year_match = re.search(r'\b(19|20)\d{2}\b', item.get_text())
+                        if year_match:
+                            p.year = int(year_match.group())
+
+                    if p.title and len(p.title) > 5:  # 过滤掉太短的标题
+                        papers.append(p)
+                except Exception:
+                    continue
+
+            return papers
+        except Exception as e:
+            print(f"Bing Academic search error: {e}")
+            return []
+
+
 class SearchEngine:
     """聚合检索引擎"""
 
@@ -829,6 +937,7 @@ class SearchEngine:
         cnki_cfg = sources_cfg.get("cnki", {})
         wanfang_cfg = sources_cfg.get("wanfang", {})
         vip_cfg = sources_cfg.get("vip", {})
+        bing_cfg = sources_cfg.get("bing_academic", {})
 
         self.pubmed = PubMedSearch(
             email=pubmed_cfg.get("email", ""),
@@ -857,11 +966,16 @@ class SearchEngine:
             proxy=proxy
         ) if vip_cfg.get("enabled", False) else None
 
+        self.bing_academic = BingScholarSearch(
+            proxy=proxy
+        ) if bing_cfg.get("enabled", False) else None
+
     def search(self, query: str, year_from=2020, year_to=2026,
                sort="relevance", max_results=50,
                use_pubmed=True, use_openalex=True,
                use_google_scholar=False, use_cnki=False,
                use_wanfang=False, use_vip=False,
+               use_bing_academic=False,
                journal="", field="", mesh_term="", pub_type="") -> list:
         """聚合检索
 
@@ -875,6 +989,7 @@ class SearchEngine:
             use_cnki: 启用中国知网（实验性）
             use_wanfang: 启用万方（实验性）
             use_vip: 启用维普（实验性）
+            use_bing_academic: 启用 Bing 学术（实验性）
         """
         all_papers = []
 
@@ -926,6 +1041,13 @@ class SearchEngine:
                 query, year_from, year_to, max_results=min(max_results, 20)
             )
             all_papers.extend(vip_papers)
+
+        # Bing 学术检索（实验性）
+        if use_bing_academic and self.bing_academic:
+            bing_papers = self.bing_academic.search(
+                query, year_from, year_to, max_results=min(max_results, 20)
+            )
+            all_papers.extend(bing_papers)
 
         # 去重
         seen_dois = set()

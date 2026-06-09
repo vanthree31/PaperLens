@@ -49,7 +49,7 @@ PaperLens solves all of these with a single interface.
 | Feature | Description |
 |---------|-------------|
 | **AI Smart Search** | Describe what you're looking for in natural language (Chinese or English), AI builds the optimal PubMed query |
-| **Multi Data Source** | PubMed + OpenAlex (+ Google Scholar / CNKI / Wanfang / VIP experimental), automatic deduplication, citation counts, and OA links |
+| **Multi Data Source** | PubMed + OpenAlex (+ Google Scholar / Bing Academic / CNKI / Wanfang / VIP experimental), automatic deduplication, citation counts, and OA links |
 | **Batch DOI Import** | Paste a list of DOIs and look them up in one click |
 | **Advanced Filtering** | Filter by journal, field tags, year range, publication type |
 | **In-result Sorting** | Sort by citations, date, or title without re-searching |
@@ -80,6 +80,8 @@ PaperLens solves all of these with a single interface.
 | **PDF Download** | Direct OA PDF download with link verification |
 | **Search History** | Persistent history with smart suggestions |
 | **Dual AI Models** | Configure separate models for search (fast) and analysis (high-quality) |
+| **Zotero Sync** | Direct sync papers to Zotero with collection selection |
+| **Reading Recommendations** | Personalized paper recommendations based on reading history |
 
 ## Architecture
 
@@ -230,9 +232,10 @@ PaperLens/
 - [x] Author collaboration network visualization
 
 ### Planned
-- [ ] Paper recommendation based on reading history
-- [ ] RAG integration for literature review writing
-- [ ] Zotero / Mendeley direct sync
+- [x] Paper recommendation based on reading history
+- [ ] RAG integration for literature review writing (complex, deferred)
+- [x] Zotero direct sync
+- [ ] Mendeley direct sync
 - [ ] Collaborative paper collections
 
 ## Contributing

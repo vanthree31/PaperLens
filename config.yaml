@@ -17,6 +17,8 @@ sources:
     enabled: false
   vip:
     enabled: false
+  bing_academic:
+    enabled: false
 
 # AI 模型 - 智能检索（解析自然语言 → 生成检索式，建议用快速模型）
 ai_search:
