@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const paperAbstract = document.getElementById('paperAbstract');
   const paperKeywords = document.getElementById('paperKeywords');
   const btnCollect = document.getElementById('btnCollect');
+  const btnZotero = document.getElementById('btnZotero');
   const btnOpenOa = document.getElementById('btnOpenOa');
   const message = document.getElementById('message');
   const emptyState = document.getElementById('emptyState');
@@ -208,6 +209,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 启用收藏按钮
     btnCollect.disabled = false;
     btnCollect.onclick = () => addToCollection(paper);
+
+    // 启用 Zotero 同步按钮
+    btnZotero.disabled = false;
+    btnZotero.onclick = () => syncToZotero(paper);
   }
 
   /**
@@ -243,6 +248,34 @@ document.addEventListener('DOMContentLoaded', () => {
       showMessage('无法连接到 PaperLens', 'error');
       btnCollect.disabled = false;
       btnCollect.querySelector('.btn-text').textContent = '收藏到 PaperLens';
+    }
+  }
+
+  /**
+   * 同步到 Zotero
+   */
+  async function syncToZotero(paper) {
+    btnZotero.disabled = true;
+    btnZotero.querySelector('.btn-text').textContent = '同步中...';
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'syncToZotero',
+        paper: paper
+      });
+
+      if (response.success) {
+        showMessage('已成功同步到 Zotero', 'success');
+        btnZotero.querySelector('.btn-text').textContent = '已同步 ✓';
+      } else {
+        showMessage(response.error || '同步失败', 'error');
+        btnZotero.disabled = false;
+        btnZotero.querySelector('.btn-text').textContent = '同步到 Zotero';
+      }
+    } catch (error) {
+      showMessage('无法连接到 PaperLens', 'error');
+      btnZotero.disabled = false;
+      btnZotero.querySelector('.btn-text').textContent = '同步到 Zotero';
     }
   }
 

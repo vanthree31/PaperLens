@@ -8,6 +8,8 @@
 - 📄 **论文详情查询** - 一键查询论文摘要、作者、期刊、引用数
 - ⭐ **快速收藏** - 将论文收藏到 PaperLens
 - 🔗 **全文链接** - 直接访问开放获取论文
+- 📤 **Zotero 同步** - 将论文直接同步到 Zotero 文献库
+- 📖 **阅读记录** - 自动记录浏览行为，用于个性化推荐
 
 ## 安装步骤
 
@@ -66,6 +68,13 @@ python generate_icons.py
 2. 点击 **"收藏到 PaperLens"** 按钮
 3. 论文将添加到 PaperLens 的默认收藏夹
 
+### 同步到 Zotero
+
+1. 先在 PaperLens 设置中配置 Zotero API Key 和 User ID
+2. 查询论文详情后
+3. 点击 **"同步到 Zotero"** 按钮
+4. 论文将同步到 Zotero 默认文献库
+
 ## 支持的网站
 
 扩展在所有网站上运行，特别优化了以下学术网站：
@@ -107,6 +116,8 @@ python main.py
 - **Manifest V3** - 使用最新的 Chrome 扩展标准
 - **DOI 检测** - 优先级：meta 标签 > URL > 正则匹配
 - **API 通信** - 通过 `http://127.0.0.1:51234` 与 PaperLens 通信
+- **Zotero API** - 通过 PaperLens 代理调用 Zotero Web API v3
+- **阅读记录** - 浏览行为通过 PaperLens 记录，用于个性化推荐
 
 ## 开发
 

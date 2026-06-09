@@ -38,6 +38,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  if (request.action === 'syncToZotero') {
+    // 同步到 Zotero
+    syncToZotero(request.paper)
+      .then(result => sendResponse({ success: true, result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
+
   if (request.action === 'checkConnection') {
     // 检查 PaperLens 连接
     checkConnection()
@@ -83,7 +91,8 @@ async function addToCollection(paper) {
         citation_count: paper.citation_count,
         oa_url: paper.oa_url,
         pmid: paper.pmid,
-        abstract: paper.abstract
+        abstract: paper.abstract,
+        keywords: paper.keywords
       },
       group_id: 'default'
     })
@@ -110,6 +119,49 @@ async function checkConnection() {
   } catch {
     return false;
   }
+}
+
+/**
+ * 同步到 Zotero
+ */
+async function syncToZotero(paper) {
+  // 先获取 Zotero 配置
+  const configResponse = await fetch(`${PAPERLENS_API}/api/zotero/config`);
+  if (!configResponse.ok) {
+    throw new Error('无法获取 Zotero 配置');
+  }
+  const config = await configResponse.json();
+
+  if (!config.api_key || !config.user_id) {
+    throw new Error('请先在 PaperLens 设置中配置 Zotero API Key 和 User ID');
+  }
+
+  // 同步论文到 Zotero
+  const response = await fetch(`${PAPERLENS_API}/api/zotero/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: config.api_key,
+      user_id: config.user_id,
+      collection_key: '',
+      papers: [{
+        doi: paper.doi,
+        title: paper.title,
+        authors: paper.authors,
+        journal: paper.journal,
+        year: paper.year,
+        abstract: paper.abstract,
+        keywords: paper.keywords
+      }]
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || '同步失败');
+  }
+
+  return await response.json();
 }
 
 // 标签页更新时重新检测 DOI
