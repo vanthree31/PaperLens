@@ -60,7 +60,7 @@ def export_bibtex(papers: list) -> str:
             lines.append(f"  pmid = {{{p.pmid}}},")
         if p.abstract:
             abs_text = p.abstract.replace("{", "\\{").replace("}", "\\}")
-            lines.append(f"  abstract = {{{abs_text[:1000]}}},")
+            lines.append(f"  abstract = {{{abs_text[:2000]}}},")
         if p.keywords:
             lines.append(f"  keywords = {{{', '.join(p.keywords)}}},")
         lines.append("}")
@@ -91,7 +91,7 @@ def export_csv(papers: list) -> str:
             p.citation_count,
             p.oa_url,
             "; ".join(p.keywords),
-            p.abstract[:500] if p.abstract else "",
+            p.abstract[:2000] if p.abstract else "",
         ])
 
     return output.getvalue()

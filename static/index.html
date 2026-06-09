@@ -514,7 +514,7 @@ body {
         <button class="btn btn-sm btn-outline" onclick="closeAiPanel()" style="margin-left:4px">✕ 关闭</button>
       </div>
     </div>
-    <div class="ai-content" id="aiContent" style="line-height:1.8;font-size:14px">等待操作...</div>
+    <div class="ai-content" id="aiContent" style="line-height:1.8;font-size:14px" data-status="waiting">等待操作...</div>
   </div>
 
   <div id="results">
@@ -732,6 +732,11 @@ let currentGroupId = "default";
 let checkedSet = new Set();
 let currentSort = "";
 
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 // ========== 多语言支持 ==========
 const LANGS = {
   zh: {
@@ -794,6 +799,7 @@ const LANGS = {
     cannotDownload: "无法下载",
     // 导出
     exported: "已导出", exportFailed: "导出失败", exportError: "导出错误:",
+    completed: "完成",
     // 设置
     settingsTitle: "⚙ 设置", dataSourceConfig: "数据源配置",
     pubmedEmail: "PubMed Email", pubmedEmailHint: "可选，提高 NCBI API 速率限制",
@@ -820,7 +826,7 @@ const LANGS = {
     citationGraph: "引用关系图谱", legendCenter: "当前论文", legendCiting: "引用了此论文", legendReferenced: "此论文引用",
     loadingGraph: "加载引用关系中...", noDOI: "该论文无 DOI，无法查看引用关系",
     openNewGraph: "在新图谱中打开", fullscreen: "全屏", exitFullscreen: "退出全屏", closeGraph: "关闭",
-    aiSummary: "AI 总结", aiDetail: "AI 详析", aiNovelty: "创新点", newGraph: "新图谱", original: "原文",
+    graphAiSummary: "AI 总结", graphAiDetail: "AI 详析", graphAiNovelty: "创新点", newGraph: "新图谱",
     graphHint: "滚轮缩放 · 拖拽平移 · 点击节点展开引用", resetZoom: "重置缩放",
     aiAnalysis: "AI 分析", copy: "复制", aiAnalyzing: "AI 分析中...", aiFailed: "AI 分析失败",
     clickNodeFirst: "请先点击论文节点",
@@ -920,6 +926,7 @@ const LANGS = {
     cannotDownload: "Cannot download",
     // Export
     exported: "Exported", exportFailed: "Export failed", exportError: "Export error:",
+    completed: "Completed",
     // Settings
     settingsTitle: "⚙ Settings", dataSourceConfig: "Data Source Configuration",
     pubmedEmail: "PubMed Email", pubmedEmailHint: "Optional, improves NCBI API rate limit",
@@ -946,7 +953,7 @@ const LANGS = {
     citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
     loadingGraph: "Loading citation graph...", noDOI: "No DOI available for citation graph",
     openNewGraph: "Open in New Graph", fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen", closeGraph: "Close",
-    aiSummary: "AI Summary", aiDetail: "AI Detail", aiNovelty: "Novelty", newGraph: "New Graph", original: "Original",
+    graphAiSummary: "AI Summary", graphAiDetail: "AI Detail", graphAiNovelty: "Novelty", newGraph: "New Graph",
     graphHint: "Scroll to zoom · Drag to pan · Click node to expand citations", resetZoom: "Reset Zoom",
     aiAnalysis: "AI Analysis", copy: "Copy", aiAnalyzing: "AI Analyzing...", aiFailed: "AI Analysis Failed",
     clickNodeFirst: "Please click a paper node first",
@@ -1047,8 +1054,9 @@ function applyLang() {
 
   // 状态栏
   const statusEl = document.getElementById("statusText");
-  if (statusEl && (statusEl.textContent === "就绪" || statusEl.textContent === "Ready")) {
+  if (statusEl && (!statusEl.dataset.status || statusEl.dataset.status === "ready")) {
     statusEl.textContent = t("ready");
+    statusEl.dataset.status = "ready";
   }
 
   // 空状态
@@ -1076,8 +1084,9 @@ function applyLang() {
 
   // AI 内容
   const aiContent = document.getElementById("aiContent");
-  if (aiContent && (aiContent.textContent === "等待操作..." || aiContent.textContent === "Waiting...")) {
+  if (aiContent && (!aiContent.dataset.status || aiContent.dataset.status === "waiting")) {
     aiContent.textContent = t("aiWaiting");
+    aiContent.dataset.status = "waiting";
   }
 
   // 试试标签
@@ -1149,11 +1158,11 @@ function applyLang() {
   const graphCloseBtn = document.getElementById("graphCloseBtn");
   if (graphCloseBtn) graphCloseBtn.textContent = `✕ ${t("closeGraph")}`;
   const graphAiSummaryBtn = document.getElementById("graphAiSummaryBtn");
-  if (graphAiSummaryBtn) graphAiSummaryBtn.textContent = t("aiSummary");
+  if (graphAiSummaryBtn) graphAiSummaryBtn.textContent = t("graphAiSummary");
   const graphAiDetailBtn = document.getElementById("graphAiDetailBtn");
-  if (graphAiDetailBtn) graphAiDetailBtn.textContent = t("aiDetail");
+  if (graphAiDetailBtn) graphAiDetailBtn.textContent = t("graphAiDetail");
   const graphAiNoveltyBtn = document.getElementById("graphAiNoveltyBtn");
-  if (graphAiNoveltyBtn) graphAiNoveltyBtn.textContent = t("aiNovelty");
+  if (graphAiNoveltyBtn) graphAiNoveltyBtn.textContent = t("graphAiNovelty");
   const graphNewGraphBtn = document.getElementById("graphNewGraphBtn");
   if (graphNewGraphBtn) graphNewGraphBtn.textContent = t("openNewGraph");
   const graphOriginalBtn = document.getElementById("graphOriginalBtn");
@@ -1586,7 +1595,7 @@ async function doSearch() {
     }
   } catch (e) {
     showToast(`${t("networkError")}: ${e.message}`);
-    setStatus(t("networkErrorRetry"));
+    setStatus(t("networkErrorRetry"), "network_error");
     btn.textContent = t("retry");
     btn.onclick = () => { btn.onclick = doSmartSearch; doSmartSearch(); };
   } finally {
@@ -1644,9 +1653,9 @@ async function doAISearch() {
         const aiPanel = document.getElementById("aiPanel");
         const aiContent = document.getElementById("aiContent");
         aiPanel.classList.add("show");
-        aiContent.innerHTML = `<b>${t("aiSearchStrategy")}</b>${data.explanation}` +
-          (data.analysis?.suggested_keywords ? `<br><b>${t("suggestedKeywords")}</b>${data.analysis.suggested_keywords.join(", ")}` : "") +
-          `<br><b>${t("actualQuery")}</b><code>${data.query}</code>`;
+        aiContent.innerHTML = `<b>${t("aiSearchStrategy")}</b>${escapeHtml(data.explanation)}` +
+          (data.analysis?.suggested_keywords ? `<br><b>${t("suggestedKeywords")}</b>${escapeHtml(data.analysis.suggested_keywords.join(", "))}` : "") +
+          `<br><b>${t("actualQuery")}</b><code>${escapeHtml(data.query)}</code>`;
       }
       setStatus(`${t("aiSearchComplete")} ${data.total} ${t("papersFound")} ${elapsed} ${t("seconds")})`);
     } else {
@@ -1656,7 +1665,7 @@ async function doAISearch() {
   } catch (e) {
     clearInterval(timer);
     showToast(`${t("networkError")}: ${e.message}`);
-    setStatus(t("networkError"));
+    setStatus(t("networkError"), "network_error");
   } finally {
     btn.disabled = false;
     btn.textContent = t("search");
@@ -1667,8 +1676,8 @@ async function doAISearch() {
 function renderResults() {
   const div = document.getElementById("results");
   if (!allPapers.length) {
-    const lastStatus = document.getElementById("statusText")?.textContent || "";
-    const isNetworkError = lastStatus.includes("网络") || lastStatus.includes("Network") || lastStatus.includes("错误") || lastStatus.includes("error");
+    const statusKey = document.getElementById("statusText")?.dataset?.status || "";
+    const isNetworkError = statusKey === "network_error";
     const hint = isNetworkError ? t("networkError") : t("searchTips");
     div.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>${t("noResults")}</p>
       <p style="font-size:12px;margin-top:12px;color:#94a3b8">${hint}</p></div>`;
@@ -1681,7 +1690,7 @@ function renderResults() {
   const end = Math.min(start + pageSize, allPapers.length);
   const page = allPapers.slice(start, end);
   const selCount = checkedSet.size;
-  const exportLabel = (fmt, name) => selCount > 0 ? `${name} (${selCount} ${t("papers")})` : `${name} (${t("all")})`;
+  const exportLabel = (fmt, name) => name;
 
   let html = `<div class="toolbar">
     <div class="toolbar-left">${t("totalPapers")} ${allPapers.length} ${t("papers")}, ${t("showing")} ${start+1}-${end} <span id="selectedCount" style="color:var(--primary);font-weight:500">${selCount > 0 ? `(${t("selected")} ${selCount} ${t("papers")})` : ""}</span>
@@ -1693,8 +1702,8 @@ function renderResults() {
     </div>
     <div class="toolbar-right">
       <button class="btn btn-sm btn-outline" onclick="selectAll()">${t("selectAll")}</button>
-      <button class="btn btn-sm btn-ai" id="btnSummary" onclick="aiAnalyzePapers('summary')" ${selCount > 1 ? 'style="display:none"' : ''}>${t("aiSummary")}</button>
-      <button class="btn btn-sm btn-ai" id="btnDetail" onclick="aiAnalyzePapers('detail')" ${selCount > 1 ? 'style="display:none"' : ''}>${t("aiDetail")}</button>
+      <button class="btn btn-sm btn-ai" id="btnSummary" onclick="aiAnalyzePapers('summary')">${t("aiSummary")}</button>
+      <button class="btn btn-sm btn-ai" id="btnDetail" onclick="aiAnalyzePapers('detail')">${t("aiDetail")}</button>
       <button class="btn btn-sm btn-ai" id="btnCompare" onclick="aiAnalyzePapers('compare')" ${selCount < 2 ? 'style="display:none"' : ''}>${t("aiCompare")}</button>
       <button class="btn btn-sm btn-ai" id="btnNovelty" onclick="aiAnalyzePapers('novelty')" ${selCount < 1 ? 'style="display:none"' : ''}>${t("aiNovelty")}</button>
       <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${exportLabel('ris', t("exportRIS"))}</button>
@@ -1713,7 +1722,8 @@ function renderResults() {
     const isFavorited = collectionsData.items && collectionsData.items.some(item => item.doi && p.doi && item.doi.toLowerCase() === p.doi.toLowerCase());
     const authors = p.authors.length > 3 ? p.authors.slice(0, 3).join(", ") + " et al." : p.authors.join(", ");
     const doiLink = p.doi ? `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" style="color:var(--primary);text-decoration:none">${p.doi}</a>` : "";
-    const oaLink = p.oa_url ? `<a href="${p.oa_url}" target="_blank" class="badge badge-green">OA</a>` : "";
+    const safeOaUrl = p.oa_url && /^https?:\/\//i.test(p.oa_url) ? p.oa_url : "";
+    const oaLink = safeOaUrl ? `<a href="${safeOaUrl}" target="_blank" class="badge badge-green">OA</a>` : "";
     const citationTag = p.citation_count > 0 ? `<span class="badge">${t("cited")} ${p.citation_count}</span>` : "";
 
     html += `
@@ -1748,9 +1758,10 @@ function renderResults() {
   html += '</div>';
 
   if (totalPages > 1) {
+    const pageText = currentLang === "en" ? `Page ${currentPage} of ${totalPages}` : `${t("page")} ${currentPage}/${totalPages} ${t("of")}`;
     html += `<div class="pagination">
       <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>${t("prevPage")}</button>
-      <span>${t("page")} ${currentPage}/${totalPages} ${t("of")}</span>
+      <span>${pageText}</span>
       <button class="btn btn-sm btn-outline" onclick="goPage(${currentPage+1})" ${currentPage>=totalPages?'disabled':''}>${t("nextPage")}</button>
     </div>`;
   }
@@ -1797,12 +1808,8 @@ function updateSelectedCount() {
   const el = document.getElementById("selectedCount");
   if (el) el.textContent = count > 0 ? `(${t("selected")} ${count} ${t("papers")})` : "";
   // 动态切换 AI 按钮显隐
-  const btnS = document.getElementById("btnSummary");
-  const btnD = document.getElementById("btnDetail");
   const btnC = document.getElementById("btnCompare");
   const btnN = document.getElementById("btnNovelty");
-  if (btnS) btnS.style.display = count > 1 ? "none" : "";
-  if (btnD) btnD.style.display = count > 1 ? "none" : "";
   if (btnC) btnC.style.display = count < 2 ? "none" : "";
   if (btnN) btnN.style.display = count < 1 ? "none" : "";
 }
@@ -2165,8 +2172,10 @@ function formatAIText(text) {
   return '<p style="margin:8px 0">' + s + '</p>';
 }
 
-function setStatus(text) {
-  document.getElementById("statusText").textContent = text;
+function setStatus(text, statusKey) {
+  const el = document.getElementById("statusText");
+  el.textContent = text;
+  if (statusKey) el.dataset.status = statusKey;
 }
 
 function showToast(msg) {
@@ -2316,9 +2325,11 @@ function renderGroupTabs() {
     const isActive = g.id === currentGroupId;
     const canDelete = g.id !== 'default'; // 默认收藏夹不能删除
     const displayName = g.id === 'default' ? t('defaultGroup') : g.name;
+    const safeId = escapeHtml(g.id);
+    const safeName = escapeHtml(displayName);
     return `<span class="group-tab-wrapper">
-      <button class="group-tab${isActive ? ' active' : ''}" onclick="switchGroup('${g.id}')">${displayName}</button>
-      ${canDelete ? `<button class="group-tab-delete" onclick="deleteGroup('${g.id}', '${displayName.replace(/'/g, "\\'")}')" title="${t('deleteGroup')}">✕</button>` : ''}
+      <button class="group-tab${isActive ? ' active' : ''}" onclick="switchGroup('${safeId}')">${safeName}</button>
+      ${canDelete ? `<button class="group-tab-delete" onclick="deleteGroup('${safeId}', this.getAttribute('data-name'))" data-name="${safeName}" title="${t('deleteGroup')}">✕</button>` : ''}
     </span>`;
   }).join('');
   html += `<button class="add-group-btn" onclick="addGroup()">${t('newGroup')}</button>`;
@@ -2412,9 +2423,23 @@ function renderCollections() {
 function viewCollectionItem(encodedDoi) {
   const doi = decodeURIComponent(encodedDoi);
   // 先检查当前搜索结果中是否有这篇论文
-  const found = allPapers.find(p => p.doi && p.doi.toLowerCase() === doi.toLowerCase());
-  if (found) {
+  const idx = allPapers.findIndex(p => p.doi && p.doi.toLowerCase() === doi.toLowerCase());
+  if (idx >= 0) {
     toggleCollections();
+    // 跳转到对应页并滚动定位
+    const targetPage = Math.floor(idx / pageSize) + 1;
+    if (targetPage !== currentPage) {
+      currentPage = targetPage;
+      renderResults();
+    }
+    setTimeout(() => {
+      const card = document.getElementById(`card-${idx}`);
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.style.outline = "2px solid var(--primary)";
+        setTimeout(() => { card.style.outline = ""; }, 2000);
+      }
+    }, 100);
     return;
   }
   // 否则通过 DOI 查询并跳转
@@ -2424,9 +2449,9 @@ function viewCollectionItem(encodedDoi) {
 async function toggleFavorite(idx, btn) {
   const paper = allPapers[idx];
   if (!paper || !paper.doi) return;
-  const isFavorited = collectionsData.items && collectionsData.items.some(item => item.doi && item.doi.toLowerCase() === paper.doi.toLowerCase());
-  if (isFavorited) {
-    await removeFromCollection(encodeURIComponent(paper.doi));
+  const existingItem = collectionsData.items && collectionsData.items.find(item => item.doi && item.doi.toLowerCase() === paper.doi.toLowerCase());
+  if (existingItem) {
+    await removeFromCollection(encodeURIComponent(paper.doi), existingItem.group_id || "default");
   } else {
     await addToCollection(paper);
   }
@@ -2450,13 +2475,13 @@ async function addToCollection(paper) {
   }
 }
 
-async function removeFromCollection(encodedDoi) {
+async function removeFromCollection(encodedDoi, groupId) {
   const doi = decodeURIComponent(encodedDoi);
   try {
     const r = await fetch(`${API}/api/collections`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ doi, group_id: currentGroupId }),
+      body: JSON.stringify({ doi, group_id: groupId || currentGroupId }),
     });
     if (r.ok) {
       await loadCollections();
@@ -2526,7 +2551,7 @@ async function batchDoiLookup() {
         ? `${t("foundPapers")} ${data.total} ${t("papers")}, ${data.not_found} ${t("doiNotFound")}`
         : `${t("foundPapers")} ${data.total} ${t("papers")}${t("doiReplaced")}`;
       document.getElementById("doiResult").textContent = msg;
-      setStatus(`${t("batchDOI")} ${t("exported")}, ${data.total} ${t("papers")}`);
+      setStatus(`${t("batchDOI")} ${t("completed")}, ${data.total} ${t("papers")}`);
       setTimeout(closeDoiModal, 2000);
     } else {
       document.getElementById("doiResult").textContent = te(data.error) || t("queryFailed");
@@ -3047,7 +3072,7 @@ function floatGraphAnalyze(gid, mode) {
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
-          });
+          }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
         }
         readChunk();
       }
@@ -3092,7 +3117,7 @@ function floatGraphNovelty(gid) {
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
-          });
+          }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
         }
         readChunk();
       }
@@ -3305,7 +3330,7 @@ function graphAnalyze(mode) {
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
-          });
+          }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
         }
         readChunk();
       }
@@ -3398,7 +3423,7 @@ function graphNoveltyDetection() {
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
-          });
+          }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
         }
         readChunk();
       }

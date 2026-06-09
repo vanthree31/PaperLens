@@ -169,7 +169,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 摘要
     if (paper.abstract) {
-      paperAbstract.innerHTML = `<strong>摘要：</strong>${unescapeHtml(paper.abstract)}`;
+      paperAbstract.textContent = '';
+      const strong = document.createElement('strong');
+      strong.textContent = '摘要：';
+      paperAbstract.appendChild(strong);
+      paperAbstract.appendChild(document.createTextNode(unescapeHtml(paper.abstract)));
       paperAbstract.style.display = 'block';
     } else {
       paperAbstract.style.display = 'none';
@@ -177,14 +181,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 关键词
     if (paper.keywords && paper.keywords.length > 0) {
-      paperKeywords.innerHTML = `<strong>关键词：</strong>${paper.keywords.map(k => `<span class="keyword">${unescapeHtml(k)}</span>`).join(' ')}`;
+      paperKeywords.textContent = '';
+      const strong = document.createElement('strong');
+      strong.textContent = '关键词：';
+      paperKeywords.appendChild(strong);
+      paper.keywords.forEach(k => {
+        const span = document.createElement('span');
+        span.className = 'keyword';
+        span.textContent = unescapeHtml(k);
+        paperKeywords.appendChild(document.createTextNode(' '));
+        paperKeywords.appendChild(span);
+      });
       paperKeywords.style.display = 'block';
     } else {
       paperKeywords.style.display = 'none';
     }
 
     // OA 链接
-    if (paper.oa_url) {
+    if (paper.oa_url && /^https?:\/\//i.test(paper.oa_url)) {
       btnOpenOa.href = paper.oa_url;
       btnOpenOa.style.display = 'flex';
     } else {

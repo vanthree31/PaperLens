@@ -222,9 +222,14 @@ class AnalysisAI:
         return self.assistant is not None and self.assistant.is_available()
 
     def chat(self, message: str, context: str = "") -> str:
+        if not self.assistant:
+            return "AI_ERROR:ai_not_enabled"
         return self.assistant.chat(message, context)
 
     def chat_stream(self, message: str, context: str = ""):
+        if not self.assistant:
+            yield "AI_ERROR:ai_not_enabled"
+            return
         yield from self.assistant.chat_stream(message, context)
 
     def summarize(self, papers: list) -> str:

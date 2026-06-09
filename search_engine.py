@@ -160,8 +160,8 @@ class PubMedSearch:
 
     def search(self, query: str, year_from=2020, year_to=2026,
                sort="relevance", max_results=50,
-               journal="", field="", mesh_term="", pub_type="") -> List[str]:
-        """返回 PMID 列表
+               journal="", field="", mesh_term="", pub_type="") -> tuple:
+        """返回 (PMID 列表, 精确 DOI 或 None)
 
         Args:
             query: 检索词（可含 PubMed 字段标签）
@@ -171,11 +171,12 @@ class PubMedSearch:
             pub_type: 文献类型
         """
         # 检测是否是 DOI 查询
+        exact_doi = None
         doi_match = re.match(r'^(10\.\d{4,}/\S+)$', query.strip())
         if doi_match:
             # 用 DOI[aid] 精确查询，后续需要过滤精确匹配
             term = f'{query.strip()}[aid]'
-            self._exact_doi = query.strip().lower()
+            exact_doi = query.strip().lower()
         else:
             # 构建检索式
             term = build_pubmed_query(
@@ -189,7 +190,7 @@ class PubMedSearch:
         )
 
         if not term:
-            return []
+            return [], exact_doi
 
         # 映射排序参数
         sort_map = {
@@ -214,10 +215,10 @@ class PubMedSearch:
             r = self.session.get(f"{self.BASE}/esearch.fcgi", params=params, timeout=20)
             r.raise_for_status()
             data = r.json()
-            return data.get("esearchresult", {}).get("idlist", [])
+            return data.get("esearchresult", {}).get("idlist", []), exact_doi
         except Exception as e:
             print(f"PubMed search error: {e}")
-            return []
+            return [], exact_doi
 
     def fetch_details(self, pmids: list[str]) -> list:
         """批量获取文献详情"""
@@ -508,6 +509,9 @@ class OpenAlexSearch:
                         p.authors.append(name)
                 oa = w.get("open_access", {})
                 p.oa_url = oa.get("oa_url", "") or ""
+                for kw in w.get("keywords", []):
+                    if isinstance(kw, str) and kw:
+                        p.keywords.append(kw)
                 return [p]
         except Exception as e:
             print(f"OpenAlex DOI search error: {e}")
@@ -541,27 +545,27 @@ class GoogleScholarSearch:
             import socket
             old_timeout = socket.getdefaulttimeout()
             socket.setdefaulttimeout(30)
-
-            results = []
-            search_query = sch.search_pubs(query, year_low=year_from, year_high=year_to)
-            for i, result in enumerate(search_query):
-                if i >= max_results:
-                    break
-                p = Paper(source="google_scholar")
-                bib = result.get("bib", {})
-                p.title = bib.get("title", "")
-                p.authors = bib.get("author", []) if isinstance(bib.get("author"), list) else [bib.get("author", "")]
-                p.journal = bib.get("venue", "")
-                p.year = int(bib.get("pub_year", 0)) if bib.get("pub_year") else 0
-                p.abstract = bib.get("abstract", "")
-                p.doi = result.get("doi", "") or ""
-                # Google Scholar 引用数
-                p.citation_count = result.get("num_citations", 0) or 0
-                p.oa_url = result.get("eprint_url", "") or ""
-                results.append(p)
-
-            socket.setdefaulttimeout(old_timeout)
-            return results
+            try:
+                results = []
+                search_query = sch.search_pubs(query, year_low=year_from, year_high=year_to)
+                for i, result in enumerate(search_query):
+                    if i >= max_results:
+                        break
+                    p = Paper(source="google_scholar")
+                    bib = result.get("bib", {})
+                    p.title = bib.get("title", "")
+                    p.authors = bib.get("author", []) if isinstance(bib.get("author"), list) else [bib.get("author", "")]
+                    p.journal = bib.get("venue", "")
+                    p.year = int(bib.get("pub_year", 0)) if bib.get("pub_year") else 0
+                    p.abstract = bib.get("abstract", "")
+                    p.doi = result.get("doi", "") or ""
+                    # Google Scholar 引用数
+                    p.citation_count = result.get("num_citations", 0) or 0
+                    p.oa_url = result.get("eprint_url", "") or ""
+                    results.append(p)
+                return results
+            finally:
+                socket.setdefaulttimeout(old_timeout)
         except Exception as e:
             print(f"Google Scholar search error: {e}")
             return []
@@ -876,19 +880,16 @@ class SearchEngine:
 
         # PubMed 检索
         if use_pubmed and self.pubmed:
-            pmids = self.pubmed.search(
+            pmids, exact_doi = self.pubmed.search(
                 query, year_from, year_to, sort, max_results,
                 journal=journal, field=field,
                 mesh_term=mesh_term, pub_type=pub_type,
             )
             if pmids:
                 papers = self.pubmed.fetch_details(pmids)
-                # DOI 精确搜索时，只保留 DOI 完全匹配的结果 [Bug #2]
-                exact_doi = getattr(self.pubmed, '_exact_doi', None)
+                # DOI 精确搜索时，只保留 DOI 完全匹配的结果
                 if exact_doi:
                     papers = [p for p in papers if p.doi and p.doi.lower() == exact_doi]
-                    if hasattr(self.pubmed, '_exact_doi'):
-                        del self.pubmed._exact_doi
                 all_papers.extend(papers)
 
         # OpenAlex 检索
@@ -950,7 +951,7 @@ class SearchEngine:
     def search_by_doi(self, doi: str):
         """通过 DOI 精确查询"""
         if self.pubmed:
-            pmids = self.pubmed.search(doi, max_results=1)
+            pmids, _ = self.pubmed.search(doi, max_results=1)
             if pmids:
                 papers = self.pubmed.fetch_details(pmids)
                 if papers:

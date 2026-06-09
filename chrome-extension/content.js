@@ -43,6 +43,7 @@
 
     // 从 body 文本匹配
     const bodyText = document.body.innerText;
+    DOI_REGEX.lastIndex = 0;
     let match;
     while ((match = DOI_REGEX.exec(bodyText)) !== null) {
       dois.add(match[1]);

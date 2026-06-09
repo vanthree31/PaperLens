@@ -5,6 +5,7 @@ import sys
 import re
 import json
 import html
+import threading
 import yaml
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -38,21 +39,31 @@ def load_config():
     """加载配置：优先 data/config.yaml，否则用打包内置默认"""
     user_path = get_config_path()
     if os.path.exists(user_path):
-        with open(user_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+        try:
+            with open(user_path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"[ERROR] Failed to load config from {user_path}: {e}")
     # 打包模式：从内置默认加载
     if getattr(sys, 'frozen', False):
         bundled = os.path.join(getattr(sys, '_MEIPASS', ''), "config.yaml")
         if os.path.exists(bundled):
-            with open(bundled, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f)
+            try:
+                with open(bundled, "r", encoding="utf-8") as f:
+                    return yaml.safe_load(f) or {}
+            except Exception as e:
+                print(f"[ERROR] Failed to load bundled config: {e}")
     return {}
 
 
 def save_config(config):
     path = get_config_path()
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
+    except Exception as e:
+        print(f"[ERROR] Failed to save config to {path}: {e}")
+        raise
 
 
 def _get_user_data_path(filename: str) -> str:
@@ -303,6 +314,7 @@ def create_app():
 
     cached_papers = {"papers": [], "query": ""}
     ai_cache = {}
+    cache_lock = threading.Lock()
 
     @app.route("/")
     def index():
@@ -315,19 +327,27 @@ def create_app():
         if not query:
             return jsonify({"error": "no_query"}), 400
         current_year = datetime.now().year
-        papers = engine.search(
-            query=query, year_from=data.get("year_from", 2020), year_to=data.get("year_to", current_year),
-            sort=data.get("sort", "relevance"), max_results=data.get("max_results", 50),
-            use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
-            use_google_scholar=data.get("use_google_scholar", False),
-            use_cnki=data.get("use_cnki", False),
-            use_wanfang=data.get("use_wanfang", False),
-            use_vip=data.get("use_vip", False),
-            journal=data.get("journal", "").strip(), field=data.get("field", "").strip(),
-            mesh_term=data.get("mesh_term", "").strip(), pub_type=data.get("pub_type", "").strip(),
-        )
-        cached_papers["papers"] = papers
-        cached_papers["query"] = query
+        max_results = min(int(data.get("max_results", 50)), 200)
+        year_from = max(1900, min(int(data.get("year_from", 2020)), current_year))
+        year_to = max(year_from, min(int(data.get("year_to", current_year)), current_year))
+        try:
+            papers = engine.search(
+                query=query, year_from=year_from, year_to=year_to,
+                sort=data.get("sort", "relevance"), max_results=max_results,
+                use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
+                use_google_scholar=data.get("use_google_scholar", False),
+                use_cnki=data.get("use_cnki", False),
+                use_wanfang=data.get("use_wanfang", False),
+                use_vip=data.get("use_vip", False),
+                journal=data.get("journal", "").strip(), field=data.get("field", "").strip(),
+                mesh_term=data.get("mesh_term", "").strip(), pub_type=data.get("pub_type", "").strip(),
+            )
+        except Exception as e:
+            print(f"[ERROR] Search failed: {e}")
+            return jsonify({"error": "search_failed", "detail": str(e)}), 500
+        with cache_lock:
+            cached_papers["papers"] = papers
+            cached_papers["query"] = query
         results = [_escape_paper(p) for p in papers]
         return jsonify({"total": len(results), "query": query, "papers": results})
 
@@ -340,22 +360,28 @@ def create_app():
         if not user_input:
             return jsonify({"error": "no_query"}), 400
 
-        analysis = search_ai.analyze_query(user_input)
-        current_year = datetime.now().year
-        papers = engine.search(
-            query=analysis.get("query", user_input),
-            year_from=analysis.get("year_from", 2020), year_to=analysis.get("year_to", current_year),
-            sort="relevance", max_results=data.get("max_results", 50),
-            use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
-            use_google_scholar=data.get("use_google_scholar", False),
-            use_cnki=data.get("use_cnki", False),
-            use_wanfang=data.get("use_wanfang", False),
-            use_vip=data.get("use_vip", False),
-            journal=analysis.get("journal", ""), field=analysis.get("field", ""),
-            mesh_term=analysis.get("mesh_term", ""), pub_type=analysis.get("pub_type", ""),
-        )
-        cached_papers["papers"] = papers
-        cached_papers["query"] = analysis.get("query", user_input)
+        try:
+            analysis = search_ai.analyze_query(user_input)
+            current_year = datetime.now().year
+            max_results = min(int(data.get("max_results", 50)), 200)
+            papers = engine.search(
+                query=analysis.get("query", user_input),
+                year_from=analysis.get("year_from", 2020), year_to=analysis.get("year_to", current_year),
+                sort="relevance", max_results=max_results,
+                use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
+                use_google_scholar=data.get("use_google_scholar", False),
+                use_cnki=data.get("use_cnki", False),
+                use_wanfang=data.get("use_wanfang", False),
+                use_vip=data.get("use_vip", False),
+                journal=analysis.get("journal", ""), field=analysis.get("field", ""),
+                mesh_term=analysis.get("mesh_term", ""), pub_type=analysis.get("pub_type", ""),
+            )
+        except Exception as e:
+            print(f"[ERROR] AI search failed: {e}")
+            return jsonify({"error": "ai_search_failed", "detail": str(e)}), 500
+        with cache_lock:
+            cached_papers["papers"] = papers
+            cached_papers["query"] = analysis.get("query", user_input)
         results = [_escape_paper(p) for p in papers]
         return jsonify({
             "total": len(results), "query": analysis.get("query", ""),
@@ -480,11 +506,12 @@ def create_app():
                 found_escaped.append(_escape_paper(paper))
 
         # 合并到 cached_papers（确保后续导出/AI分析可用）
-        existing_dois = {p.doi.lower() for p in cached_papers["papers"] if p.doi}
-        for p in found_papers:
-            if p.doi and p.doi.lower() not in existing_dois:
-                cached_papers["papers"].append(p)
-                existing_dois.add(p.doi.lower())
+        with cache_lock:
+            existing_dois = {p.doi.lower() for p in cached_papers["papers"] if p.doi}
+            for p in found_papers:
+                if p.doi and p.doi.lower() not in existing_dois:
+                    cached_papers["papers"].append(p)
+                    existing_dois.add(p.doi.lower())
 
         return jsonify({"total": len(found_escaped), "papers": found_escaped, "not_found": valid_count - len(found_escaped)})
 
@@ -501,9 +528,10 @@ def create_app():
             return jsonify({"error": "paper_not_found"}), 404
 
         # 添加到缓存（避免重复）
-        existing_dois = {p.doi.lower() for p in cached_papers["papers"] if p.doi}
-        if paper.doi and paper.doi.lower() not in existing_dois:
-            cached_papers["papers"].append(paper)
+        with cache_lock:
+            existing_dois = {p.doi.lower() for p in cached_papers["papers"] if p.doi}
+            if paper.doi and paper.doi.lower() not in existing_dois:
+                cached_papers["papers"].append(paper)
 
         return jsonify({"paper": _escape_paper(paper)})
 
@@ -711,6 +739,8 @@ def create_app():
     def download_pdf():
         """验证 OA 论文 PDF 链接并下载到指定目录"""
         import urllib.request
+        import ipaddress
+        from urllib.parse import urlparse
         data = request.json or {}
         url = data.get("url", "").strip()
         title = data.get("title", "paper")[:50]
@@ -718,6 +748,22 @@ def create_app():
 
         if not url:
             return jsonify({"error": "no_download_link"}), 400
+
+        # SSRF 防护：校验协议和内网 IP
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https"):
+                return jsonify({"error": "invalid_url_scheme"}), 400
+            hostname = parsed.hostname or ""
+            try:
+                ip = ipaddress.ip_address(hostname)
+                if ip.is_private or ip.is_loopback or ip.is_link_local:
+                    return jsonify({"error": "blocked_internal_url"}), 403
+            except ValueError:
+                # hostname 不是 IP，是域名，允许通过
+                pass
+        except Exception:
+            return jsonify({"error": "invalid_url"}), 400
 
         safe_title = re.sub(r'[^\w\-]', '_', title).strip('_') or "paper"
         filename = f"{safe_title}.pdf"
@@ -790,8 +836,8 @@ def create_app():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     return jsonify(json.load(f))
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Failed to read collections.json: {e}")
         return jsonify({"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []})
 
     @app.route("/api/collections", methods=["POST"])
@@ -809,8 +855,9 @@ def create_app():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     collections = json.load(f)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[ERROR] Failed to read collections.json for add: {e}")
+                return jsonify({"error": "collection_read_failed"}), 500
 
         # 检查是否已收藏
         doi = paper.get("doi", "").lower()
@@ -876,8 +923,9 @@ def create_app():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     collections = json.load(f)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[ERROR] Failed to read collections.json for group save: {e}")
+                return jsonify({"error": "collection_read_failed"}), 500
         collections["groups"] = groups
         try:
             with open(path, "w", encoding="utf-8") as f:
@@ -941,21 +989,29 @@ def create_app():
     @app.route("/api/config", methods=["POST"])
     def update_config():
         data = request.json or {}
-        cfg = load_config()
-        _deep_update(cfg, data)
-        save_config(cfg)
-        nonlocal engine, search_ai, analysis_ai
-        engine = SearchEngine(cfg)
-        search_ai = SearchAI(cfg)
-        analysis_ai = AnalysisAI(cfg)
-        return jsonify({"ok": True})
+        try:
+            cfg = load_config()
+            _deep_update(cfg, data)
+            save_config(cfg)
+            nonlocal engine, search_ai, analysis_ai
+            engine = SearchEngine(cfg)
+            search_ai = SearchAI(cfg)
+            analysis_ai = AnalysisAI(cfg)
+            return jsonify({"ok": True})
+        except Exception as e:
+            print(f"[ERROR] Config update failed: {e}")
+            return jsonify({"error": "config_save_failed", "detail": str(e)}), 500
 
     @app.route("/api/ai/chat", methods=["POST"])
     def ai_chat():
         if not analysis_ai.is_available():
             return jsonify({"error": "ai_analysis_not_enabled"}), 400
         data = request.json or {}
-        return jsonify({"response": analysis_ai.chat(data.get("message", ""), data.get("context", ""))})
+        try:
+            return jsonify({"response": analysis_ai.chat(data.get("message", ""), data.get("context", ""))})
+        except Exception as e:
+            print(f"[ERROR] AI chat failed: {e}")
+            return jsonify({"error": "request_failed", "detail": str(e)}), 500
 
     @app.route("/api/ai/summarize", methods=["POST"])
     def ai_summarize():
@@ -964,7 +1020,11 @@ def create_app():
         papers = cached_papers["papers"]
         if not papers:
             return jsonify({"error": "no_papers"}), 400
-        return jsonify({"response": analysis_ai.summarize(papers)})
+        try:
+            return jsonify({"response": analysis_ai.summarize(papers)})
+        except Exception as e:
+            print(f"[ERROR] AI summarize failed: {e}")
+            return jsonify({"error": "request_failed", "detail": str(e)}), 500
 
     return app
 
