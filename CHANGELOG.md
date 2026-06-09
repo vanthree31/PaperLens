@@ -15,7 +15,7 @@ All notable changes to PaperLens will be documented in this file.
 ### Fixed
 - **i18n: English version had hardcoded Chinese strings** — fixed 15+ untranslated Chinese text in JS (error messages, status text, button labels)
 - **i18n: Citation graph overlay buttons broken** — static HTML used `${t(...)}` template literals that don't evaluate in HTML context; replaced with static text + `applyLang()` dynamic updates
-- **i18n: English prompt mixed Chinese** — "compare" mode AI prompt contained `最值得关注` in English context
+- **i18n: English prompt mixed Chinese** — "compare" mode AI prompt contained Chinese text in English context
 - **i18n: English translation used Chinese punctuation** — `enterGroupName` used Chinese colon `：` instead of `:`
 
 ## [1.2.0] - 2026-06-09
