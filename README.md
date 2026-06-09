@@ -151,6 +151,16 @@ Select papers → click **AI Summary** / **AI Detail** / **AI Compare** / **Nove
 ### Batch DOI Import
 Click 📋 → paste DOIs (one per line) → query all at once.
 
+### Chrome Extension
+Install the Chrome extension to quickly lookup and collect papers while browsing:
+
+1. Visit `chrome://extensions/`, enable "Developer mode"
+2. Click "Load unpacked", select the `chrome-extension` folder
+3. Visit any academic paper page, the extension auto-detects DOIs
+4. Click the extension icon to view paper details and collect with one click
+
+See [chrome-extension/README.md](chrome-extension/README.md) for details.
+
 ## Configuration
 
 Open **Settings (⚙)** in the app:
@@ -179,6 +189,12 @@ PaperLens/
 ├── build.bat            # One-click exe build (Windows)
 ├── static/
 │   └── index.html       # Frontend (single-file app)
+├── chrome-extension/    # Chrome extension
+│   ├── manifest.json    # Extension config
+│   ├── popup.html/js    # Popup window
+│   ├── content.js       # DOI detection
+│   ├── background.js    # Background service
+│   └── icons/           # Extension icons
 ├── README.md
 ├── README.zh-CN.md
 ├── LICENSE
@@ -206,13 +222,14 @@ PaperLens/
 - [x] Data directory management
 - [x] Settings reset to defaults
 - [x] Local paper collections with custom groups
+- [x] Chrome extension for DOI quick-lookup and collection
+- [x] Collection management (create, delete with confirmation)
 
 ### Planned
 - [ ] Paper recommendation based on reading history
 - [ ] RAG integration for literature review writing
 - [ ] Zotero / Mendeley direct sync
 - [ ] Collaborative paper collections
-- [ ] Chrome extension for DOI quick-lookup
 
 ## Contributing
 

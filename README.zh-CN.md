@@ -150,6 +150,16 @@ AI 分析你的意图，构建最优 PubMed 检索式并执行。
 ### 批量 DOI 导入
 点击 📋 → 粘贴 DOI（每行一个）→ 一键查询。
 
+### Chrome 扩展
+安装 Chrome 扩展后，可以在浏览学术网页时快速查询和收藏论文：
+
+1. 访问 `chrome://extensions/`，启用"开发者模式"
+2. 点击"加载已解压的扩展程序"，选择 `chrome-extension` 文件夹
+3. 访问任何学术论文页面，扩展会自动检测 DOI
+4. 点击扩展图标，查看论文详情并一键收藏
+
+详细说明请参考 [chrome-extension/README.md](chrome-extension/README.md)。
+
 ## 配置
 
 在应用内点击 **设置 (⚙)**：
@@ -178,6 +188,12 @@ PaperLens/
 ├── build.bat            # 一键打包脚本（Windows）
 ├── static/
 │   └── index.html       # 前端界面（单文件应用）
+├── chrome-extension/    # Chrome 扩展
+│   ├── manifest.json    # 扩展配置
+│   ├── popup.html/js    # 弹出窗口
+│   ├── content.js       # DOI 检测
+│   ├── background.js    # 后台服务
+│   └── icons/           # 扩展图标
 ├── README.md
 ├── README.zh-CN.md
 ├── LICENSE
@@ -205,13 +221,14 @@ PaperLens/
 - [x] 数据目录管理
 - [x] 设置重置为默认值
 - [x] 本地论文收藏（支持自定义分组）
+- [x] Chrome 扩展：DOI 快速查询和收藏
+- [x] 收藏夹管理（创建、删除、二次确认）
 
 ### 计划中
 - [ ] 基于阅读历史的论文推荐
 - [ ] RAG 集成，辅助文献综述撰写
 - [ ] Zotero / Mendeley 直接同步
 - [ ] 协作论文收藏
-- [ ] Chrome 扩展：DOI 快速查询
 
 ## 参与贡献
 

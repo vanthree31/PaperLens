@@ -807,6 +807,40 @@ def create_app():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/collections/groups", methods=["DELETE"])
+    def delete_collection_group():
+        """删除收藏夹及其所有收藏"""
+        data = request.json or {}
+        group_id = data.get("group_id", "")
+        if not group_id or group_id == "default":
+            return jsonify({"error": "不能删除默认收藏夹"}), 400
+
+        path = _get_user_data_path("collections.json")
+        if not os.path.exists(path):
+            return jsonify({"ok": True})
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                collections = json.load(f)
+
+            # 删除该收藏夹
+            collections["groups"] = [
+                g for g in collections.get("groups", [])
+                if g.get("id") != group_id
+            ]
+
+            # 删除该收藏夹下的所有收藏
+            collections["items"] = [
+                item for item in collections.get("items", [])
+                if item.get("group_id") != group_id
+            ]
+
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(collections, f, ensure_ascii=False, indent=2)
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/api/data-dir", methods=["GET"])
     def get_data_dir():
         return jsonify({"path": _get_app_data_dir()})
