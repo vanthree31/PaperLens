@@ -535,25 +535,25 @@ body {
 <div class="settings-panel" id="settingsPanel">
   <h2>⚙ 设置</h2>
   <div class="settings-section">
-    <h3>数据源配置</h3>
+    <h3 data-i18n="dataSourceConfig">数据源配置</h3>
     <div class="form-group">
-      <label>PubMed Email</label>
+      <label data-i18n="pubmedEmail">PubMed Email</label>
       <input type="email" id="cfgPubmedEmail" placeholder="your@email.com">
-      <div class="hint">可选，提高 NCBI API 速率限制</div>
+      <div class="hint" data-i18n="pubmedEmailHint">可选，提高 NCBI API 速率限制</div>
     </div>
     <div class="form-group">
-      <label>PubMed API Key</label>
+      <label data-i18n="pubmedAPIKey">PubMed API Key</label>
       <input type="text" id="cfgPubmedKey" placeholder="可选">
     </div>
   </div>
   <div class="settings-section">
-    <h3>AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）</h3>
+    <h3 data-i18n="aiSearchModel">AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）</h3>
     <div class="toggle-row">
-      <label>启用检索 AI</label>
+      <label data-i18n="enableSearchAI">启用检索 AI</label>
       <input type="checkbox" id="cfgSearchAiEnabled">
     </div>
     <div class="form-group">
-      <label>提供商</label>
+      <label data-i18n="provider">提供商</label>
       <select id="cfgSearchAiProvider">
         <option value="deepseek">DeepSeek</option>
         <option value="openai">OpenAI</option>
@@ -563,27 +563,27 @@ body {
       </select>
     </div>
     <div class="form-group">
-      <label>API Key</label>
+      <label data-i18n="apiKey">API Key</label>
       <input type="password" id="cfgSearchAiKey" placeholder="sk-...">
     </div>
     <div class="form-group">
-      <label>模型名称</label>
-      <input type="text" id="cfgSearchAiModel" placeholder="如 deepseek-chat（快速模型）">
-      <div class="hint">推荐：deepseek-chat / gpt-4o-mini</div>
+      <label data-i18n="modelName">模型名称</label>
+      <input type="text" id="cfgSearchAiModel" data-i18n-placeholder="cfgSearchAiModel" placeholder="如 deepseek-chat（快速模型）">
+      <div class="hint" data-i18n="searchAIHint">推荐：deepseek-chat / gpt-4o-mini</div>
     </div>
     <div class="form-group">
-      <label>端点 URL</label>
-      <input type="text" id="cfgSearchAiUrl" placeholder="留空使用默认端点">
+      <label data-i18n="endpointURL">端点 URL</label>
+      <input type="text" id="cfgSearchAiUrl" data-i18n-placeholder="cfgSearchAiUrl" placeholder="留空使用默认端点">
     </div>
   </div>
   <div class="settings-section">
-    <h3>AI 论文分析模型（总结/详析/对比，建议用高质量模型）</h3>
+    <h3 data-i18n="aiAnalysisModel">AI 论文分析模型（总结/详析/对比，建议用高质量模型）</h3>
     <div class="toggle-row">
-      <label>启用分析 AI</label>
+      <label data-i18n="enableAnalysisAI">启用分析 AI</label>
       <input type="checkbox" id="cfgAnalysisAiEnabled">
     </div>
     <div class="form-group">
-      <label>提供商</label>
+      <label data-i18n="provider">提供商</label>
       <select id="cfgAnalysisAiProvider">
         <option value="deepseek">DeepSeek</option>
         <option value="openai">OpenAI</option>
@@ -593,53 +593,53 @@ body {
       </select>
     </div>
     <div class="form-group">
-      <label>API Key</label>
+      <label data-i18n="apiKey">API Key</label>
       <input type="password" id="cfgAnalysisAiKey" placeholder="sk-...">
     </div>
     <div class="form-group">
-      <label>模型名称</label>
-      <input type="text" id="cfgAnalysisAiModel" placeholder="如 deepseek-reasoner（高质量模型）">
-      <div class="hint">推荐：deepseek-reasoner / gpt-4o / claude-sonnet</div>
+      <label data-i18n="modelName">模型名称</label>
+      <input type="text" id="cfgAnalysisAiModel" data-i18n-placeholder="cfgAnalysisAiModel" placeholder="如 deepseek-reasoner（高质量模型）">
+      <div class="hint" data-i18n="analysisAIHint">推荐：deepseek-reasoner / gpt-4o / claude-sonnet</div>
     </div>
     <div class="form-group">
-      <label>端点 URL</label>
-      <input type="text" id="cfgAnalysisAiUrl" placeholder="留空使用默认端点">
+      <label data-i18n="endpointURL">端点 URL</label>
+      <input type="text" id="cfgAnalysisAiUrl" data-i18n-placeholder="cfgAnalysisAiUrl" placeholder="留空使用默认端点">
     </div>
   </div>
   <div class="settings-section">
-    <h3>网络代理</h3>
+    <h3 data-i18n="networkProxy">网络代理</h3>
     <div class="form-group">
-      <label>HTTP 代理</label>
+      <label data-i18n="httpProxy">HTTP 代理</label>
       <input type="text" id="cfgProxyHttp" placeholder="http://127.0.0.1:7890">
     </div>
     <div class="form-group">
-      <label>HTTPS 代理</label>
+      <label data-i18n="httpsProxy">HTTPS 代理</label>
       <input type="text" id="cfgProxyHttps" placeholder="http://127.0.0.1:7890">
     </div>
   </div>
   <div class="settings-section">
-    <h3>数据存储</h3>
+    <h3 data-i18n="dataStorage">数据存储</h3>
     <div class="form-group">
-      <label>配置与历史数据目录</label>
+      <label data-i18n="dataDir">配置与历史数据目录</label>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="text" id="dataDirPath" readonly style="flex:1;background:#f8fafc;font-size:12px">
-        <button class="btn btn-sm btn-outline" onclick="openDataDir()">打开文件夹</button>
+        <button class="btn btn-sm btn-outline" onclick="openDataDir()" data-i18n="openFolder">打开文件夹</button>
       </div>
-      <div class="hint">搜索历史、偏好设置、AI 配置均存储在此目录</div>
+      <div class="hint" data-i18n="dataDirHint">搜索历史、偏好设置、AI 配置均存储在此目录</div>
     </div>
     <div class="form-group">
-      <label>导出文件保存路径</label>
+      <label data-i18n="exportPath">导出文件保存路径</label>
       <div style="display:flex;gap:8px;align-items:center">
-        <input type="text" id="cfgExportPath" placeholder="留空则弹出浏览器下载" style="flex:1">
-        <button class="btn btn-sm btn-outline" onclick="chooseExportPath()">选择</button>
+        <input type="text" id="cfgExportPath" data-i18n-placeholder="cfgExportPath" placeholder="留空则弹出浏览器下载" style="flex:1">
+        <button class="btn btn-sm btn-outline" onclick="chooseExportPath()" data-i18n="choose">选择</button>
       </div>
-      <div class="hint">导出 RIS/BibTeX/CSV 和下载 PDF 时自动保存到此目录</div>
+      <div class="hint" data-i18n="exportPathHint">导出 RIS/BibTeX/CSV 和下载 PDF 时自动保存到此目录</div>
     </div>
   </div>
   <div style="display:flex;gap:8px;margin-top:20px">
-    <button class="btn btn-primary" onclick="saveSettings()">保存</button>
-    <button class="btn btn-outline" onclick="toggleSettings()">取消</button>
-    <button class="btn btn-outline" onclick="resetSettings()" style="margin-left:auto;color:var(--danger)">重置默认</button>
+    <button class="btn btn-primary" onclick="saveSettings()" data-i18n="save">保存</button>
+    <button class="btn btn-outline" onclick="toggleSettings()" data-i18n="cancel">取消</button>
+    <button class="btn btn-outline" onclick="resetSettings()" style="margin-left:auto;color:var(--danger)" data-i18n="reset">重置默认</button>
   </div>
 </div>
 
@@ -809,6 +809,11 @@ const LANGS = {
     apiKey: "API Key", modelName: "模型名称", endpointURL: "端点 URL",
     searchAIHint: "推荐：deepseek-chat / gpt-4o-mini",
     endpointHint: "留空使用默认端点",
+    cfgSearchAiModel: "如 deepseek-chat（快速模型）",
+    cfgSearchAiUrl: "留空使用默认端点",
+    cfgAnalysisAiModel: "如 deepseek-reasoner（高质量模型）",
+    cfgAnalysisAiUrl: "留空使用默认端点",
+    cfgExportPath: "留空则弹出浏览器下载",
     aiAnalysisModel: "AI 论文分析模型（总结/详析/对比，建议用高质量模型）",
     enableAnalysisAI: "启用分析 AI",
     analysisAIHint: "推荐：deepseek-reasoner / gpt-4o / claude-sonnet",
@@ -936,6 +941,11 @@ const LANGS = {
     apiKey: "API Key", modelName: "Model Name", endpointURL: "Endpoint URL",
     searchAIHint: "Recommended: deepseek-chat / gpt-4o-mini",
     endpointHint: "Leave empty to use default endpoint",
+    cfgSearchAiModel: "e.g. deepseek-chat (fast model)",
+    cfgSearchAiUrl: "Leave empty to use default endpoint",
+    cfgAnalysisAiModel: "e.g. deepseek-reasoner (high-quality)",
+    cfgAnalysisAiUrl: "Leave empty to use default endpoint",
+    cfgExportPath: "Leave empty to use browser download",
     aiAnalysisModel: "AI Analysis Model (summary/detail/comparison, recommend high-quality model)",
     enableAnalysisAI: "Enable Analysis AI",
     analysisAIHint: "Recommended: deepseek-reasoner / gpt-4o / claude-sonnet",
@@ -1051,6 +1061,11 @@ function applyLang() {
     else if (el.tagName === "INPUT") el.placeholder = t(key);
     else el.textContent = t(key);
   });
+  // data-i18n-placeholder 用于需要单独翻译 placeholder 的 INPUT
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    if (el.tagName === "INPUT") el.placeholder = t(key);
+  });
 
   // 状态栏
   const statusEl = document.getElementById("statusText");
@@ -1097,16 +1112,11 @@ function applyLang() {
   const dataSourceSpan = document.querySelector(".status-bar span:last-child");
   if (dataSourceSpan) dataSourceSpan.textContent = t("dataSource");
 
-  // Placeholder 切换
+  // Placeholder 切换（settings 面板的 placeholder 已通过 data-i18n-placeholder 处理）
   const placeholders = {
     searchInput: t("searchPlaceholder"),
     filterJournal: currentLang === "zh" ? "如 Nature Methods" : "e.g. Nature Methods",
     cfgPubmedKey: t("optional"),
-    cfgSearchAiModel: currentLang === "zh" ? "如 deepseek-chat（快速模型）" : "e.g. deepseek-chat (fast model)",
-    cfgSearchAiUrl: t("endpointHint"),
-    cfgAnalysisAiModel: currentLang === "zh" ? "如 deepseek-reasoner（高质量模型）" : "e.g. deepseek-reasoner (high-quality)",
-    cfgAnalysisAiUrl: t("endpointHint"),
-    cfgExportPath: t("exportPathPlaceholder"),
   };
   for (const [id, ph] of Object.entries(placeholders)) {
     const el = document.getElementById(id);
@@ -1183,53 +1193,7 @@ function applySettingsLang() {
   const section = document.getElementById("settingsPanel");
   if (!section) return;
 
-  // 数据源配置
-  const h3s = section.querySelectorAll("h3");
-  if (h3s[0]) h3s[0].textContent = t("dataSourceConfig");
-  if (h3s[1]) h3s[1].textContent = t("aiSearchModel");
-  if (h3s[2]) h3s[2].textContent = t("aiAnalysisModel");
-  if (h3s[3]) h3s[3].textContent = t("networkProxy");
-  if (h3s[4]) h3s[4].textContent = t("dataStorage");
-
-  // 标签（只匹配 .form-group label，不包括 .toggle-row label）
-  const labels = section.querySelectorAll(".form-group label");
-  const labelKeys = [
-    "pubmedEmail", "pubmedAPIKey",
-    "provider", "apiKey", "modelName", "endpointURL",
-    "provider", "apiKey", "modelName", "endpointURL",
-    "httpProxy", "httpsProxy",
-    "dataDir", "exportPath",
-  ];
-  labels.forEach((el, i) => {
-    if (labelKeys[i]) el.textContent = t(labelKeys[i]);
-  });
-
-  // 提示
-  const hints = section.querySelectorAll(".hint");
-  const hintKeys = [
-    "pubmedEmailHint",
-    "searchAIHint",
-    "analysisAIHint",
-    "dataDirHint", "exportPathHint"
-  ];
-  hints.forEach((el, i) => {
-    if (hintKeys[i]) el.textContent = t(hintKeys[i]);
-  });
-
-  // 按钮
-  const buttons = section.querySelectorAll("button");
-  buttons.forEach(btn => {
-    if (btn.textContent === "保存" || btn.textContent === "Save") btn.textContent = t("save");
-    if (btn.textContent === "取消" || btn.textContent === "Cancel") btn.textContent = t("cancel");
-    if (btn.textContent === "重置默认" || btn.textContent === "Reset Default") btn.textContent = t("reset");
-    if (btn.textContent === "打开文件夹" || btn.textContent === "Open Folder") btn.textContent = t("openFolder");
-    if (btn.textContent === "选择" || btn.textContent === "Choose") btn.textContent = t("choose");
-  });
-
-  // Checkbox labels
-  const toggleLabels = section.querySelectorAll(".toggle-row label");
-  if (toggleLabels[0]) toggleLabels[0].textContent = t("enableSearchAI");
-  if (toggleLabels[1]) toggleLabels[1].textContent = t("enableAnalysisAI");
+  // h3、label、hint、按钮的翻译已通过 data-i18n 属性在 applyLang() 中处理
 
   // Provider 选项中的本地化
   const ollamaText = currentLang === "zh" ? "Ollama (本地)" : "Ollama (Local)";
