@@ -2,6 +2,20 @@
 
 All notable changes to PaperLens will be documented in this file.
 
+## [1.2.2] - 2026-06-09
+
+### Fixed
+- **i18n: Backend error messages now use error codes** — all API error responses use language-independent error codes (e.g., `no_query`, `paper_not_found`), frontend translates them via `te()` function
+- **i18n: AI assistant error messages** — AI error responses now use `AI_ERROR:` prefix with error codes, frontend translates them via `teAI()` function
+- **i18n: Default collection group name** — fixed Temporal Dead Zone bug where `collectionsData` referenced `LANGS` before initialization; default group now uses `t('defaultGroup')` when rendering
+- **i18n: PDF download error detection** — error checks now use error codes instead of matching translated text strings
+
+### Changed
+- Added 20+ error code translations to both Chinese and English LANGS dictionaries
+- Added `te()` helper function for translating backend error codes
+- Added `teAI()` helper function for translating AI error responses
+- Added `.claude/` to `.gitignore`
+
 ## [1.2.1] - 2026-06-09
 
 ### Added

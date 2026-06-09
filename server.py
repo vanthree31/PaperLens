@@ -313,7 +313,7 @@ def create_app():
         data = request.json or {}
         query = data.get("query", "").strip()
         if not query:
-            return jsonify({"error": "请输入检索词"}), 400
+            return jsonify({"error": "no_query"}), 400
         current_year = datetime.now().year
         papers = engine.search(
             query=query, year_from=data.get("year_from", 2020), year_to=data.get("year_to", current_year),
@@ -334,11 +334,11 @@ def create_app():
     @app.route("/api/ai-search", methods=["POST"])
     def ai_search():
         if not search_ai.is_available():
-            return jsonify({"error": "AI 检索功能未启用，请在设置中配置检索模型的 API Key"}), 400
+            return jsonify({"error": "ai_search_not_enabled"}), 400
         data = request.json or {}
         user_input = data.get("query", "").strip()
         if not user_input:
-            return jsonify({"error": "请输入检索描述"}), 400
+            return jsonify({"error": "no_query"}), 400
 
         analysis = search_ai.analyze_query(user_input)
         current_year = datetime.now().year
@@ -365,7 +365,7 @@ def create_app():
     @app.route("/api/ai/analyze-papers", methods=["POST"])
     def ai_analyze_papers():
         if not analysis_ai.is_available():
-            return jsonify({"error": "AI 分析功能未启用，请在设置中配置分析模型的 API Key"}), 400
+            return jsonify({"error": "ai_analysis_not_enabled"}), 400
 
         data = request.json or {}
         indices = sorted(data.get("indices", []))
@@ -378,13 +378,13 @@ def create_app():
 
         papers = cached_papers["papers"]
         if not papers:
-            return jsonify({"error": "没有文献可分析"}), 400
+            return jsonify({"error": "no_papers"}), 400
         if not indices:
-            return jsonify({"error": "请先勾选要分析的论文"}), 400
+            return jsonify({"error": "no_selection"}), 400
 
         selected = [papers[i] for i in indices if 0 <= i < len(papers)]
         if not selected:
-            return jsonify({"error": "选中的论文无效"}), 400
+            return jsonify({"error": "invalid_selection"}), 400
 
         paper_ids = "_".join(sorted(set(p.doi or p.pmid or str(i) for i, p in zip(indices, selected))))
         cache_key = f"{mode}_{lang}_{paper_ids}"
@@ -404,13 +404,13 @@ def create_app():
                     full_response.append(chunk)
                     yield chunk
                 result = "".join(full_response)
-                if result and not result.startswith("AI 请求失败"):
+                if result and not result.startswith("AI_ERROR:"):
                     ai_cache[cache_key] = result
             return Response(generate(), mimetype="text/plain; charset=utf-8",
                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
         result = analysis_ai.chat(prompt, context)
-        if result and not result.startswith("AI 请求失败"):
+        if result and not result.startswith("AI_ERROR:"):
             ai_cache[cache_key] = result
         return jsonify({"response": result, "count": len(selected), "mode": mode, "cached": False})
 
@@ -464,7 +464,7 @@ def create_app():
         data = request.json or {}
         dois = data.get("dois", [])
         if not dois:
-            return jsonify({"error": "请提供 DOI 列表"}), 400
+            return jsonify({"error": "no_doi_list"}), 400
 
         found_papers = []
         found_escaped = []
@@ -494,11 +494,11 @@ def create_app():
         data = request.json or {}
         doi = data.get("doi", "").strip()
         if not doi:
-            return jsonify({"error": "请提供 DOI"}), 400
+            return jsonify({"error": "no_doi"}), 400
 
         paper = engine.search_by_doi(doi)
         if not paper:
-            return jsonify({"error": "未找到该论文"}), 404
+            return jsonify({"error": "paper_not_found"}), 404
 
         # 添加到缓存（避免重复）
         existing_dois = {p.doi.lower() for p in cached_papers["papers"] if p.doi}
@@ -513,7 +513,7 @@ def create_app():
         data = request.json or {}
         doi = data.get("doi", "").strip()
         if not doi:
-            return jsonify({"error": "请提供 DOI"}), 400
+            return jsonify({"error": "no_doi"}), 400
 
         try:
             import requests as req
@@ -524,7 +524,7 @@ def create_app():
             # 获取论文信息
             r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15)
             if r.status_code != 200:
-                return jsonify({"error": "未找到论文"}), 404
+                return jsonify({"error": "paper_not_found"}), 404
 
             work = r.json()
             work_id = work.get("id", "")
@@ -568,7 +568,7 @@ def create_app():
                 "referenced": referenced_papers,
             })
         except Exception as e:
-            return jsonify({"error": f"获取引用关系失败: {e}"}), 500
+            return jsonify({"error": "citation_fetch_failed", "detail": str(e)}), 500
 
     @app.route("/api/related-papers", methods=["POST"])
     def related_papers():
@@ -576,7 +576,7 @@ def create_app():
         data = request.json or {}
         doi = data.get("doi", "").strip()
         if not doi:
-            return jsonify({"error": "请提供 DOI"}), 400
+            return jsonify({"error": "no_doi"}), 400
 
         try:
             import requests as req
@@ -587,13 +587,13 @@ def create_app():
             # 获取论文信息
             r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15)
             if r.status_code != 200:
-                return jsonify({"error": "未找到论文"}), 404
+                return jsonify({"error": "paper_not_found"}), 404
 
             work = r.json()
             work_id = work.get("id", "")
             refs = work.get("referenced_works", [])
             if not refs:
-                return jsonify({"papers": [], "message": "该论文无引用数据"})
+                return jsonify({"papers": [], "message": "no_citation_data"})
 
             # 取前 8 个引用，查找同时引用这些论文的其他论文
             ref_ids = [r.split("/")[-1] for r in refs[:8]]
@@ -636,14 +636,14 @@ def create_app():
 
             return jsonify({"papers": results, "source_doi": doi})
         except Exception as e:
-            return jsonify({"error": f"获取相关论文失败: {e}"}), 500
+            return jsonify({"error": "related_papers_failed", "detail": str(e)}), 500
 
     @app.route("/api/keyword-network", methods=["POST"])
     def keyword_network():
         """关键词共现网络"""
         papers = cached_papers["papers"]
         if not papers:
-            return jsonify({"error": "没有文献数据"}), 400
+            return jsonify({"error": "no_papers_data"}), 400
 
         from itertools import combinations
         from collections import Counter
@@ -678,7 +678,7 @@ def create_app():
         """作者合作网络"""
         papers = cached_papers["papers"]
         if not papers:
-            return jsonify({"error": "没有文献数据"}), 400
+            return jsonify({"error": "no_papers_data"}), 400
 
         from itertools import combinations
         from collections import Counter
@@ -717,7 +717,7 @@ def create_app():
         save_to_disk = data.get("save_to_disk", False)
 
         if not url:
-            return jsonify({"error": "无下载链接"}), 400
+            return jsonify({"error": "no_download_link"}), 400
 
         safe_title = re.sub(r'[^\w\-]', '_', title).strip('_') or "paper"
         filename = f"{safe_title}.pdf"
@@ -727,7 +727,7 @@ def create_app():
             with urllib.request.urlopen(req, timeout=15) as resp:
                 header = resp.read(8)
                 if not header.startswith(b'%PDF'):
-                    return jsonify({"error": "链接不是 PDF 文件"}), 400
+                    return jsonify({"error": "not_pdf"}), 400
 
             if save_to_disk:
                 export_dir = load_config().get("export_path", "")
@@ -739,11 +739,11 @@ def create_app():
                     urllib.request.urlretrieve(url, filepath)
                     return jsonify({"ok": True, "path": filepath, "filename": filename})
                 except Exception as e:
-                    return jsonify({"error": f"下载失败: {e}"}), 500
+                    return jsonify({"error": "download_failed", "detail": str(e)}), 500
 
             return jsonify({"filename": filename, "url": url})
         except Exception as e:
-            return jsonify({"error": f"链接验证失败: {e}"}), 500
+            return jsonify({"error": "link_verify_failed", "detail": str(e)}), 500
 
     @app.route("/api/export", methods=["POST"])
     def export():
@@ -753,7 +753,7 @@ def create_app():
         save_to_disk = data.get("save_to_disk", False)
         papers = cached_papers["papers"]
         if not papers:
-            return jsonify({"error": "没有可导出的文献"}), 400
+            return jsonify({"error": "no_export_data"}), 400
         selected = [papers[i] for i in indices if 0 <= i < len(papers)] if indices else papers
         safe_q = re.sub(r'[^\w\-]', '_', cached_papers['query'][:40]).strip('_') or "results"
         if fmt == "ris":
@@ -765,7 +765,7 @@ def create_app():
         elif fmt == "endnotexml":
             content, filename, mime = export_endnote_xml(selected), f"lit_search_{safe_q}.xml", "application/xml"
         else:
-            return jsonify({"error": f"不支持的格式: {fmt}"}), 400
+            return jsonify({"error": "unsupported_format", "format": fmt}), 400
 
         if save_to_disk:
             export_dir = load_config().get("export_path", "")
@@ -801,7 +801,7 @@ def create_app():
         paper = data.get("paper")
         group_id = data.get("group_id", "default")
         if not paper or not paper.get("doi"):
-            return jsonify({"error": "缺少论文信息"}), 400
+            return jsonify({"error": "missing_paper_info"}), 400
 
         path = _get_user_data_path("collections.json")
         collections = {"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []}
@@ -846,7 +846,7 @@ def create_app():
         doi = data.get("doi", "").lower()
         group_id = data.get("group_id", "default")
         if not doi:
-            return jsonify({"error": "缺少 DOI"}), 400
+            return jsonify({"error": "no_doi"}), 400
 
         path = _get_user_data_path("collections.json")
         if not os.path.exists(path):
@@ -892,7 +892,7 @@ def create_app():
         data = request.json or {}
         group_id = data.get("group_id", "")
         if not group_id or group_id == "default":
-            return jsonify({"error": "不能删除默认收藏夹"}), 400
+            return jsonify({"error": "cannot_delete_default"}), 400
 
         path = _get_user_data_path("collections.json")
         if not os.path.exists(path):
@@ -953,17 +953,17 @@ def create_app():
     @app.route("/api/ai/chat", methods=["POST"])
     def ai_chat():
         if not analysis_ai.is_available():
-            return jsonify({"error": "AI 分析功能未启用"}), 400
+            return jsonify({"error": "ai_analysis_not_enabled"}), 400
         data = request.json or {}
         return jsonify({"response": analysis_ai.chat(data.get("message", ""), data.get("context", ""))})
 
     @app.route("/api/ai/summarize", methods=["POST"])
     def ai_summarize():
         if not analysis_ai.is_available():
-            return jsonify({"error": "AI 分析功能未启用"}), 400
+            return jsonify({"error": "ai_analysis_not_enabled"}), 400
         papers = cached_papers["papers"]
         if not papers:
-            return jsonify({"error": "没有文献可总结"}), 400
+            return jsonify({"error": "no_papers"}), 400
         return jsonify({"response": analysis_ai.summarize(papers)})
 
     return app

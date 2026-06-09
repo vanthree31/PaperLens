@@ -10,3 +10,6 @@ dist/
 
 # Runtime data (user-specific)
 data/
+
+# Claude Code local settings
+.claude/

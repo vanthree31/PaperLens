@@ -727,7 +727,7 @@ const API = "";
 let allPapers = [];
 let currentPage = 1;
 const pageSize = 20;
-let collectionsData = { groups: [{ id: "default", name: LANGS[currentLang]?.defaultGroup || "默认收藏夹" }], items: [] };
+let collectionsData = { groups: [{ id: "default", name: "默认收藏夹" }], items: [] };
 let currentGroupId = "default";
 let checkedSet = new Set();
 let currentSort = "";
@@ -845,6 +845,20 @@ const LANGS = {
     noOALink: "无 OA 链接", analyzingResearchGaps: "AI 正在分析研究空白...",
     noDOILoadGraph: "该论文无 DOI，无法加载引用关系",
     querying: "查询中...", query: "查询",
+    // 错误码
+    no_query: "请输入检索词", ai_search_not_enabled: "AI 检索功能未启用，请在设置中配置检索模型的 API Key",
+    ai_analysis_not_enabled: "AI 分析功能未启用，请在设置中配置分析模型的 API Key",
+    no_papers: "没有文献可分析", no_selection: "请先勾选要分析的论文", invalid_selection: "选中的论文无效",
+    no_doi_list: "请提供 DOI 列表", no_doi: "请提供 DOI", paper_not_found: "未找到该论文",
+    no_citation_data: "该论文无引用数据", no_papers_data: "没有文献数据",
+    no_download_link: "无下载链接", not_pdf: "链接不是 PDF 文件",
+    no_export_data: "没有可导出的文献", missing_paper_info: "缺少论文信息",
+    cannot_delete_default: "不能删除默认收藏夹",
+    citation_fetch_failed: "获取引用关系失败", related_papers_failed: "获取相关论文失败",
+    download_failed: "下载失败", link_verify_failed: "链接验证失败",
+    unsupported_format: "不支持的格式",
+    ai_not_enabled: "AI 功能未启用，请在设置中配置 API Key",
+    request_failed: "AI 请求失败",
   },
   en: {
     // General
@@ -957,6 +971,20 @@ const LANGS = {
     noOALink: "No OA link available", analyzingResearchGaps: "AI is analyzing research gaps...",
     noDOILoadGraph: "This paper has no DOI, cannot load citation graph",
     querying: "Querying...", query: "Query",
+    // Error codes
+    no_query: "Please enter search query", ai_search_not_enabled: "AI search not enabled, please configure search model API Key in Settings",
+    ai_analysis_not_enabled: "AI analysis not enabled, please configure analysis model API Key in Settings",
+    no_papers: "No papers to analyze", no_selection: "Please select papers to analyze first", invalid_selection: "Invalid paper selection",
+    no_doi_list: "Please provide DOI list", no_doi: "Please provide DOI", paper_not_found: "Paper not found",
+    no_citation_data: "No citation data available", no_papers_data: "No papers data available",
+    no_download_link: "No download link", not_pdf: "Link does not return a PDF file",
+    no_export_data: "No papers to export", missing_paper_info: "Missing paper information",
+    cannot_delete_default: "Cannot delete default collection",
+    citation_fetch_failed: "Failed to fetch citation data", related_papers_failed: "Failed to fetch related papers",
+    download_failed: "Download failed", link_verify_failed: "Link verification failed",
+    unsupported_format: "Unsupported format",
+    ai_not_enabled: "AI not enabled, please configure API Key in Settings",
+    request_failed: "AI request failed",
   }
 };
 
@@ -964,6 +992,29 @@ let currentLang = localStorage.getItem("paperlang") || "zh";
 
 function t(key) {
   return LANGS[currentLang]?.[key] || LANGS.zh[key] || key;
+}
+
+// 翻译后端返回的错误码
+function te(error) {
+  if (!error) return "";
+  // 处理 AI_ERROR: 前缀
+  if (error.startsWith("AI_ERROR:")) {
+    const parts = error.split(":");
+    const code = parts[1];
+    const detail = parts.slice(2).join(":");
+    const msg = LANGS[currentLang]?.[code] || LANGS.zh?.[code] || code;
+    return detail ? `${msg}: ${detail}` : msg;
+  }
+  return LANGS[currentLang]?.[error] || LANGS.zh?.[error] || error;
+}
+
+// 翻译 AI 响应（处理 AI_ERROR: 前缀）
+function teAI(response) {
+  if (!response) return "";
+  if (response.startsWith("AI_ERROR:")) {
+    return te(response);
+  }
+  return response;
 }
 
 function setLang(lang) {
@@ -1530,7 +1581,7 @@ async function doSearch() {
       renderResults();
       setStatus(`${t("totalPapers")} ${data.total} ${t("papers")}`);
     } else {
-      showToast(data.error || t("searchFailed"));
+      showToast(te(data.error) || t("searchFailed"));
       setStatus(t("searchFailed"));
     }
   } catch (e) {
@@ -1599,7 +1650,7 @@ async function doAISearch() {
       }
       setStatus(`${t("aiSearchComplete")} ${data.total} ${t("papersFound")} ${elapsed} ${t("seconds")})`);
     } else {
-      showToast(data.error || t("aiFailed"));
+      showToast(te(data.error) || t("aiFailed"));
       setStatus(t("aiFailed"));
     }
   } catch (e) {
@@ -1793,7 +1844,7 @@ async function exportSelected(fmt) {
           downloadFile(data.content, data.filename, data.mime);
         }
       } else {
-        showToast(data.error || t("exportFailed"));
+        showToast(te(data.error) || t("exportFailed"));
       }
     }
   } catch (e) {
@@ -1945,7 +1996,7 @@ async function openDataDir() {
     const r = await fetch(`${API}/api/open-data-dir`, {method: "POST"});
     if (!r.ok) {
       const data = await r.json();
-      showToast(data.error || t("cannotOpenFolder"));
+      showToast(te(data.error) || t("cannotOpenFolder"));
     }
   } catch (e) {
     showToast(`${t("openFailed")} ${e.message}`);
@@ -1989,7 +2040,7 @@ async function aiSummarize() {
   try {
     const r = await fetch(`${API}/api/ai/summarize`, {method: "POST"});
     const data = await r.json();
-    el.innerHTML = formatAIText(data.response || data.error || t("noResult"));
+    el.innerHTML = formatAIText(teAI(data.response) || te(data.error) || t("noResult"));
   } catch (e) {
     el.textContent = `${t("requestFailed")} ${e.message}`;
   }
@@ -2032,7 +2083,7 @@ async function aiAnalyzePapers(mode, forceRefresh) {
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
         const err = await r.json();
-        el.textContent = err.error || t("analysisFailed");
+        el.textContent = te(err.error) || t("analysisFailed");
       } else {
         el.textContent = t("serverError");
       }
@@ -2057,7 +2108,7 @@ async function aiAnalyzePapers(mode, forceRefresh) {
         if (done) break;
         const chunk = decoder.decode(value, {stream: true});
         fullText += chunk;
-        streamEl.innerHTML = formatAIText(fullText);
+        streamEl.innerHTML = formatAIText(teAI(fullText));
         const tEl = document.getElementById("aiTimer");
         if (tEl) tEl.textContent = `${fullText.length} ${currentLang === "zh" ? "字" : "chars"}`;
         panel.scrollTop = panel.scrollHeight;
@@ -2074,7 +2125,8 @@ async function aiAnalyzePapers(mode, forceRefresh) {
 function renderAIResult(el, modeName, text, count, cached) {
   const cachedTag = cached ? ` <span style="color:#10b981;font-size:12px">(${t("cached")})</span>` : '';
   const modeKey = modeName === t("aiSummarizing") ? "summary" : modeName === t("aiDetailing") ? "detail" : modeName === t("aiComparing") ? "compare" : "novelty";
-  window._lastAIText = text;
+  const translatedText = teAI(text);
+  window._lastAIText = translatedText;
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <b>${modeName}${t("resultFor")}${count}${t("papersCount")}${cachedTag}</b>
@@ -2083,7 +2135,7 @@ function renderAIResult(el, modeName, text, count, cached) {
         <button class="btn btn-sm btn-outline" onclick="aiAnalyzePapers('${modeKey}', true)">${t("regenerate")}</button>
       </div>
     </div>
-    <div style="line-height:1.8;font-size:14px">${formatAIText(text)}</div>`;
+    <div style="line-height:1.8;font-size:14px">${formatAIText(translatedText)}</div>`;
 }
 
 function copyAIText() {
@@ -2263,9 +2315,10 @@ function renderGroupTabs() {
   let html = groups.map(g => {
     const isActive = g.id === currentGroupId;
     const canDelete = g.id !== 'default'; // 默认收藏夹不能删除
+    const displayName = g.id === 'default' ? t('defaultGroup') : g.name;
     return `<span class="group-tab-wrapper">
-      <button class="group-tab${isActive ? ' active' : ''}" onclick="switchGroup('${g.id}')">${g.name}</button>
-      ${canDelete ? `<button class="group-tab-delete" onclick="deleteGroup('${g.id}', '${g.name.replace(/'/g, "\\'")}')" title="${t('deleteGroup')}">✕</button>` : ''}
+      <button class="group-tab${isActive ? ' active' : ''}" onclick="switchGroup('${g.id}')">${displayName}</button>
+      ${canDelete ? `<button class="group-tab-delete" onclick="deleteGroup('${g.id}', '${displayName.replace(/'/g, "\\'")}')" title="${t('deleteGroup')}">✕</button>` : ''}
     </span>`;
   }).join('');
   html += `<button class="add-group-btn" onclick="addGroup()">${t('newGroup')}</button>`;
@@ -2476,7 +2529,7 @@ async function batchDoiLookup() {
       setStatus(`${t("batchDOI")} ${t("exported")}, ${data.total} ${t("papers")}`);
       setTimeout(closeDoiModal, 2000);
     } else {
-      document.getElementById("doiResult").textContent = data.error || t("queryFailed");
+      document.getElementById("doiResult").textContent = te(data.error) || t("queryFailed");
     }
   } catch (e) {
     document.getElementById("doiResult").textContent = `${t("networkError")}: ${e.message}`;
@@ -2537,14 +2590,13 @@ async function downloadOA(encodedUrl, encodedTitle) {
         // 同时打开浏览器下载
         window.open(url, "_blank");
       } else {
-        const errMsg = data.error || t("cannotDownload");
-        if (errMsg.includes("不是 PDF") || errMsg.includes("not PDF")) {
+        if (data.error === "not_pdf") {
           showToast(t("notPDF"));
-        } else if (errMsg.includes("验证失败") || errMsg.includes("verification failed")) {
+        } else if (data.error === "link_verify_failed") {
           showToast(t("linkVerifyFailed"));
           window.open(url, "_blank");
         } else {
-          showToast(errMsg);
+          showToast(te(data.error) || t("cannotDownload"));
         }
       }
     }
@@ -2589,7 +2641,7 @@ async function showCitationGraph(encodedDoi, encodedTitle) {
       });
       renderGraph(data);
     } else {
-      svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${data.error || t("analysisFailed")}</text>`;
+      svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${te(data.error) || t("analysisFailed")}</text>`;
     }
   } catch (e) {
     svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
@@ -2886,7 +2938,7 @@ function openNewCitationGraph(doi, title) {
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${data.error || t("analysisFailed")}</text>`; return; }
+    if (!data.paper) { svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${te(data.error) || t("analysisFailed")}</text>`; return; }
     renderGraphInto(svgEl, data, doi, title, floatDiv, gid);
     // 自动设置当前论文并显示工具栏
     setFloatGraphPaper(gid, {
@@ -2984,16 +3036,16 @@ function floatGraphAnalyze(gid, mode) {
       if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(fullText); allPapers = saved; return; }
+            if (done) { content.innerHTML = formatAIText(teAI(fullText)); allPapers = saved; return; }
             fullText += decoder.decode(value, { stream: true });
-            content.innerHTML = formatAIText(fullText);
+            content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
           });
         }
@@ -3029,16 +3081,16 @@ function floatGraphNovelty(gid) {
       if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(fullText); allPapers = saved; return; }
+            if (done) { content.innerHTML = formatAIText(teAI(fullText)); allPapers = saved; return; }
             fullText += decoder.decode(value, { stream: true });
-            content.innerHTML = formatAIText(fullText);
+            content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
           });
         }
@@ -3242,16 +3294,16 @@ function graphAnalyze(mode) {
       if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(fullText); allPapers = saved; return; }
+            if (done) { content.innerHTML = formatAIText(teAI(fullText)); allPapers = saved; return; }
             fullText += decoder.decode(value, { stream: true });
-            content.innerHTML = formatAIText(fullText);
+            content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
           });
         }
@@ -3335,16 +3387,16 @@ function graphNoveltyDetection() {
       if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(fullText); allPapers = saved; return; }
+            if (done) { content.innerHTML = formatAIText(teAI(fullText)); allPapers = saved; return; }
             fullText += decoder.decode(value, { stream: true });
-            content.innerHTML = formatAIText(fullText);
+            content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
           });
         }
@@ -3373,7 +3425,7 @@ async function showKeywordNetwork() {
     if (r.ok && data.nodes.length > 0) {
       renderNetworkGraph(svgEl, data, "#8b5cf6", "#c4b5fd");
     } else {
-      svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${data.error || t("noResults")}</text>`;
+      svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${te(data.error) || t("noResults")}</text>`;
     }
   } catch (e) {
     svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
@@ -3398,7 +3450,7 @@ async function showAuthorNetwork() {
     if (r.ok && data.nodes.length > 0) {
       renderNetworkGraph(svgEl, data, "#059669", "#a7f3d0");
     } else {
-      svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${data.error || t("noResults")}</text>`;
+      svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${te(data.error) || t("noResults")}</text>`;
     }
   } catch (e) {
     svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;

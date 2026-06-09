@@ -104,7 +104,7 @@ class AIAssistant:
 
     def chat(self, message: str, context: str = "") -> str:
         if not self.is_available():
-            return "AI 功能未启用，请在设置中配置 API Key。"
+            return "AI_ERROR:ai_not_enabled"
         messages = []
         if context:
             messages.append({"role": "system", "content": context})
@@ -115,11 +115,11 @@ class AIAssistant:
             r.raise_for_status()
             return self._extract_content(r.json())
         except Exception as e:
-            return f"AI 请求失败: {e}"
+            return f"AI_ERROR:request_failed:{e}"
 
     def chat_stream(self, message: str, context: str = ""):
         if not self.is_available():
-            yield "AI 功能未启用，请在设置中配置 API Key。"
+            yield "AI_ERROR:ai_not_enabled"
             return
         messages = []
         if context:
@@ -152,7 +152,7 @@ class AIAssistant:
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
         except Exception as e:
-            yield f"\nAI 请求失败: {e}"
+            yield f"\nAI_ERROR:request_failed:{e}"
 
 
 class SearchAI:
