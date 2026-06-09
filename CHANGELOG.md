@@ -2,6 +2,33 @@
 
 All notable changes to PaperLens will be documented in this file.
 
+## [1.2.0] - 2026-06-09
+
+### Added
+- **Chrome Extension**: DOI quick-lookup and paper collection while browsing academic websites
+  - Auto-detect DOIs on any webpage (meta tags + regex matching)
+  - One-click paper lookup via PaperLens API
+  - One-click collection to PaperLens
+  - Real-time sync notification after collection
+- **Collection Management**: delete collection groups with confirmation dialog
+  - Default collection group cannot be deleted
+  - Deleting a group removes all items in it
+  - Double confirmation before deletion
+- **i18n Improvements**: comprehensive translation for all UI elements
+  - Citation graph buttons (fullscreen, close, AI analysis, export)
+  - Collection panel (refresh, delete group, new group)
+  - AI analysis panel (copy, fullscreen, status messages)
+  - Graph hints and legend text
+
+### Fixed
+- Collection data now auto-refreshes when opening collection panel
+- Periodic polling (every 30 seconds) for collection data sync
+- Chrome extension notifies frontend after successful collection
+
+### Changed
+- Added `DELETE /api/collections/groups` endpoint for collection group deletion
+- Frontend uses translation functions for all dynamic content
+
 ## [1.1.0] - 2026-06-08
 
 ### Added

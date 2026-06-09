@@ -415,6 +415,10 @@ body {
 .group-tab:hover:not(.active) { background: var(--bg); }
 .add-group-btn { padding: 4px 8px; font-size: 12px; border-radius: 4px; cursor: pointer; border: 1px dashed var(--border); background: none; color: var(--text-secondary); }
 .add-group-btn:hover { border-color: var(--primary); color: var(--primary); }
+.group-tab-wrapper { display: inline-flex; align-items: center; }
+.group-tab-delete { padding: 4px 6px; font-size: 10px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text-secondary); margin-left: -1px; opacity: 0; transition: opacity 0.15s; }
+.group-tab-wrapper:hover .group-tab-delete { opacity: 1; }
+.group-tab-delete:hover { background: var(--danger); color: white; border-color: var(--danger); }
 
 /* 可拖动悬浮图谱 */
 .graph-float { position: fixed; background: var(--card); border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); display: flex; flex-direction: column; overflow: hidden; resize: both; min-width: 500px; min-height: 400px; }
@@ -428,7 +432,7 @@ body {
 <div class="header">
   <h1>PaperLens</h1>
   <div class="header-actions">
-    <button class="btn-icon" onclick="toggleCollections()" id="collectionsBtn" title="收藏">★</button>
+    <button class="btn-icon" onclick="toggleCollections()" id="collectionsBtn" title="Collections">★</button>
     <button class="btn-icon" id="langBtn" onclick="setLang(currentLang==='zh'?'en':'zh')" title="Language">EN</button>
     <button class="btn-icon" onclick="toggleAI()" id="aiBtn" title="AI 助手">AI</button>
     <button class="btn-icon" onclick="toggleSettings()" id="settingsBtn" title="设置">⚙</button>
@@ -642,7 +646,10 @@ body {
 <div class="collections-panel" id="collectionsPanel">
   <h2>
     <span id="collectionsTitle">★ 我的收藏</span>
-    <button class="btn btn-sm btn-outline" onclick="toggleCollections()">✕</button>
+    <span>
+      <button class="btn btn-sm btn-outline" onclick="refreshCollections()" id="refreshCollectionsBtn" title="Refresh">🔄</button>
+      <button class="btn btn-sm btn-outline" onclick="toggleCollections()">✕</button>
+    </span>
   </h2>
   <div class="group-tabs" id="groupTabs"></div>
   <div class="collections-body" id="collectionsBody">
@@ -659,20 +666,20 @@ body {
     <div class="graph-header">
       <h3 id="graphTitle">引用关系图谱</h3>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn btn-sm btn-outline" onclick="toggleGraphFullscreen()" id="graphFsBtn">⛶ 全屏</button>
-        <button class="btn btn-sm btn-outline" onclick="closeGraph()">✕ 关闭</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleGraphFullscreen()" id="graphFsBtn">⛶ ${t("fullscreen")}</button>
+        <button class="btn btn-sm btn-outline" onclick="closeGraph()">✕ ${t("closeGraph")}</button>
       </div>
     </div>
     <div id="graphToolbar" style="display:none;padding:8px 16px;border-bottom:1px solid var(--border);background:#fafbfc;gap:6px;flex-wrap:wrap;align-items:center">
       <span id="graphPaperTitle" style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('summary')">AI 总结</button>
-      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('detail')">AI 详析</button>
-      <button class="btn btn-sm btn-ai" onclick="graphNoveltyDetection()">创新点检测</button>
-      <button class="btn btn-sm btn-outline" onclick="openGraphNodeInNewGraph()" id="graphNewGraphBtn">在新图谱中打开</button>
-      <button class="btn btn-sm btn-outline" onclick="graphExport('ris')">导出 RIS</button>
+      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('summary')">${t("aiSummary")}</button>
+      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('detail')">${t("aiDetail")}</button>
+      <button class="btn btn-sm btn-ai" onclick="graphNoveltyDetection()">${t("aiNovelty")}</button>
+      <button class="btn btn-sm btn-outline" onclick="openGraphNodeInNewGraph()" id="graphNewGraphBtn">${t("openNewGraph")}</button>
+      <button class="btn btn-sm btn-outline" onclick="graphExport('ris')">RIS</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('bibtex')">BibTeX</button>
-      <button class="btn btn-sm btn-outline" onclick="graphDownloadPDF()">下载 PDF</button>
-      <button class="btn btn-sm btn-outline" onclick="graphOpenOriginal()">原文链接</button>
+      <button class="btn btn-sm btn-outline" onclick="graphDownloadPDF()">PDF</button>
+      <button class="btn btn-sm btn-outline" onclick="graphOpenOriginal()">${t("original")}</button>
     </div>
     <div class="graph-body" id="graphBody">
       <svg id="graphSvg"></svg>
@@ -680,15 +687,15 @@ body {
         <div><span class="dot" style="background:#2563eb"></span> <span id="legendCenter">当前论文</span></div>
         <div><span class="dot" style="background:#10b981"></span> <span id="legendCiting">引用了此论文</span></div>
         <div><span class="dot" style="background:#f59e0b"></span> <span id="legendReferenced">此论文引用</span></div>
-        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px"><span id="graphZoomLevel">100%</span> · 滚轮缩放 · 拖拽平移 · 点击节点展开引用 · <a href="#" onclick="resetGraphZoom();return false" style="color:#64748b">重置缩放</a></div>
+        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px"><span id="graphZoomLevel">100%</span> · ${t("graphHint")} · <a href="#" onclick="resetGraphZoom();return false" style="color:#64748b">${t("resetZoom")}</a></div>
       </div>
     </div>
     <div id="graphAiPanel" style="display:none;padding:12px 16px;border-top:1px solid var(--border);background:#f0fdf4;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <strong style="font-size:13px">AI 分析</strong>
+        <strong style="font-size:13px">${t("aiAnalysis")}</strong>
         <div style="display:flex;gap:4px">
-          <button class="btn btn-sm btn-outline" onclick="graphAiCopy()">复制</button>
-          <button class="btn btn-sm btn-outline" onclick="graphAiFullscreen()" id="graphAiFsBtn">全屏</button>
+          <button class="btn btn-sm btn-outline" onclick="graphAiCopy()">${t("copy")}</button>
+          <button class="btn btn-sm btn-outline" onclick="graphAiFullscreen()" id="graphAiFsBtn">${t("fullscreen")}</button>
           <button class="btn btn-sm btn-outline" onclick="document.getElementById('graphAiPanel').style.display='none'">✕</button>
         </div>
       </div>
@@ -716,7 +723,7 @@ const API = "";
 let allPapers = [];
 let currentPage = 1;
 const pageSize = 20;
-let collectionsData = { groups: [{ id: "default", name: "默认收藏夹" }], items: [] };
+let collectionsData = { groups: [{ id: "default", name: LANGS[currentLang]?.defaultGroup || "默认收藏夹" }], items: [] };
 let currentGroupId = "default";
 let checkedSet = new Set();
 let currentSort = "";
@@ -767,7 +774,7 @@ const LANGS = {
     networkErrorRetry: "网络错误 - 点击重试", noResultsFound: "未找到相关文献",
     dataSource: "数据源: PubMed + OpenAlex",
     // 历史
-    noHistory: "暂无搜索历史", papersCount2: "篇",
+    searchHistory: "搜索历史", noHistory: "暂无搜索历史", papersCount2: "篇",
     // DOI
     batchDOI: "批量 DOI 导入", doiHint: "每行一个 DOI，支持带 \"doi:\" 前缀",
     enterDOI: "请输入 DOI", noValidDOI: "未识别到有效 DOI",
@@ -807,7 +814,12 @@ const LANGS = {
     // 引用图谱
     citationGraph: "引用关系图谱", legendCenter: "当前论文", legendCiting: "引用了此论文", legendReferenced: "此论文引用",
     loadingGraph: "加载引用关系中...", noDOI: "该论文无 DOI，无法查看引用关系",
-    openNewGraph: "在新图谱中打开",
+    openNewGraph: "在新图谱中打开", fullscreen: "全屏", exitFullscreen: "退出全屏", closeGraph: "关闭",
+    aiSummary: "AI 总结", aiDetail: "AI 详析", aiNovelty: "创新点", newGraph: "新图谱", original: "原文",
+    graphHint: "滚轮缩放 · 拖拽平移 · 点击节点展开引用", resetZoom: "重置缩放",
+    aiAnalysis: "AI 分析", copy: "复制", aiAnalyzing: "AI 分析中...", aiFailed: "AI 分析失败",
+    clickNodeFirst: "请先点击论文节点",
+    fetchPaperFailed: "获取论文失败", noResult: "无结果",
     // AI 功能
     pleaseSearchFirst: "请先检索文献", pleaseSelectPapers: "请先勾选要分析的论文",
     aiFailed: "AI 检索失败", analysisFailed: "分析失败", serverError: "分析失败（服务器错误）",
@@ -821,6 +833,9 @@ const LANGS = {
     addToCollection: "收藏", removeFromCollection: "取消收藏",
     addedToCollection: "已添加到收藏", removedFromCollection: "已取消收藏",
     remove: "移除", operationFailed: "操作失败",
+    defaultGroup: "默认收藏夹", newGroup: "+ 新建", deleteGroup: "删除收藏夹",
+    enterGroupName: "输入收藏夹名称：", deleteGroupConfirm: "确定要删除收藏夹\"{name}\"吗？\n该收藏夹内的所有收藏也将被删除，此操作不可撤销。",
+    refreshCollections: "刷新",
   },
   en: {
     // General
@@ -866,7 +881,7 @@ const LANGS = {
     networkErrorRetry: "Network error - click to retry", noResultsFound: "No papers found",
     dataSource: "Data Source: PubMed + OpenAlex",
     // History
-    noHistory: "No search history", papersCount2: " papers",
+    searchHistory: "Search History", noHistory: "No search history", papersCount2: " papers",
     // DOI
     batchDOI: "Batch DOI Import", doiHint: "One DOI per line, supports \"doi:\" prefix",
     enterDOI: "Please enter DOI", noValidDOI: "No valid DOI recognized",
@@ -906,7 +921,12 @@ const LANGS = {
     // Citation graph
     citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
     loadingGraph: "Loading citation graph...", noDOI: "No DOI available for citation graph",
-    openNewGraph: "Open in New Graph",
+    openNewGraph: "Open in New Graph", fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen", closeGraph: "Close",
+    aiSummary: "AI Summary", aiDetail: "AI Detail", aiNovelty: "Novelty", newGraph: "New Graph", original: "Original",
+    graphHint: "Scroll to zoom · Drag to pan · Click node to expand citations", resetZoom: "Reset Zoom",
+    aiAnalysis: "AI Analysis", copy: "Copy", aiAnalyzing: "AI Analyzing...", aiFailed: "AI Analysis Failed",
+    clickNodeFirst: "Please click a paper node first",
+    fetchPaperFailed: "Failed to fetch paper", noResult: "No result",
     // AI features
     pleaseSearchFirst: "Please search papers first", pleaseSelectPapers: "Please select papers to analyze first",
     aiFailed: "AI search failed", analysisFailed: "Analysis failed", serverError: "Analysis failed (server error)",
@@ -920,6 +940,9 @@ const LANGS = {
     addToCollection: "Add to Collection", removeFromCollection: "Remove from Collection",
     addedToCollection: "Added to collection", removedFromCollection: "Removed from collection",
     remove: "Remove", operationFailed: "Operation failed",
+    defaultGroup: "Default", newGroup: "+ New", deleteGroup: "Delete Collection",
+    enterGroupName: "Enter collection name：", deleteGroupConfirm: "Are you sure you want to delete \"{name}\"?\nAll items in this collection will also be deleted. This action cannot be undone.",
+    refreshCollections: "Refresh",
   }
 };
 
@@ -989,7 +1012,7 @@ function applyLang() {
   // AI 内容
   const aiContent = document.getElementById("aiContent");
   if (aiContent && (aiContent.textContent === "等待操作..." || aiContent.textContent === "Waiting...")) {
-    aiContent.textContent = currentLang === "zh" ? "等待操作..." : "Waiting...";
+    aiContent.textContent = t("aiWaiting");
   }
 
   // 试试标签
@@ -1020,7 +1043,7 @@ function applyLang() {
   const titles = {
     aiBtn: t("aiAssistant"),
     settingsBtn: t("settings"),
-    historyBtn: currentLang === "zh" ? "搜索历史" : "Search History",
+    historyBtn: t("searchHistory"),
     doiBtn2: t("batchDOI"),
   };
   for (const [id, title] of Object.entries(titles)) {
@@ -1045,6 +1068,8 @@ function applyLang() {
   if (collectionsBtn) collectionsBtn.title = t("collections");
   const collectionsEmptyText = document.getElementById("collectionsEmptyText");
   if (collectionsEmptyText) collectionsEmptyText.textContent = t("collectionsEmpty");
+  const refreshCollectionsBtn = document.getElementById("refreshCollectionsBtn");
+  if (refreshCollectionsBtn) refreshCollectionsBtn.title = t("refreshCollections");
 
   // 设置面板内容
   applySettingsLang();
@@ -1913,7 +1938,7 @@ async function aiSummarize() {
   try {
     const r = await fetch(`${API}/api/ai/summarize`, {method: "POST"});
     const data = await r.json();
-    el.innerHTML = formatAIText(data.response || data.error || (currentLang === "zh" ? "无结果" : "No result"));
+    el.innerHTML = formatAIText(data.response || data.error || t("noResult"));
   } catch (e) {
     el.textContent = `${t("requestFailed")} ${e.message}`;
   }
@@ -2137,13 +2162,46 @@ async function loadCollections() {
   } catch { /* 忽略 */ }
 }
 
+// 刷新收藏数据
+async function refreshCollections() {
+  try {
+    const r = await fetch(`${API}/api/collections`);
+    if (r.ok) {
+      collectionsData = await r.json();
+      renderGroupTabs();
+      renderCollections();
+    }
+  } catch { /* 忽略 */ }
+}
+
+// 定期轮询收藏数据（每 30 秒）
+setInterval(async () => {
+  try {
+    const r = await fetch(`${API}/api/collections`);
+    if (r.ok) {
+      const newData = await r.json();
+      // 检查数据是否有变化
+      if (JSON.stringify(newData) !== JSON.stringify(collectionsData)) {
+        collectionsData = newData;
+        renderGroupTabs();
+        // 如果收藏面板是打开的，重新渲染
+        const panel = document.getElementById("collectionsPanel");
+        if (panel && panel.classList.contains("show")) {
+          renderCollections();
+        }
+      }
+    }
+  } catch { /* 忽略 */ }
+}, 30000);
+
 function toggleCollections() {
   const panel = document.getElementById("collectionsPanel");
   const overlay = document.getElementById("collectionsOverlay");
   panel.classList.toggle("show");
   overlay.classList.toggle("show");
   if (panel.classList.contains("show")) {
-    renderCollections();
+    // 打开面板时重新加载收藏数据
+    loadCollections().then(() => renderCollections());
   }
 }
 
@@ -2151,10 +2209,15 @@ function renderGroupTabs() {
   const tabs = document.getElementById("groupTabs");
   if (!tabs) return;
   const groups = collectionsData.groups || [];
-  let html = groups.map(g =>
-    `<button class="group-tab${g.id === currentGroupId ? ' active' : ''}" onclick="switchGroup('${g.id}')">${g.name}</button>`
-  ).join('');
-  html += `<button class="add-group-btn" onclick="addGroup()">+ 新建</button>`;
+  let html = groups.map(g => {
+    const isActive = g.id === currentGroupId;
+    const canDelete = g.id !== 'default'; // 默认收藏夹不能删除
+    return `<span class="group-tab-wrapper">
+      <button class="group-tab${isActive ? ' active' : ''}" onclick="switchGroup('${g.id}')">${g.name}</button>
+      ${canDelete ? `<button class="group-tab-delete" onclick="deleteGroup('${g.id}', '${g.name.replace(/'/g, "\\'")}')" title="${t('deleteGroup')}">✕</button>` : ''}
+    </span>`;
+  }).join('');
+  html += `<button class="add-group-btn" onclick="addGroup()">${t('newGroup')}</button>`;
   tabs.innerHTML = html;
 }
 
@@ -2165,7 +2228,7 @@ function switchGroup(groupId) {
 }
 
 function addGroup() {
-  const name = prompt(currentLang === 'zh' ? '输入收藏夹名称：' : 'Enter collection name：');
+  const name = prompt(t('enterGroupName'));
   if (!name || !name.trim()) return;
   const id = 'group_' + Date.now();
   collectionsData.groups = collectionsData.groups || [];
@@ -2174,6 +2237,36 @@ function addGroup() {
   currentGroupId = id;
   renderGroupTabs();
   renderCollections();
+}
+
+async function deleteGroup(groupId, groupName) {
+  // 二次确认
+  const confirmMsg = t('deleteGroupConfirm').replace('{name}', groupName);
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    // 调用后端 API 删除收藏夹及其所有收藏
+    const r = await fetch(`${API}/api/collections/groups`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ group_id: groupId }),
+    });
+
+    if (r.ok) {
+      // 更新本地数据
+      collectionsData.items = (collectionsData.items || []).filter(item => item.group_id !== groupId);
+      collectionsData.groups = (collectionsData.groups || []).filter(g => g.id !== groupId);
+
+      // 如果删除的是当前选中的收藏夹，切换到默认收藏夹
+      if (currentGroupId === groupId) {
+        currentGroupId = 'default';
+      }
+
+      renderGroupTabs();
+      renderCollections();
+    }
+  } catch { /* 忽略 */ }
 }
 
 async function saveCollectionGroups() {
@@ -2197,10 +2290,11 @@ function renderCollections() {
   let html = '';
   items.forEach((item, i) => {
     const authors = (item.authors || []).length > 2 ? item.authors.slice(0, 2).join(", ") + " et al." : (item.authors || []).join(", ");
+    const citedText = item.citation_count > 0 ? `· ${t("cited")} ${item.citation_count}` : '';
     html += `
     <div class="collection-item" onclick="viewCollectionItem('${encodeURIComponent(item.doi)}')">
       <div class="title">${item.title || t("noTitle")}</div>
-      <div class="meta">${authors} · ${item.journal || ""} (${item.year || "?"}) ${item.citation_count > 0 ? '· 引用 ' + item.citation_count : ''}</div>
+      <div class="meta">${authors} · ${item.journal || ""} (${item.year || "?"}) ${citedText}</div>
       <div class="actions">
         ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();window.open('https://doi.org/${encodeURIComponent(item.doi)}')">${t("original")}</button>` : ''}
         ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showCitationGraph('${encodeURIComponent(item.doi)}','${encodeURIComponent(item.title)}')">${t("citationGraph")}</button>` : ''}
@@ -2477,7 +2571,7 @@ function toggleGraphFullscreen() {
   const panel = document.getElementById("graphPanelEl");
   const btn = document.getElementById("graphFsBtn");
   panel.classList.toggle("fullscreen", _graphFs);
-  btn.textContent = _graphFs ? "⛶ 退出全屏" : "⛶ 全屏";
+  btn.textContent = _graphFs ? `⛶ ${t("exitFullscreen")}` : `⛶ ${t("fullscreen")}`;
   // 更新力模拟中心以适应新尺寸，保留缩放状态
   setTimeout(() => {
     const svgEl = document.getElementById("graphSvg");
@@ -2690,20 +2784,20 @@ function openNewCitationGraph(doi, title) {
     <div class="graph-header" id="${gid}-header">
       <h3 style="font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t("citationGraph")} - ${(title || doi).substring(0, 50)}</h3>
       <div style="display:flex;gap:4px;align-items:center">
-        <button class="btn btn-sm btn-outline" onclick="toggleFloatGraphFullscreen('${gid}')" title="全屏">⛶</button>
-        <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-float').remove()" title="关闭">✕</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleFloatGraphFullscreen('${gid}')" title="${t('fullscreen')}">⛶</button>
+        <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-float').remove()" title="${t('closeGraph')}">✕</button>
       </div>
     </div>
     <div id="${gid}-toolbar" style="display:none;padding:6px 12px;border-bottom:1px solid var(--border);background:#fafbfc;gap:4px;flex-wrap:wrap;align-items:center">
       <span id="${gid}-paperTitle" style="font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-      <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','summary')">AI 总结</button>
-      <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','detail')">AI 详析</button>
-      <button class="btn btn-sm btn-ai" onclick="floatGraphNovelty('${gid}')">创新点</button>
-      <button class="btn btn-sm btn-outline" onclick="floatGraphOpenNew('${gid}')">新图谱</button>
+      <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','summary')">${t('aiSummary')}</button>
+      <button class="btn btn-sm btn-ai" onclick="floatGraphAnalyze('${gid}','detail')">${t('aiDetail')}</button>
+      <button class="btn btn-sm btn-ai" onclick="floatGraphNovelty('${gid}')">${t('aiNovelty')}</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphOpenNew('${gid}')">${t('newGraph')}</button>
       <button class="btn btn-sm btn-outline" onclick="floatGraphExport('${gid}','ris')">RIS</button>
       <button class="btn btn-sm btn-outline" onclick="floatGraphExport('${gid}','bibtex')">BibTeX</button>
       <button class="btn btn-sm btn-outline" onclick="floatGraphDownloadPDF('${gid}')">PDF</button>
-      <button class="btn btn-sm btn-outline" onclick="floatGraphOpenOriginal('${gid}')">原文</button>
+      <button class="btn btn-sm btn-outline" onclick="floatGraphOpenOriginal('${gid}')">${t('original')}</button>
     </div>
     <div class="graph-body" id="${gid}-body" style="flex:1;overflow:hidden;position:relative">
       <svg id="${gid}-svg" style="width:100%;height:100%"></svg>
@@ -2711,14 +2805,14 @@ function openNewCitationGraph(doi, title) {
         <div><span class="dot" style="background:#2563eb"></span> ${t("legendCenter")}</div>
         <div><span class="dot" style="background:#10b981"></span> ${t("legendCiting")}</div>
         <div><span class="dot" style="background:#f59e0b"></span> ${t("legendReferenced")}</div>
-        <div style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);color:#94a3b8;font-size:10px">滚轮缩放 · 拖拽平移 · 点击展开</div>
+        <div style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);color:#94a3b8;font-size:10px">${t("graphHint")}</div>
       </div>
     </div>
     <div class="graph-ai-panel" id="${gid}-aiPanel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <strong style="font-size:12px">AI 分析</strong>
+        <strong style="font-size:12px">${t("aiAnalysis")}</strong>
         <div style="display:flex;gap:4px">
-          <button class="btn btn-sm btn-outline" onclick="floatGraphAiCopy('${gid}')">复制</button>
+          <button class="btn btn-sm btn-outline" onclick="floatGraphAiCopy('${gid}')">${t("copy")}</button>
           <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-aiPanel').classList.remove('show')">✕</button>
         </div>
       </div>
@@ -2817,17 +2911,17 @@ function setFloatGraphPaper(gid, paper) {
 function floatGraphAnalyze(gid, mode) {
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper) { showToast("请先点击论文节点"); return; }
+  if (!paper) { showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById(gid + "-aiPanel");
   const content = document.getElementById(gid + "-aiContent");
   panel.classList.add("show");
-  content.textContent = "AI 分析中...";
+  content.textContent = t("aiAnalyzing");
 
   fetch(`${API}/api/paper-by-doi`, {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: paper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = "获取论文失败"; return; }
+    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     allPapers = [data.paper];
     checkedSet.clear();
@@ -2836,10 +2930,10 @@ function floatGraphAnalyze(gid, mode) {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ indices: [0], mode, stream: true, lang: currentLang, force_refresh: true }),
     }).then(r => {
-      if (!r.ok) { content.textContent = "AI 分析失败"; allPapers = saved; return; }
+      if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || "无结果"); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
@@ -2855,14 +2949,14 @@ function floatGraphAnalyze(gid, mode) {
         readChunk();
       }
     }).catch(e => { content.textContent = "请求失败"; allPapers = saved; });
-  }).catch(e => { content.textContent = "获取论文失败"; });
+  }).catch(e => { content.textContent = t("fetchPaperFailed"); });
 }
 
 // 悬浮图谱创新点检测
 function floatGraphNovelty(gid) {
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper) { showToast("请先点击论文节点"); return; }
+  if (!paper) { showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById(gid + "-aiPanel");
   const content = document.getElementById(gid + "-aiContent");
   panel.classList.add("show");
@@ -2872,7 +2966,7 @@ function floatGraphNovelty(gid) {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: paper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = "获取论文失败"; return; }
+    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     allPapers = [data.paper];
     checkedSet.clear();
@@ -2881,10 +2975,10 @@ function floatGraphNovelty(gid) {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ indices: [0], mode: "novelty", stream: true, lang: currentLang, force_refresh: true }),
     }).then(r => {
-      if (!r.ok) { content.textContent = "AI 分析失败"; allPapers = saved; return; }
+      if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || "无结果"); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
@@ -2900,14 +2994,14 @@ function floatGraphNovelty(gid) {
         readChunk();
       }
     }).catch(e => { content.textContent = "请求失败"; allPapers = saved; });
-  }).catch(e => { content.textContent = "获取论文失败"; });
+  }).catch(e => { content.textContent = t("fetchPaperFailed"); });
 }
 
 // 悬浮图谱在新图谱中打开
 function floatGraphOpenNew(gid) {
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
+  if (!paper?.doi) { showToast(t("clickNodeFirst")); return; }
   openNewCitationGraph(paper.doi, paper.title);
 }
 
@@ -2915,7 +3009,7 @@ function floatGraphOpenNew(gid) {
 function floatGraphExport(gid, fmt) {
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
+  if (!paper?.doi) { showToast(t("clickNodeFirst")); return; }
   fetch(`${API}/api/paper-by-doi`, {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: paper.doi }),
@@ -2939,7 +3033,7 @@ function floatGraphDownloadPDF(gid) {
 function floatGraphOpenOriginal(gid) {
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper?.doi) { showToast("请先点击论文节点"); return; }
+  if (!paper?.doi) { showToast(t("clickNodeFirst")); return; }
   window.open(`https://doi.org/${encodeURIComponent(paper.doi)}`);
 }
 
@@ -3073,18 +3167,18 @@ function renderGraphInto(svgEl, data, doi, title, overlayEl, gid) {
 }
 
 function graphAnalyze(mode) {
-  if (!_graphPaper) { showToast("请先点击论文节点"); return; }
+  if (!_graphPaper) { showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById("graphAiPanel");
   const content = document.getElementById("graphAiContent");
   panel.style.display = "block";
   panel.classList.remove("fullscreen");
-  content.textContent = "AI 分析中...";
+  content.textContent = t("aiAnalyzing");
 
   fetch(`${API}/api/paper-by-doi`, {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: _graphPaper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = "获取论文失败"; return; }
+    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     allPapers = [data.paper];
     checkedSet.clear();
@@ -3094,10 +3188,10 @@ function graphAnalyze(mode) {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ indices: [0], mode, stream: true, lang: currentLang, force_refresh: true }),
     }).then(r => {
-      if (!r.ok) { content.textContent = "AI 分析失败"; allPapers = saved; return; }
+      if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || "无结果"); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
@@ -3113,14 +3207,14 @@ function graphAnalyze(mode) {
         readChunk();
       }
     }).catch(e => { content.textContent = "请求失败: " + e.message; allPapers = saved; });
-  }).catch(e => { content.textContent = "获取论文失败: " + e.message; });
+  }).catch(e => { content.textContent = t("fetchPaperFailed") + ": " + e.message; });
 }
 
 function graphAiCopy() {
   const el = document.getElementById("graphAiContent");
   if (!el) return;
   const text = el.innerText || el.textContent;
-  navigator.clipboard.writeText(text).then(() => showToast("已复制")).catch(() => showToast("复制失败"));
+  navigator.clipboard.writeText(text).then(() => showToast(t("copied"))).catch(() => showToast(t("copyFailed")));
 }
 
 let _graphAiFs = false;
@@ -3129,7 +3223,7 @@ function graphAiFullscreen() {
   const btn = document.getElementById("graphAiFsBtn");
   _graphAiFs = !_graphAiFs;
   panel.classList.toggle("fullscreen", _graphAiFs);
-  btn.textContent = _graphAiFs ? "退出全屏" : "全屏";
+  btn.textContent = _graphAiFs ? t("exitFullscreen") : t("fullscreen");
 }
 
 function graphExport(fmt) {
@@ -3138,7 +3232,7 @@ function graphExport(fmt) {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: _graphPaper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { showToast("获取论文失败"); return; }
+    if (!data.paper) { showToast(t("fetchPaperFailed")); return; }
     const saved = allPapers;
     allPapers = [data.paper];
     exportSelected(fmt).finally(() => { allPapers = saved; });
@@ -3166,7 +3260,7 @@ function openGraphNodeInNewGraph() {
 
 // ========== Novelty Detection ==========
 function graphNoveltyDetection() {
-  if (!_graphPaper) { showToast("请先点击论文节点"); return; }
+  if (!_graphPaper) { showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById("graphAiPanel");
   const content = document.getElementById("graphAiContent");
   panel.style.display = "block";
@@ -3177,7 +3271,7 @@ function graphNoveltyDetection() {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: _graphPaper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = "获取论文失败"; return; }
+    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     allPapers = [data.paper];
     checkedSet.clear();
@@ -3187,10 +3281,10 @@ function graphNoveltyDetection() {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ indices: [0], mode: "novelty", stream: true, lang: currentLang, force_refresh: true }),
     }).then(r => {
-      if (!r.ok) { content.textContent = "AI 分析失败"; allPapers = saved; return; }
+      if (!r.ok) { content.textContent = t("aiFailed"); allPapers = saved; return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(d.response || "无结果"); allPapers = saved; });
+        r.json().then(d => { content.innerHTML = formatAIText(d.response || t("noResults")); allPapers = saved; });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
@@ -3206,7 +3300,7 @@ function graphNoveltyDetection() {
         readChunk();
       }
     }).catch(e => { content.textContent = "请求失败: " + e.message; allPapers = saved; });
-  }).catch(e => { content.textContent = "获取论文失败: " + e.message; });
+  }).catch(e => { content.textContent = t("fetchPaperFailed") + ": " + e.message; });
 }
 </script>
 </body>
