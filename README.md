@@ -49,7 +49,7 @@ PaperLens solves all of these with a single interface.
 | Feature | Description |
 |---------|-------------|
 | **AI Smart Search** | Describe what you're looking for in natural language (Chinese or English), AI builds the optimal PubMed query |
-| **Dual Data Source** | PubMed + OpenAlex, automatic deduplication, citation counts, and OA links |
+| **Multi Data Source** | PubMed + OpenAlex (+ Google Scholar / CNKI / Wanfang / VIP experimental), automatic deduplication, citation counts, and OA links |
 | **Batch DOI Import** | Paste a list of DOIs and look them up in one click |
 | **Advanced Filtering** | Filter by journal, field tags, year range, publication type |
 | **In-result Sorting** | Sort by citations, date, or title without re-searching |
@@ -69,12 +69,14 @@ PaperLens solves all of these with a single interface.
 |---------|-------------|
 | **Citation Graph** | Interactive D3.js force-directed graph — zoom, pan, drag nodes, click to expand citation relationships |
 | **Citation Expansion** | Click any node in the graph to load its citing and referenced papers |
+| **Keyword Network** | Co-occurrence network visualization of keywords across search results |
+| **Author Network** | Collaboration network visualization of co-authorship patterns |
 
 ### Export & Integration
 
 | Feature | Description |
 |---------|-------------|
-| **Multi-format Export** | RIS (EndNote), BibTeX (LaTeX), CSV |
+| **Multi-format Export** | RIS (EndNote), BibTeX (LaTeX), CSV, EndNote XML |
 | **PDF Download** | Direct OA PDF download with link verification |
 | **Search History** | Persistent history with smart suggestions |
 | **Dual AI Models** | Configure separate models for search (fast) and analysis (high-quality) |
@@ -205,13 +207,13 @@ PaperLens/
 
 ### Implemented
 - [x] AI Smart Search (natural language → PubMed query)
-- [x] Dual data source aggregation (PubMed + OpenAlex)
+- [x] Multi data source aggregation (PubMed + OpenAlex + Google Scholar / CNKI / Wanfang / VIP)
 - [x] AI Paper Analysis (summary / detail / compare / novelty)
 - [x] Citation Network Graph (interactive D3.js visualization)
 - [x] Floating Citation Graph (draggable windows with full AI toolbar)
 - [x] Novelty Detection (AI identifies research gaps)
 - [x] Batch DOI Import
-- [x] Multi-format Export (RIS / BibTeX / CSV)
+- [x] Multi-format Export (RIS / BibTeX / CSV / EndNote XML)
 - [x] Dual AI model configuration
 - [x] Streaming output for AI analysis
 - [x] User preference persistence (year range, sort, filters)
@@ -224,6 +226,8 @@ PaperLens/
 - [x] Local paper collections with custom groups
 - [x] Chrome extension for DOI quick-lookup and collection
 - [x] Collection management (create, delete with confirmation)
+- [x] Keyword co-occurrence network visualization
+- [x] Author collaboration network visualization
 
 ### Planned
 - [ ] Paper recommendation based on reading history

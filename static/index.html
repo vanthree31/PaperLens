@@ -459,6 +459,10 @@ body {
     <div class="filter-group">
       <label><input type="checkbox" id="usePubmed" checked> PubMed</label>
       <label><input type="checkbox" id="useOpenalex" checked> OpenAlex</label>
+      <label><input type="checkbox" id="useGoogleScholar"> Google Scholar <span style="color:#f59e0b;font-size:10px">β</span></label>
+      <label><input type="checkbox" id="useCNKI"> CNKI <span style="color:#f59e0b;font-size:10px">β</span></label>
+      <label><input type="checkbox" id="useWanfang"> 万方 <span style="color:#f59e0b;font-size:10px">β</span></label>
+      <label><input type="checkbox" id="useVIP"> 维普 <span style="color:#f59e0b;font-size:10px">β</span></label>
     </div>
     <div class="filter-group">
       <span data-i18n="journal">期刊</span>: <input type="text" id="filterJournal" placeholder="如 Nature Methods" style="width:140px">
@@ -666,20 +670,20 @@ body {
     <div class="graph-header">
       <h3 id="graphTitle">引用关系图谱</h3>
       <div style="display:flex;gap:6px;align-items:center">
-        <button class="btn btn-sm btn-outline" onclick="toggleGraphFullscreen()" id="graphFsBtn">⛶ ${t("fullscreen")}</button>
-        <button class="btn btn-sm btn-outline" onclick="closeGraph()">✕ ${t("closeGraph")}</button>
+        <button class="btn btn-sm btn-outline" onclick="toggleGraphFullscreen()" id="graphFsBtn">⛶ 全屏</button>
+        <button class="btn btn-sm btn-outline" onclick="closeGraph()" id="graphCloseBtn">✕ 关闭</button>
       </div>
     </div>
     <div id="graphToolbar" style="display:none;padding:8px 16px;border-bottom:1px solid var(--border);background:#fafbfc;gap:6px;flex-wrap:wrap;align-items:center">
       <span id="graphPaperTitle" style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('summary')">${t("aiSummary")}</button>
-      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('detail')">${t("aiDetail")}</button>
-      <button class="btn btn-sm btn-ai" onclick="graphNoveltyDetection()">${t("aiNovelty")}</button>
-      <button class="btn btn-sm btn-outline" onclick="openGraphNodeInNewGraph()" id="graphNewGraphBtn">${t("openNewGraph")}</button>
+      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('summary')" id="graphAiSummaryBtn">AI 总结</button>
+      <button class="btn btn-sm btn-ai" onclick="graphAnalyze('detail')" id="graphAiDetailBtn">AI 详析</button>
+      <button class="btn btn-sm btn-ai" onclick="graphNoveltyDetection()" id="graphAiNoveltyBtn">创新点</button>
+      <button class="btn btn-sm btn-outline" onclick="openGraphNodeInNewGraph()" id="graphNewGraphBtn">在新图谱中打开</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('ris')">RIS</button>
       <button class="btn btn-sm btn-outline" onclick="graphExport('bibtex')">BibTeX</button>
       <button class="btn btn-sm btn-outline" onclick="graphDownloadPDF()">PDF</button>
-      <button class="btn btn-sm btn-outline" onclick="graphOpenOriginal()">${t("original")}</button>
+      <button class="btn btn-sm btn-outline" onclick="graphOpenOriginal()" id="graphOriginalBtn">原文</button>
     </div>
     <div class="graph-body" id="graphBody">
       <svg id="graphSvg"></svg>
@@ -687,15 +691,15 @@ body {
         <div><span class="dot" style="background:#2563eb"></span> <span id="legendCenter">当前论文</span></div>
         <div><span class="dot" style="background:#10b981"></span> <span id="legendCiting">引用了此论文</span></div>
         <div><span class="dot" style="background:#f59e0b"></span> <span id="legendReferenced">此论文引用</span></div>
-        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px"><span id="graphZoomLevel">100%</span> · ${t("graphHint")} · <a href="#" onclick="resetGraphZoom();return false" style="color:#64748b">${t("resetZoom")}</a></div>
+        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px"><span id="graphZoomLevel">100%</span> · <span id="graphHintText">滚轮缩放 · 拖拽平移 · 点击节点展开引用</span> · <a href="#" onclick="resetGraphZoom();return false" style="color:#64748b" id="resetZoomLink">重置缩放</a></div>
       </div>
     </div>
     <div id="graphAiPanel" style="display:none;padding:12px 16px;border-top:1px solid var(--border);background:#f0fdf4;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <strong style="font-size:13px">${t("aiAnalysis")}</strong>
+        <strong style="font-size:13px" id="graphAiPanelTitle">AI 分析</strong>
         <div style="display:flex;gap:4px">
-          <button class="btn btn-sm btn-outline" onclick="graphAiCopy()">${t("copy")}</button>
-          <button class="btn btn-sm btn-outline" onclick="graphAiFullscreen()" id="graphAiFsBtn">${t("fullscreen")}</button>
+          <button class="btn btn-sm btn-outline" onclick="graphAiCopy()" id="graphAiCopyBtn">复制</button>
+          <button class="btn btn-sm btn-outline" onclick="graphAiFullscreen()" id="graphAiFsBtn">全屏</button>
           <button class="btn btn-sm btn-outline" onclick="document.getElementById('graphAiPanel').style.display='none'">✕</button>
         </div>
       </div>
@@ -751,7 +755,8 @@ const LANGS = {
     totalPapers: "共", papers: "篇", showing: "显示", selected: "已选",
     sortBtn: "排序：", cited: "被引", date: "时间", title: "标题",
     selectAll: "全选/取消", aiSummary: "AI 总结", aiDetail: "AI 详析", aiCompare: "AI 对比", aiNovelty: "创新点检测",
-    exportRIS: "导出 RIS", bibtex: "BibTeX", csv: "CSV", all: "全部",
+    exportRIS: "导出 RIS", bibtex: "BibTeX", csv: "CSV", endnotexml: "XML", all: "全部",
+    keywordNetwork: "关键词共现", authorNetwork: "作者合作",
     noTitle: "无标题", noAbstract: "该数据源无摘要，点击原文链接查看",
     abstract: "摘要", original: "原文", downloadPDF: "下载PDF",
     prevPage: "上一页", nextPage: "下一页", page: "第", of: "页",
@@ -836,6 +841,10 @@ const LANGS = {
     defaultGroup: "默认收藏夹", newGroup: "+ 新建", deleteGroup: "删除收藏夹",
     enterGroupName: "输入收藏夹名称：", deleteGroupConfirm: "确定要删除收藏夹\"{name}\"吗？\n该收藏夹内的所有收藏也将被删除，此操作不可撤销。",
     refreshCollections: "刷新",
+    // 图谱面板
+    noOALink: "无 OA 链接", analyzingResearchGaps: "AI 正在分析研究空白...",
+    noDOILoadGraph: "该论文无 DOI，无法加载引用关系",
+    querying: "查询中...", query: "查询",
   },
   en: {
     // General
@@ -858,7 +867,8 @@ const LANGS = {
     totalPapers: "Total", papers: "papers", showing: "Showing", selected: "Selected",
     sortBtn: "Sort:", cited: "Cited", date: "Date", title: "Title",
     selectAll: "Select All", aiSummary: "AI Summary", aiDetail: "AI Detail", aiCompare: "AI Compare", aiNovelty: "Novelty Detection",
-    exportRIS: "Export RIS", bibtex: "BibTeX", csv: "CSV", all: "All",
+    exportRIS: "Export RIS", bibtex: "BibTeX", csv: "CSV", endnotexml: "XML", all: "All",
+    keywordNetwork: "Keywords", authorNetwork: "Authors",
     noTitle: "No Title", noAbstract: "No abstract available for this source, click original link to view",
     abstract: "Abstract", original: "Original", downloadPDF: "Download PDF",
     prevPage: "Previous", nextPage: "Next", page: "Page", of: "of",
@@ -941,8 +951,12 @@ const LANGS = {
     addedToCollection: "Added to collection", removedFromCollection: "Removed from collection",
     remove: "Remove", operationFailed: "Operation failed",
     defaultGroup: "Default", newGroup: "+ New", deleteGroup: "Delete Collection",
-    enterGroupName: "Enter collection name：", deleteGroupConfirm: "Are you sure you want to delete \"{name}\"?\nAll items in this collection will also be deleted. This action cannot be undone.",
+    enterGroupName: "Enter collection name:", deleteGroupConfirm: "Are you sure you want to delete \"{name}\"?\nAll items in this collection will also be deleted. This action cannot be undone.",
     refreshCollections: "Refresh",
+    // Graph panel
+    noOALink: "No OA link available", analyzingResearchGaps: "AI is analyzing research gaps...",
+    noDOILoadGraph: "This paper has no DOI, cannot load citation graph",
+    querying: "Querying...", query: "Query",
   }
 };
 
@@ -1077,6 +1091,32 @@ function applyLang() {
   // 语言按钮
   const langBtn = document.getElementById("langBtn");
   if (langBtn) langBtn.textContent = currentLang === "zh" ? "EN" : "中";
+
+  // 引用图谱面板
+  const graphFsBtn = document.getElementById("graphFsBtn");
+  if (graphFsBtn) graphFsBtn.textContent = `⛶ ${_graphFs ? t("exitFullscreen") : t("fullscreen")}`;
+  const graphCloseBtn = document.getElementById("graphCloseBtn");
+  if (graphCloseBtn) graphCloseBtn.textContent = `✕ ${t("closeGraph")}`;
+  const graphAiSummaryBtn = document.getElementById("graphAiSummaryBtn");
+  if (graphAiSummaryBtn) graphAiSummaryBtn.textContent = t("aiSummary");
+  const graphAiDetailBtn = document.getElementById("graphAiDetailBtn");
+  if (graphAiDetailBtn) graphAiDetailBtn.textContent = t("aiDetail");
+  const graphAiNoveltyBtn = document.getElementById("graphAiNoveltyBtn");
+  if (graphAiNoveltyBtn) graphAiNoveltyBtn.textContent = t("aiNovelty");
+  const graphNewGraphBtn = document.getElementById("graphNewGraphBtn");
+  if (graphNewGraphBtn) graphNewGraphBtn.textContent = t("openNewGraph");
+  const graphOriginalBtn = document.getElementById("graphOriginalBtn");
+  if (graphOriginalBtn) graphOriginalBtn.textContent = t("original");
+  const graphHintText = document.getElementById("graphHintText");
+  if (graphHintText) graphHintText.textContent = t("graphHint");
+  const resetZoomLink = document.getElementById("resetZoomLink");
+  if (resetZoomLink) resetZoomLink.textContent = t("resetZoom");
+  const graphAiPanelTitle = document.getElementById("graphAiPanelTitle");
+  if (graphAiPanelTitle) graphAiPanelTitle.textContent = t("aiAnalysis");
+  const graphAiCopyBtn = document.getElementById("graphAiCopyBtn");
+  if (graphAiCopyBtn) graphAiCopyBtn.textContent = t("copy");
+  const graphAiFsBtn = document.getElementById("graphAiFsBtn");
+  if (graphAiFsBtn) graphAiFsBtn.textContent = _graphAiFs ? t("exitFullscreen") : t("fullscreen");
 }
 
 function applySettingsLang() {
@@ -1466,6 +1506,10 @@ async function doSearch() {
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
+    use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
+    use_cnki: document.getElementById("useCNKI")?.checked || false,
+    use_wanfang: document.getElementById("useWanfang")?.checked || false,
+    use_vip: document.getElementById("useVIP")?.checked || false,
     journal: document.getElementById("filterJournal").value.trim(),
     field: document.getElementById("filterField").value,
     pub_type: document.getElementById("filterPubType").value,
@@ -1522,6 +1566,10 @@ async function doAISearch() {
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
+    use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
+    use_cnki: document.getElementById("useCNKI")?.checked || false,
+    use_wanfang: document.getElementById("useWanfang")?.checked || false,
+    use_vip: document.getElementById("useVIP")?.checked || false,
   };
 
   try {
@@ -1601,6 +1649,9 @@ function renderResults() {
       <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${exportLabel('ris', t("exportRIS"))}</button>
       <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${exportLabel('bibtex', t("bibtex"))}</button>
       <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', t("csv"))}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('endnotexml')">${exportLabel('endnotexml', t("endnotexml"))}</button>
+      <button class="btn btn-sm btn-outline" onclick="showKeywordNetwork()">${t("keywordNetwork")}</button>
+      <button class="btn btn-sm btn-outline" onclick="showAuthorNetwork()">${t("authorNetwork")}</button>
     </div>
   </div>`;
 
@@ -2403,7 +2454,7 @@ async function batchDoiLookup() {
 
   const btn = document.getElementById("doiBtn");
   btn.disabled = true;
-  btn.textContent = currentLang === "zh" ? "查询中..." : "Querying...";
+  btn.textContent = t("querying");
   document.getElementById("doiResult").textContent = `${t("queryingDOI")} ${dois.length} ${t("doiQuery")}`;
 
   try {
@@ -2431,7 +2482,7 @@ async function batchDoiLookup() {
     document.getElementById("doiResult").textContent = `${t("networkError")}: ${e.message}`;
   } finally {
     btn.disabled = false;
-    btn.textContent = currentLang === "zh" ? "查询" : "Query";
+    btn.textContent = t("query");
   }
 }
 
@@ -2763,7 +2814,7 @@ function setGraphPaper(paper) {
 }
 
 async function expandGraphNode(d) {
-  if (!d.doi) { showToast("该论文无 DOI，无法加载引用关系"); return; }
+  if (!d.doi) { showToast(t("noDOILoadGraph")); return; }
   openNewCitationGraph(d.doi, d.fullTitle || "");
 }
 
@@ -2948,7 +2999,7 @@ function floatGraphAnalyze(gid, mode) {
         }
         readChunk();
       }
-    }).catch(e => { content.textContent = "请求失败"; allPapers = saved; });
+    }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
   }).catch(e => { content.textContent = t("fetchPaperFailed"); });
 }
 
@@ -2960,7 +3011,7 @@ function floatGraphNovelty(gid) {
   const panel = document.getElementById(gid + "-aiPanel");
   const content = document.getElementById(gid + "-aiContent");
   panel.classList.add("show");
-  content.textContent = "AI 创新点检测中...";
+  content.textContent = t("aiNoveltyDetecting");
 
   fetch(`${API}/api/paper-by-doi`, {
     method: "POST", headers: {"Content-Type": "application/json"},
@@ -2993,7 +3044,7 @@ function floatGraphNovelty(gid) {
         }
         readChunk();
       }
-    }).catch(e => { content.textContent = "请求失败"; allPapers = saved; });
+    }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
   }).catch(e => { content.textContent = t("fetchPaperFailed"); });
 }
 
@@ -3025,7 +3076,7 @@ function floatGraphExport(gid, fmt) {
 function floatGraphDownloadPDF(gid) {
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper?.oa_url) { showToast("无 OA 链接"); return; }
+  if (!paper?.oa_url) { showToast(t("noOALink")); return; }
   downloadOA(encodeURIComponent(paper.oa_url), encodeURIComponent(paper.title || "paper"));
 }
 
@@ -3206,7 +3257,7 @@ function graphAnalyze(mode) {
         }
         readChunk();
       }
-    }).catch(e => { content.textContent = "请求失败: " + e.message; allPapers = saved; });
+    }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
   }).catch(e => { content.textContent = t("fetchPaperFailed") + ": " + e.message; });
 }
 
@@ -3236,12 +3287,12 @@ function graphExport(fmt) {
     const saved = allPapers;
     allPapers = [data.paper];
     exportSelected(fmt).finally(() => { allPapers = saved; });
-  }).catch(e => showToast("导出失败: " + e.message));
+  }).catch(e => showToast(t("exportFailed") + ": " + e.message));
 }
 
 function graphDownloadPDF() {
   if (!_graphPaper) return;
-  if (!_graphPaper.oa_url) { showToast("该论文无开放获取链接"); return; }
+  if (!_graphPaper.oa_url) { showToast(t("noOALink")); return; }
   downloadOA(encodeURIComponent(_graphPaper.oa_url), encodeURIComponent(_graphPaper.title));
 }
 
@@ -3265,7 +3316,7 @@ function graphNoveltyDetection() {
   const content = document.getElementById("graphAiContent");
   panel.style.display = "block";
   panel.classList.remove("fullscreen");
-  content.textContent = "AI 正在分析研究空白...";
+  content.textContent = t("analyzingResearchGaps");
 
   fetch(`${API}/api/paper-by-doi`, {
     method: "POST", headers: {"Content-Type": "application/json"},
@@ -3299,8 +3350,128 @@ function graphNoveltyDetection() {
         }
         readChunk();
       }
-    }).catch(e => { content.textContent = "请求失败: " + e.message; allPapers = saved; });
+    }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; allPapers = saved; });
   }).catch(e => { content.textContent = t("fetchPaperFailed") + ": " + e.message; });
+}
+
+// ========== 关键词共现 / 作者合作网络 ==========
+async function showKeywordNetwork() {
+  if (!allPapers.length) { showToast(t("pleaseSearchFirst")); return; }
+  const svgEl = document.getElementById("graphSvg");
+  document.getElementById("graphTitle").textContent = t("keywordNetwork");
+  document.getElementById("legendCenter").textContent = t("keywordNetwork");
+  document.getElementById("legendCiting").textContent = "";
+  document.getElementById("legendReferenced").textContent = "";
+  document.getElementById("graphOverlay").classList.add("show");
+  document.getElementById("graphToolbar").style.display = "none";
+  document.getElementById("graphAiPanel").style.display = "none";
+  svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${t("aiAnalyzing")}</text>`;
+
+  try {
+    const r = await fetch(`${API}/api/keyword-network`, { method: "POST" });
+    const data = await r.json();
+    if (r.ok && data.nodes.length > 0) {
+      renderNetworkGraph(svgEl, data, "#8b5cf6", "#c4b5fd");
+    } else {
+      svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${data.error || t("noResults")}</text>`;
+    }
+  } catch (e) {
+    svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
+  }
+}
+
+async function showAuthorNetwork() {
+  if (!allPapers.length) { showToast(t("pleaseSearchFirst")); return; }
+  const svgEl = document.getElementById("graphSvg");
+  document.getElementById("graphTitle").textContent = t("authorNetwork");
+  document.getElementById("legendCenter").textContent = t("authorNetwork");
+  document.getElementById("legendCiting").textContent = "";
+  document.getElementById("legendReferenced").textContent = "";
+  document.getElementById("graphOverlay").classList.add("show");
+  document.getElementById("graphToolbar").style.display = "none";
+  document.getElementById("graphAiPanel").style.display = "none";
+  svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${t("aiAnalyzing")}</text>`;
+
+  try {
+    const r = await fetch(`${API}/api/author-network`, { method: "POST" });
+    const data = await r.json();
+    if (r.ok && data.nodes.length > 0) {
+      renderNetworkGraph(svgEl, data, "#059669", "#a7f3d0");
+    } else {
+      svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8">${data.error || t("noResults")}</text>`;
+    }
+  } catch (e) {
+    svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="#ef4444">${t("networkError")}</text>`;
+  }
+}
+
+function renderNetworkGraph(svgEl, data, nodeColor, linkColor) {
+  const width = svgEl.clientWidth || 800;
+  const height = svgEl.clientHeight || 600;
+  svgEl.innerHTML = "";
+
+  if (_graphSimulation) { _graphSimulation.stop(); _graphSimulation = null; }
+  d3.select(svgEl).on(".zoom", null);
+
+  const svg = d3.select(svgEl);
+  const container = svg.append("g");
+
+  const maxCount = Math.max(...data.nodes.map(n => n.count), 1);
+  const maxWeight = Math.max(...data.links.map(l => l.weight), 1);
+  const radiusScale = d3.scaleSqrt().domain([1, maxCount]).range([8, 28]);
+  const linkScale = d3.scaleLinear().domain([1, maxWeight]).range([1, 6]);
+
+  const zoomBehavior = d3.zoom().scaleExtent([0.15, 5]).on("zoom", e => {
+    container.attr("transform", e.transform);
+  });
+  svg.call(zoomBehavior);
+
+  const nodeMap = {};
+  data.nodes.forEach(n => { nodeMap[n.id] = n; });
+  const validLinks = data.links.filter(l => nodeMap[l.source] && nodeMap[l.target]);
+
+  const link = container.append("g").selectAll("line")
+    .data(validLinks).join("line")
+      .attr("stroke", linkColor)
+      .attr("stroke-opacity", 0.6)
+      .attr("stroke-width", d => linkScale(d.weight));
+
+  const node = container.append("g").selectAll("g")
+    .data(data.nodes).join("g")
+      .attr("class", "graph-node")
+      .call(d3.drag()
+        .on("start", (e, d) => { if (!e.active) _graphSimulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on("end", (e, d) => { if (!e.active) _graphSimulation.alphaTarget(0); d.fx = null; d.fy = null; })
+      );
+
+  node.append("circle")
+    .attr("r", d => radiusScale(d.count))
+    .attr("fill", nodeColor)
+    .attr("stroke", "#fff").attr("stroke-width", 2);
+
+  node.append("text")
+    .attr("text-anchor", "middle").attr("dy", d => radiusScale(d.count) + 14)
+    .attr("font-size", 10).attr("fill", "#475569")
+    .text(d => d.label.length > 12 ? d.label.substring(0, 12) + "..." : d.label);
+
+  node.append("text")
+    .attr("text-anchor", "middle").attr("dy", d => radiusScale(d.count) + 26)
+    .attr("font-size", 9).attr("fill", "#94a3b8")
+    .text(d => d.count);
+
+  node.append("title").text(d => `${d.label}: ${d.count}`);
+
+  _graphSimulation = d3.forceSimulation(data.nodes)
+    .force("link", d3.forceLink(validLinks).id(d => d.id).distance(120))
+    .force("charge", d3.forceManyBody().strength(-300))
+    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("collide", d3.forceCollide().radius(d => radiusScale(d.count) + 20).strength(1).iterations(5))
+    .on("tick", () => {
+      link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      node.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
 }
 </script>
 </body>

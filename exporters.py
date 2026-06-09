@@ -109,3 +109,62 @@ def _make_bibtex_key(paper, index: int) -> str:
     author_part = first_author[:8] if first_author else "unknown"
 
     return f"{author_part}{year}_{index}"
+
+
+def export_endnote_xml(papers: list) -> str:
+    """导出 EndNote XML 格式（Mendeley / EndNote 直接导入）"""
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>']
+    lines.append('<xml><records>')
+
+    for p in papers:
+        lines.append('<record>')
+        lines.append('<ref-type name="Journal Article">17</ref-type>')
+        lines.append('<contributors>')
+        if p.authors:
+            lines.append('<authors>')
+            for author in p.authors:
+                # EndNote XML 格式：姓, 名
+                if "," in author:
+                    parts = author.split(",", 1)
+                    lines.append(f'<author><style face="normal" font="default" size="100">{_xml_escape(parts[0].strip())}, {_xml_escape(parts[1].strip())}</style></author>')
+                else:
+                    lines.append(f'<author><style face="normal" font="default" size="100">{_xml_escape(author)}</style></author>')
+            lines.append('</authors>')
+        lines.append('</contributors>')
+        if p.title:
+            lines.append(f'<titles><title><style face="normal" font="default" size="100">{_xml_escape(p.title)}</style></title></titles>')
+        if p.journal:
+            lines.append(f'<periodical><full-title><style face="normal" font="default" size="100">{_xml_escape(p.journal)}</style></full-title></periodical>')
+        if p.year:
+            lines.append(f'<dates><year><style face="normal" font="default" size="100">{p.year}</style></year></dates>')
+        if p.doi:
+            lines.append(f'<electronic-resource-num><style face="normal" font="default" size="100">{_xml_escape(p.doi)}</style></electronic-resource-num>')
+        if p.abstract:
+            abs_text = _xml_escape(p.abstract[:2000])
+            lines.append(f'<abstract><style face="normal" font="default" size="100">{abs_text}</style></abstract>')
+        if p.keywords:
+            lines.append('<keywords>')
+            for kw in p.keywords:
+                lines.append(f'<keyword><style face="normal" font="default" size="100">{_xml_escape(kw)}</style></keyword>')
+            lines.append('</keywords>')
+        if p.pmid:
+            lines.append(f'<accession-num><style face="normal" font="default" size="100">{_xml_escape(p.pmid)}</style></accession-num>')
+        url = p.oa_url or (f"https://doi.org/{p.doi}" if p.doi else "")
+        if url:
+            lines.append(f'<urls><related-urls><url><style face="normal" font="default" size="100">{_xml_escape(url)}</style></url></related-urls></urls>')
+        lines.append('</record>')
+
+    lines.append('</records></xml>')
+    return "\n".join(lines)
+
+
+def _xml_escape(text: str) -> str:
+    """XML 特殊字符转义"""
+    if not text:
+        return ""
+    return (text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&apos;"))

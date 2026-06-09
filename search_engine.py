@@ -514,6 +514,298 @@ class OpenAlexSearch:
         return []
 
 
+class GoogleScholarSearch:
+    """Google Scholar 搜索（实验性，依赖 scholarly 库）"""
+
+    def __init__(self, proxy=None):
+        self.proxy = proxy
+        self._available = None
+
+    def _check_available(self):
+        if self._available is None:
+            try:
+                import scholarly
+                self._available = True
+            except ImportError:
+                self._available = False
+                print("Google Scholar: scholarly 库未安装，请运行 pip install scholarly")
+        return self._available
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               max_results=20) -> list:
+        if not self._check_available():
+            return []
+
+        try:
+            from scholarly import scholarly as sch
+            import socket
+            old_timeout = socket.getdefaulttimeout()
+            socket.setdefaulttimeout(30)
+
+            results = []
+            search_query = sch.search_pubs(query, year_low=year_from, year_high=year_to)
+            for i, result in enumerate(search_query):
+                if i >= max_results:
+                    break
+                p = Paper(source="google_scholar")
+                bib = result.get("bib", {})
+                p.title = bib.get("title", "")
+                p.authors = bib.get("author", []) if isinstance(bib.get("author"), list) else [bib.get("author", "")]
+                p.journal = bib.get("venue", "")
+                p.year = int(bib.get("pub_year", 0)) if bib.get("pub_year") else 0
+                p.abstract = bib.get("abstract", "")
+                p.doi = result.get("doi", "") or ""
+                # Google Scholar 引用数
+                p.citation_count = result.get("num_citations", 0) or 0
+                p.oa_url = result.get("eprint_url", "") or ""
+                results.append(p)
+
+            socket.setdefaulttimeout(old_timeout)
+            return results
+        except Exception as e:
+            print(f"Google Scholar search error: {e}")
+            return []
+
+
+class CNKISearch:
+    """中国知网搜索（实验性，网页抓取）"""
+
+    BASE = "https://kns.cnki.net/kns8s/brief/grid"
+
+    def __init__(self, proxy=None):
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        if proxy:
+            self.session.proxies = proxy
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               max_results=20) -> list:
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            print("CNKI: beautifulsoup4 未安装，请运行 pip install beautifulsoup4")
+            return []
+
+        try:
+            # CNKI 搜索接口
+            search_url = "https://kns.cnki.net/kns8s/brief/grid"
+            params = {
+                "queryid": "1",
+                "txt_1_sel": "SU",  # 主题
+                "txt_1_value1": query,
+                "txt_1_relation": "#DIFFUSE",
+                "txt_1_special1": "=",
+                "au_1_sel": "AU",
+                "publishdate_from": str(year_from),
+                "publishdate_to": str(year_to),
+                "sorttype": "0",
+                "pageidx": "0",
+            }
+            r = self.session.get(search_url, params=params, timeout=15)
+            r.raise_for_status()
+            r.encoding = "utf-8"
+
+            soup = BeautifulSoup(r.text, "html.parser")
+            papers = []
+            rows = soup.select("table.result-table-list tbody tr")
+
+            for row in rows[:max_results]:
+                try:
+                    p = Paper(source="cnki")
+                    # 标题
+                    title_el = row.select_one("td.name a")
+                    if title_el:
+                        p.title = title_el.get_text(strip=True)
+                    # 作者
+                    author_el = row.select_one("td.author")
+                    if author_el:
+                        authors_text = author_el.get_text(strip=True)
+                        p.authors = [a.strip() for a in authors_text.split(";") if a.strip()]
+                    # 期刊
+                    source_el = row.select_one("td.source")
+                    if source_el:
+                        p.journal = source_el.get_text(strip=True)
+                    # 年份
+                    date_el = row.select_one("td.date")
+                    if date_el:
+                        try:
+                            p.year = int(date_el.get_text(strip=True)[:4])
+                        except ValueError:
+                            pass
+                    # 被引
+                    quote_el = row.select_one("td.quote")
+                    if quote_el:
+                        try:
+                            p.citation_count = int(quote_el.get_text(strip=True))
+                        except ValueError:
+                            pass
+                    if p.title:
+                        papers.append(p)
+                except Exception:
+                    continue
+
+            return papers
+        except Exception as e:
+            print(f"CNKI search error: {e}")
+            return []
+
+
+class WanfangSearch:
+    """万方数据搜索（实验性，网页抓取）"""
+
+    BASE = "https://s.wanfangdata.com.cn/paper"
+
+    def __init__(self, proxy=None):
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        if proxy:
+            self.session.proxies = proxy
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               max_results=20) -> list:
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            print("万方: beautifulsoup4 未安装，请运行 pip install beautifulsoup4")
+            return []
+
+        try:
+            params = {
+                "q": query,
+                "StyleID": "x",
+                "Sort": "Correlation",
+                "DateType": "Between",
+                "PublishDateFrom": str(year_from),
+                "PublishDateTo": str(year_to),
+            }
+            r = self.session.get(self.BASE, params=params, timeout=15)
+            r.raise_for_status()
+            r.encoding = "utf-8"
+
+            soup = BeautifulSoup(r.text, "html.parser")
+            papers = []
+            items = soup.select("div.normal-list")
+
+            for item in items[:max_results]:
+                try:
+                    p = Paper(source="wanfang")
+                    # 标题
+                    title_el = item.select_one("a.title")
+                    if title_el:
+                        p.title = title_el.get_text(strip=True)
+                    # 作者
+                    author_el = item.select_one("div.author")
+                    if author_el:
+                        authors_text = author_el.get_text(strip=True)
+                        p.authors = [a.strip() for a in authors_text.replace(";", ",").split(",") if a.strip()]
+                    # 期刊
+                    source_el = item.select_one("div.source")
+                    if source_el:
+                        p.journal = source_el.get_text(strip=True)
+                    # 年份
+                    date_el = item.select_one("div.year")
+                    if date_el:
+                        try:
+                            p.year = int(date_el.get_text(strip=True)[:4])
+                        except ValueError:
+                            pass
+                    # DOI
+                    doi_el = item.select_one("a.doi")
+                    if doi_el:
+                        p.doi = doi_el.get_text(strip=True)
+                    # 被引
+                    cite_el = item.select_one("div.cited")
+                    if cite_el:
+                        try:
+                            p.citation_count = int(re.sub(r'[^\d]', '', cite_el.get_text()))
+                        except ValueError:
+                            pass
+                    if p.title:
+                        papers.append(p)
+                except Exception:
+                    continue
+
+            return papers
+        except Exception as e:
+            print(f"万方 search error: {e}")
+            return []
+
+
+class VIPSearch:
+    """维普搜索（实验性，网页抓取）"""
+
+    BASE = "https://www.cqvip.com/search/search.aspx"
+
+    def __init__(self, proxy=None):
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        if proxy:
+            self.session.proxies = proxy
+
+    def search(self, query: str, year_from=2020, year_to=2026,
+               max_results=20) -> list:
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            print("维普: beautifulsoup4 未安装，请运行 pip install beautifulsoup4")
+            return []
+
+        try:
+            params = {
+                "k": query,
+                "s": "0",  # 相关度排序
+                "p": "0",
+                "y": f"{year_from}-{year_to}",
+            }
+            r = self.session.get(self.BASE, params=params, timeout=15)
+            r.raise_for_status()
+            r.encoding = "utf-8"
+
+            soup = BeautifulSoup(r.text, "html.parser")
+            papers = []
+            items = soup.select("div.result-list li, div.search-result-item")
+
+            for item in items[:max_results]:
+                try:
+                    p = Paper(source="vip")
+                    # 标题
+                    title_el = item.select_one("h3 a, a.title, .result-title a")
+                    if title_el:
+                        p.title = title_el.get_text(strip=True)
+                    # 作者
+                    author_el = item.select_one(".author, .result-author")
+                    if author_el:
+                        authors_text = author_el.get_text(strip=True)
+                        p.authors = [a.strip() for a in authors_text.replace(";", ",").split(",") if a.strip()]
+                    # 期刊
+                    source_el = item.select_one(".source, .result-source")
+                    if source_el:
+                        p.journal = source_el.get_text(strip=True)
+                    # 年份
+                    date_el = item.select_one(".date, .result-date")
+                    if date_el:
+                        try:
+                            p.year = int(re.search(r'\d{4}', date_el.get_text()).group())
+                        except (ValueError, AttributeError):
+                            pass
+                    # DOI
+                    doi_el = item.select_one("a[href*='doi.org']")
+                    if doi_el:
+                        href = doi_el.get("href", "")
+                        doi_match = re.search(r'10\.\d{4,}/\S+', href)
+                        if doi_match:
+                            p.doi = doi_match.group()
+                    if p.title:
+                        papers.append(p)
+                except Exception:
+                    continue
+
+            return papers
+        except Exception as e:
+            print(f"维普 search error: {e}")
+            return []
+
+
 class SearchEngine:
     """聚合检索引擎"""
 
@@ -526,8 +818,13 @@ class SearchEngine:
             proxy["https"] = proxy_cfg["https"]
         proxy = proxy if proxy else None
 
-        pubmed_cfg = config.get("sources", {}).get("pubmed", {})
-        openalex_cfg = config.get("sources", {}).get("openalex", {})
+        sources_cfg = config.get("sources", {})
+        pubmed_cfg = sources_cfg.get("pubmed", {})
+        openalex_cfg = sources_cfg.get("openalex", {})
+        gs_cfg = sources_cfg.get("google_scholar", {})
+        cnki_cfg = sources_cfg.get("cnki", {})
+        wanfang_cfg = sources_cfg.get("wanfang", {})
+        vip_cfg = sources_cfg.get("vip", {})
 
         self.pubmed = PubMedSearch(
             email=pubmed_cfg.get("email", ""),
@@ -540,9 +837,27 @@ class SearchEngine:
             proxy=proxy
         ) if openalex_cfg.get("enabled", True) else None
 
+        self.google_scholar = GoogleScholarSearch(
+            proxy=proxy
+        ) if gs_cfg.get("enabled", False) else None
+
+        self.cnki = CNKISearch(
+            proxy=proxy
+        ) if cnki_cfg.get("enabled", False) else None
+
+        self.wanfang = WanfangSearch(
+            proxy=proxy
+        ) if wanfang_cfg.get("enabled", False) else None
+
+        self.vip = VIPSearch(
+            proxy=proxy
+        ) if vip_cfg.get("enabled", False) else None
+
     def search(self, query: str, year_from=2020, year_to=2026,
                sort="relevance", max_results=50,
                use_pubmed=True, use_openalex=True,
+               use_google_scholar=False, use_cnki=False,
+               use_wanfang=False, use_vip=False,
                journal="", field="", mesh_term="", pub_type="") -> list:
         """聚合检索
 
@@ -552,6 +867,10 @@ class SearchEngine:
             field: 默认字段标签（ti/tiab/au/tw）
             mesh_term: MeSH 主题词
             pub_type: 文献类型（review/clinical trial 等）
+            use_google_scholar: 启用 Google Scholar（实验性）
+            use_cnki: 启用中国知网（实验性）
+            use_wanfang: 启用万方（实验性）
+            use_vip: 启用维普（实验性）
         """
         all_papers = []
 
@@ -578,6 +897,34 @@ class SearchEngine:
                 query, year_from, year_to, max_results, journal=journal
             )
             all_papers.extend(oa_papers)
+
+        # Google Scholar 检索（实验性）
+        if use_google_scholar and self.google_scholar:
+            gs_papers = self.google_scholar.search(
+                query, year_from, year_to, max_results=min(max_results, 20)
+            )
+            all_papers.extend(gs_papers)
+
+        # CNKI 检索（实验性）
+        if use_cnki and self.cnki:
+            cnki_papers = self.cnki.search(
+                query, year_from, year_to, max_results=min(max_results, 20)
+            )
+            all_papers.extend(cnki_papers)
+
+        # 万方检索（实验性）
+        if use_wanfang and self.wanfang:
+            wf_papers = self.wanfang.search(
+                query, year_from, year_to, max_results=min(max_results, 20)
+            )
+            all_papers.extend(wf_papers)
+
+        # 维普检索（实验性）
+        if use_vip and self.vip:
+            vip_papers = self.vip.search(
+                query, year_from, year_to, max_results=min(max_results, 20)
+            )
+            all_papers.extend(vip_papers)
 
         # 去重
         seen_dois = set()

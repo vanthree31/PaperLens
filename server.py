@@ -9,7 +9,7 @@ import yaml
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, Response
 from search_engine import SearchEngine
-from exporters import export_ris, export_bibtex, export_csv
+from exporters import export_ris, export_bibtex, export_csv, export_endnote_xml
 from ai_assistant import SearchAI, AnalysisAI
 
 
@@ -151,7 +151,7 @@ What is the core innovation of each? Which is more groundbreaking?
 What complementary relationships exist between these works? Do they collectively expose unresolved problems in the field?
 
 4. Recommendations for Future Research
-What are the most值得关注 questions for continuing in this direction? Which technical approaches are more promising?
+What are the most noteworthy questions for continuing in this direction? Which technical approaches are more promising?
 
 {papers_text}"""
 
@@ -319,6 +319,10 @@ def create_app():
             query=query, year_from=data.get("year_from", 2020), year_to=data.get("year_to", current_year),
             sort=data.get("sort", "relevance"), max_results=data.get("max_results", 50),
             use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
+            use_google_scholar=data.get("use_google_scholar", False),
+            use_cnki=data.get("use_cnki", False),
+            use_wanfang=data.get("use_wanfang", False),
+            use_vip=data.get("use_vip", False),
             journal=data.get("journal", "").strip(), field=data.get("field", "").strip(),
             mesh_term=data.get("mesh_term", "").strip(), pub_type=data.get("pub_type", "").strip(),
         )
@@ -343,6 +347,10 @@ def create_app():
             year_from=analysis.get("year_from", 2020), year_to=analysis.get("year_to", current_year),
             sort="relevance", max_results=data.get("max_results", 50),
             use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
+            use_google_scholar=data.get("use_google_scholar", False),
+            use_cnki=data.get("use_cnki", False),
+            use_wanfang=data.get("use_wanfang", False),
+            use_vip=data.get("use_vip", False),
             journal=analysis.get("journal", ""), field=analysis.get("field", ""),
             mesh_term=analysis.get("mesh_term", ""), pub_type=analysis.get("pub_type", ""),
         )
@@ -630,6 +638,75 @@ def create_app():
         except Exception as e:
             return jsonify({"error": f"获取相关论文失败: {e}"}), 500
 
+    @app.route("/api/keyword-network", methods=["POST"])
+    def keyword_network():
+        """关键词共现网络"""
+        papers = cached_papers["papers"]
+        if not papers:
+            return jsonify({"error": "没有文献数据"}), 400
+
+        from itertools import combinations
+        from collections import Counter
+
+        keyword_count = Counter()
+        cooccurrence = Counter()
+
+        for p in papers:
+            kws = [kw.strip().lower() for kw in p.keywords if kw.strip()]
+            kws = list(dict.fromkeys(kws))  # 去重保序
+            for kw in kws:
+                keyword_count[kw] += 1
+            for a, b in combinations(sorted(kws), 2):
+                cooccurrence[(a, b)] += 1
+
+        # 取出现频次 >= 2 的关键词
+        top_keywords = {kw for kw, cnt in keyword_count.items() if cnt >= 2}
+        if len(top_keywords) < 3:
+            # 不够则取 top 20
+            top_keywords = {kw for kw, _ in keyword_count.most_common(20)}
+
+        nodes = [{"id": kw, "label": kw, "count": keyword_count[kw]}
+                 for kw in top_keywords]
+        links = [{"source": a, "target": b, "weight": w}
+                 for (a, b), w in cooccurrence.items()
+                 if a in top_keywords and b in top_keywords and w >= 1]
+
+        return jsonify({"nodes": nodes, "links": links})
+
+    @app.route("/api/author-network", methods=["POST"])
+    def author_network():
+        """作者合作网络"""
+        papers = cached_papers["papers"]
+        if not papers:
+            return jsonify({"error": "没有文献数据"}), 400
+
+        from itertools import combinations
+        from collections import Counter
+
+        author_count = Counter()
+        cooccurrence = Counter()
+
+        for p in papers:
+            authors = [a.strip() for a in p.authors if a.strip()]
+            authors = list(dict.fromkeys(authors))  # 去重保序
+            for a in authors:
+                author_count[a] += 1
+            for a, b in combinations(sorted(authors), 2):
+                cooccurrence[(a, b)] += 1
+
+        # 取发文 >= 2 的作者
+        top_authors = {a for a, cnt in author_count.items() if cnt >= 2}
+        if len(top_authors) < 3:
+            top_authors = {a for a, _ in author_count.most_common(30)}
+
+        nodes = [{"id": a, "label": a, "count": author_count[a]}
+                 for a in top_authors]
+        links = [{"source": a, "target": b, "weight": w}
+                 for (a, b), w in cooccurrence.items()
+                 if a in top_authors and b in top_authors and w >= 1]
+
+        return jsonify({"nodes": nodes, "links": links})
+
     @app.route("/api/download-pdf", methods=["POST"])
     def download_pdf():
         """验证 OA 论文 PDF 链接并下载到指定目录"""
@@ -685,6 +762,8 @@ def create_app():
             content, filename, mime = export_bibtex(selected), f"lit_search_{safe_q}.bib", "application/x-bibtex"
         elif fmt == "csv":
             content, filename, mime = export_csv(selected), f"lit_search_{safe_q}.csv", "text/csv"
+        elif fmt == "endnotexml":
+            content, filename, mime = export_endnote_xml(selected), f"lit_search_{safe_q}.xml", "application/xml"
         else:
             return jsonify({"error": f"不支持的格式: {fmt}"}), 400
 

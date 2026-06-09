@@ -2,6 +2,22 @@
 
 All notable changes to PaperLens will be documented in this file.
 
+## [1.2.1] - 2026-06-09
+
+### Added
+- **New Data Sources**: Google Scholar (experimental), CNKI, Wanfang, VIP — all with β badge
+- **Keyword Co-occurrence Network**: visualize keyword relationships across search results
+- **Author Collaboration Network**: visualize co-authorship patterns
+- **EndNote XML Export**: additional export format for Mendeley/EndNote direct import
+- Missing i18n keys: `noOALink`, `analyzingResearchGaps`, `noDOILoadGraph`, `querying`, `query`
+- `applyLang()` now updates all citation graph panel buttons, hints, and legend text dynamically
+
+### Fixed
+- **i18n: English version had hardcoded Chinese strings** — fixed 15+ untranslated Chinese text in JS (error messages, status text, button labels)
+- **i18n: Citation graph overlay buttons broken** — static HTML used `${t(...)}` template literals that don't evaluate in HTML context; replaced with static text + `applyLang()` dynamic updates
+- **i18n: English prompt mixed Chinese** — "compare" mode AI prompt contained `最值得关注` in English context
+- **i18n: English translation used Chinese punctuation** — `enterGroupName` used Chinese colon `：` instead of `:`
+
 ## [1.2.0] - 2026-06-09
 
 ### Added
