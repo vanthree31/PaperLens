@@ -1671,11 +1671,13 @@ async function doAISearch() {
     setStatus(`${t("aiWaiting")} ${elapsed} ${t("seconds")}`);
   }, 1000);
 
-  const now = new Date().getFullYear();
+  // AI 搜索：只在用户明确指定年份时才发送，否则让 AI 决定
+  const yearFromVal = parseInt(document.getElementById("yearFrom").value);
+  const yearToVal = parseInt(document.getElementById("yearTo").value);
   const body = {
     query,
-    year_from: parseInt(document.getElementById("yearFrom").value) || now - 5,
-    year_to: parseInt(document.getElementById("yearTo").value) || now,
+    ...(yearFromVal ? { year_from: yearFromVal } : {}),
+    ...(yearToVal ? { year_to: yearToVal } : {}),
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
