@@ -99,8 +99,10 @@ class AIAssistant:
 
     def _extract_content(self, data: dict) -> str:
         if self.provider == "anthropic":
-            return data.get("content", [{}])[0].get("text", "")
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = data.get("content", [])
+            return content[0].get("text", "") if content else ""
+        choices = data.get("choices", [])
+        return choices[0].get("message", {}).get("content", "") if choices else ""
 
     def chat(self, message: str, context: str = "") -> str:
         if not self.is_available():
@@ -110,12 +112,13 @@ class AIAssistant:
             messages.append({"role": "system", "content": context})
         messages.append({"role": "user", "content": message})
         try:
-            r = self.session.post(self._get_endpoint(), headers=self._build_headers(),
-                                  json=self._build_payload(messages, stream=False), timeout=600)
+            r = requests.post(self._get_endpoint(), headers=self._build_headers(),
+                              json=self._build_payload(messages, stream=False), timeout=120)
             r.raise_for_status()
             return self._extract_content(r.json())
         except Exception as e:
-            return f"AI_ERROR:request_failed:{e}"
+            print(f"[ERROR] AI request failed: {e}")
+            return "AI_ERROR:request_failed"
 
     def chat_stream(self, message: str, context: str = ""):
         if not self.is_available():
@@ -126,9 +129,9 @@ class AIAssistant:
             messages.append({"role": "system", "content": context})
         messages.append({"role": "user", "content": message})
         try:
-            r = self.session.post(self._get_endpoint(), headers=self._build_headers(),
-                                  json=self._build_payload(messages, stream=True),
-                                  timeout=600, stream=True)
+            r = requests.post(self._get_endpoint(), headers=self._build_headers(),
+                              json=self._build_payload(messages, stream=True),
+                              timeout=120, stream=True)
             r.raise_for_status()
             for line in r.iter_lines():
                 if not line:
@@ -142,9 +145,11 @@ class AIAssistant:
                 try:
                     chunk = json.loads(data_str)
                     if "choices" in chunk:
-                        content = chunk["choices"][0].get("delta", {}).get("content", "")
-                        if content:
-                            yield content
+                        choices = chunk["choices"]
+                        if choices:
+                            content = choices[0].get("delta", {}).get("content", "")
+                            if content:
+                                yield content
                     elif chunk.get("type") == "content_block_delta":
                         content = chunk.get("delta", {}).get("text", "")
                         if content:
@@ -152,7 +157,8 @@ class AIAssistant:
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
         except Exception as e:
-            yield f"\nAI_ERROR:request_failed:{e}"
+            print(f"[ERROR] AI stream failed: {e}")
+            yield "\nAI_ERROR:request_failed"
 
 
 class SearchAI:
@@ -194,11 +200,17 @@ class SearchAI:
   "suggested_keywords": ["3-5个专业英文关键词"]
 }"""
 
+        # 截断过长输入
+        if len(user_input) > 2000:
+            user_input = user_input[:2000]
         result = self.assistant.chat(user_input + web_context, system_prompt)
         try:
-            json_match = re.search(r'\{[^{}]*\}', result, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
+            # 尝试从结果中提取 JSON（支持嵌套）
+            start = result.find('{')
+            if start >= 0:
+                decoder = json.JSONDecoder()
+                obj, _ = decoder.raw_decode(result[start:])
+                return obj
         except Exception:
             pass
         return {
@@ -206,6 +218,7 @@ class SearchAI:
             "year_from": 2020, "year_to": datetime.now().year,
             "mesh_term": "", "pub_type": "",
             "explanation": f"AI 解析失败，使用原始输入: {user_input}",
+            "suggested_keywords": [],
         }
 
 
@@ -235,7 +248,10 @@ class AnalysisAI:
     def summarize(self, papers: list) -> str:
         context = "你是一个学术文献分析助手。请用中文总结以下文献的主要发现和趋势。"
         paper_text = "\n\n".join([
-            f"标题: {p.title}\n作者: {', '.join(p.authors[:3])}\n期刊: {p.journal} ({p.year})\n摘要: {p.abstract[:300]}"
+            f"标题: {getattr(p, 'title', 'Unknown')}\n"
+            f"作者: {', '.join((getattr(p, 'authors', None) or [])[:3])}\n"
+            f"期刊: {getattr(p, 'journal', '')} ({getattr(p, 'year', '')})\n"
+            f"摘要: {(getattr(p, 'abstract', '') or '')[:300]}"
             for p in papers[:10]
         ])
         return self.chat(f"请总结以下文献的主要研究方向和关键发现:\n\n{paper_text}", context)

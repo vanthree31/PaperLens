@@ -44,15 +44,25 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /**
+   * 发送消息并添加超时保护
+   */
+  async function sendMessageWithTimeout(message, timeoutMs = 10000) {
+    return Promise.race([
+      chrome.runtime.sendMessage(message),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+    ]);
+  }
+
+  /**
    * 检查 PaperLens 连接状态
    */
   async function checkConnection() {
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'checkConnection' });
+      const response = await sendMessageWithTimeout({ action: 'checkConnection' }, 5000);
       const dot = connectionStatus.querySelector('.status-dot');
       const text = connectionStatus.querySelector('.status-text');
 
-      if (response.connected) {
+      if (response && response.connected) {
         dot.className = 'status-dot connected';
         text.textContent = '已连接';
       } else {
@@ -135,10 +145,15 @@ document.addEventListener('DOMContentLoaded', () => {
     showLoading('正在查询论文...');
 
     try {
-      const response = await chrome.runtime.sendMessage({
+      const response = await sendMessageWithTimeout({
         action: 'queryPaper',
         doi: doi
-      });
+      }, 15000);
+
+      if (!response) {
+        showError('未收到响应，请重试');
+        return;
+      }
 
       if (response.success) {
         currentPaper = response.paper;
@@ -147,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showError(response.error || '查询失败');
       }
     } catch (error) {
-      showError('无法连接到 PaperLens，请确保应用正在运行');
+      showError(error.message === 'timeout' ? '查询超时，请重试' : '无法连接到 PaperLens，请确保应用正在运行');
     }
   }
 

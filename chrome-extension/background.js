@@ -7,7 +7,8 @@ const PAPERLENS_API = 'http://127.0.0.1:51234';
 // 监听来自 content script 的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'doisFound') {
-    // 更新扩展图标 badge
+    // 更新扩展图标 badge（需要检查 sender.tab 是否存在）
+    if (!sender.tab) return;
     const tabId = sender.tab.id;
     const count = request.count;
 
@@ -62,12 +63,17 @@ async function queryPaper(doi) {
   const response = await fetch(`${PAPERLENS_API}/api/paper-by-doi`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ doi })
+    body: JSON.stringify({ doi }),
+    signal: AbortSignal.timeout(15000)
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || '查询失败');
+    let errorMsg = '查询失败';
+    try {
+      const error = await response.json();
+      errorMsg = error.error || errorMsg;
+    } catch {}
+    throw new Error(errorMsg);
   }
 
   const data = await response.json();
@@ -95,12 +101,17 @@ async function addToCollection(paper) {
         keywords: paper.keywords
       },
       group_id: 'default'
-    })
+    }),
+    signal: AbortSignal.timeout(10000)
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || '收藏失败');
+    let errorMsg = '收藏失败';
+    try {
+      const error = await response.json();
+      errorMsg = error.error || errorMsg;
+    } catch {}
+    throw new Error(errorMsg);
   }
 
   return await response.json();
@@ -126,7 +137,9 @@ async function checkConnection() {
  */
 async function syncToZotero(paper) {
   // 先获取 Zotero 配置
-  const configResponse = await fetch(`${PAPERLENS_API}/api/zotero/config`);
+  const configResponse = await fetch(`${PAPERLENS_API}/api/zotero/config`, {
+    signal: AbortSignal.timeout(5000)
+  });
   if (!configResponse.ok) {
     throw new Error('无法获取 Zotero 配置');
   }
@@ -153,12 +166,17 @@ async function syncToZotero(paper) {
         abstract: paper.abstract,
         keywords: paper.keywords
       }]
-    })
+    }),
+    signal: AbortSignal.timeout(30000)
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || '同步失败');
+    let errorMsg = '同步失败';
+    try {
+      const error = await response.json();
+      errorMsg = error.error || errorMsg;
+    } catch {}
+    throw new Error(errorMsg);
   }
 
   return await response.json();

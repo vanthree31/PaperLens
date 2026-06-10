@@ -19,7 +19,9 @@
 
 import re
 import time
+import html
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List
 import requests
@@ -138,10 +140,10 @@ def build_pubmed_query(keywords: str, journal: str = "", field: str = "",
     if pub_type:
         parts.append(f"{pub_type}[pt]")
 
-    # 年份范围
+    # 年份范围（year_from=0 视为无下限，year_to=0 视为无上限）
+    y_from = year_from if year_from else 1900
+    y_to = year_to if year_to else datetime.now().year
     if year_from or year_to:
-        y_from = year_from if year_from else 1900
-        y_to = year_to if year_to else 2030
         parts.append(f"{y_from}:{y_to}[pdat]")
 
     return " AND ".join(parts) if parts else keywords
@@ -253,7 +255,9 @@ class PubMedSearch:
     def _parse_xml(self, xml_text: str) -> list:
         papers = []
         try:
-            root = ET.fromstring(xml_text)
+            # 使用安全的 XML 解析器，禁用外部实体
+            parser = ET.XMLParser(resolve_entities=False)
+            root = ET.fromstring(xml_text, parser=parser)
         except ET.ParseError:
             return papers
 
@@ -419,12 +423,14 @@ class OpenAlexSearch:
                     if oa_doi:
                         doi_map[oa_doi] = w
 
-                # 精确匹配补充信息 [Bug #12]：始终更新引用数
+                # 精确匹配补充信息：仅在 OpenAlex 有有效数据时更新
                 for p in batch:
                     doi_key = p.doi.lower()
                     if doi_key in doi_map:
                         w = doi_map[doi_key]
-                        p.citation_count = w.get("cited_by_count", 0)
+                        oa_citations = w.get("cited_by_count", 0)
+                        if oa_citations > 0:
+                            p.citation_count = oa_citations
                         if not p.oa_url:
                             oa = w.get("open_access", {})
                             p.oa_url = oa.get("oa_url", "") or ""
@@ -436,11 +442,20 @@ class OpenAlexSearch:
 
         return papers
 
+    @staticmethod
+    def _sanitize_text(text: str) -> str:
+        """清理文本：去除 HTML 标签"""
+        if not text:
+            return ""
+        # 去掉 HTML 标签（OpenAlex 返回的标题是纯文本，标签是残留的 markup）
+        clean = re.sub(r'<[^>]+>', '', text)
+        return clean.strip()
+
     def _parse_results(self, results) -> list:
         papers = []
         for w in results:
             p = Paper(source="openalex")
-            p.title = re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip()
+            p.title = self._sanitize_text(w.get("title", "") or "")
             loc = w.get("primary_location") or {}
             src = loc.get("source") or {}
             p.journal = src.get("display_name", "") or ""
@@ -493,7 +508,7 @@ class OpenAlexSearch:
             if r.status_code == 200:
                 w = r.json()
                 p = Paper(source="openalex")
-                p.title = re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip()
+                p.title = self._sanitize_text(w.get("title", "") or "")
                 loc = w.get("primary_location") or {}
                 src = loc.get("source") or {}
                 p.journal = src.get("display_name", "") or ""
@@ -1058,6 +1073,20 @@ class SearchEngine:
                 seen_dois.add(key)
                 unique.append(p)
 
+        # 年份过滤：确保结果在指定范围内
+        if year_from or year_to:
+            filtered = []
+            for p in unique:
+                # year=0 表示年份未知，当年份过滤激活时剔除
+                if not p.year:
+                    continue
+                if year_from and p.year < year_from:
+                    continue
+                if year_to and p.year > year_to:
+                    continue
+                filtered.append(p)
+            unique = filtered
+
         # 补充引用次数
         if self.openalex:
             unique = self.openalex.enrich_with_citations(unique)
@@ -1083,3 +1112,13 @@ class SearchEngine:
             if papers:
                 return papers[0]
         return None
+
+    def close(self):
+        """关闭所有搜索源的 Session"""
+        for source in [self.pubmed, self.openalex, self.google_scholar,
+                       self.cnki, self.wanfang, self.vip, self.bing_academic]:
+            if source and hasattr(source, 'session'):
+                try:
+                    source.session.close()
+                except Exception:
+                    pass

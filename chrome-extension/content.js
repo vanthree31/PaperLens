@@ -97,16 +97,21 @@
     if (request.action === 'detectDois') {
       const dois = detectDois();
       sendResponse({ dois });
+      return true;
     }
-    return true;
   });
 
   // 页面加载完成后通知 background
-  const dois = detectDois();
-  if (dois.length > 0) {
-    chrome.runtime.sendMessage({
-      action: 'doisFound',
-      count: dois.length
-    });
+  try {
+    const dois = detectDois();
+    if (dois.length > 0) {
+      chrome.runtime.sendMessage({
+        action: 'doisFound',
+        count: dois.length
+      });
+    }
+  } catch (e) {
+    // 扩展上下文可能已失效，静默处理
+    console.debug('PaperLens: Failed to send DOI count', e);
   }
 })();

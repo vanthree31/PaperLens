@@ -68,7 +68,11 @@ def save_config(config):
 
 def _get_user_data_path(filename: str) -> str:
     """获取用户数据文件路径"""
-    return os.path.join(_get_app_data_dir(), filename)
+    # 防止路径穿越：只允许纯文件名
+    safe_name = os.path.basename(filename)
+    if not safe_name or safe_name != filename:
+        raise ValueError(f"Invalid filename: {filename}")
+    return os.path.join(_get_app_data_dir(), safe_name)
 
 
 def _escape_paper(paper) -> dict:
@@ -327,9 +331,12 @@ def create_app():
         if not query:
             return jsonify({"error": "no_query"}), 400
         current_year = datetime.now().year
-        max_results = min(int(data.get("max_results", 50)), 200)
-        year_from = max(1900, min(int(data.get("year_from", 2020)), current_year))
-        year_to = max(year_from, min(int(data.get("year_to", current_year)), current_year))
+        try:
+            max_results = min(int(data.get("max_results", 50)), 200)
+            year_from = max(1900, min(int(data.get("year_from", 2020)), current_year))
+            year_to = max(year_from, min(int(data.get("year_to", current_year)), current_year))
+        except (ValueError, TypeError):
+            max_results, year_from, year_to = 50, 2020, current_year
         try:
             papers = engine.search(
                 query=query, year_from=year_from, year_to=year_to,
@@ -345,7 +352,7 @@ def create_app():
             )
         except Exception as e:
             print(f"[ERROR] Search failed: {e}")
-            return jsonify({"error": "search_failed", "detail": str(e)}), 500
+            return jsonify({"error": "search_failed"}), 500
         with cache_lock:
             cached_papers["papers"] = papers
             cached_papers["query"] = query
@@ -364,10 +371,21 @@ def create_app():
         try:
             analysis = search_ai.analyze_query(user_input)
             current_year = datetime.now().year
-            max_results = min(int(data.get("max_results", 50)), 200)
+            try:
+                max_results = min(int(data.get("max_results", 50)), 200)
+            except (ValueError, TypeError):
+                max_results = 50
+            # 钳位 AI 返回的年份参数
+            ai_year_from = analysis.get("year_from", 2020)
+            ai_year_to = analysis.get("year_to", current_year)
+            try:
+                year_from = max(1900, min(int(ai_year_from), current_year))
+                year_to = max(year_from, min(int(ai_year_to), current_year))
+            except (ValueError, TypeError):
+                year_from, year_to = 2020, current_year
             papers = engine.search(
                 query=analysis.get("query", user_input),
-                year_from=analysis.get("year_from", 2020), year_to=analysis.get("year_to", current_year),
+                year_from=year_from, year_to=year_to,
                 sort="relevance", max_results=max_results,
                 use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
                 use_google_scholar=data.get("use_google_scholar", False),
@@ -380,7 +398,7 @@ def create_app():
             )
         except Exception as e:
             print(f"[ERROR] AI search failed: {e}")
-            return jsonify({"error": "ai_search_failed", "detail": str(e)}), 500
+            return jsonify({"error": "ai_search_failed"}), 500
         with cache_lock:
             cached_papers["papers"] = papers
             cached_papers["query"] = analysis.get("query", user_input)
@@ -396,7 +414,10 @@ def create_app():
             return jsonify({"error": "ai_analysis_not_enabled"}), 400
 
         data = request.json or {}
-        indices = sorted(data.get("indices", []))
+        indices = data.get("indices", [])
+        if not isinstance(indices, list):
+            return jsonify({"error": "invalid_indices"}), 400
+        indices = sorted(set(indices))
         mode = data.get("mode", "summary")
         if mode not in ("summary", "detail", "compare", "novelty"):
             mode = "summary"
@@ -404,7 +425,8 @@ def create_app():
         use_stream = data.get("stream", False)
         lang = data.get("lang", "zh")
 
-        papers = cached_papers["papers"]
+        with cache_lock:
+            papers = list(cached_papers["papers"])
         if not papers:
             return jsonify({"error": "no_papers"}), 400
         if not indices:
@@ -416,8 +438,9 @@ def create_app():
 
         paper_ids = "_".join(sorted(set(p.doi or p.pmid or str(i) for i, p in zip(indices, selected))))
         cache_key = f"{mode}_{lang}_{paper_ids}"
-        if not force_refresh and cache_key in ai_cache and ai_cache[cache_key]:
-            return jsonify({"response": ai_cache[cache_key], "count": len(selected), "mode": mode, "cached": True})
+        with cache_lock:
+            if not force_refresh and cache_key in ai_cache and ai_cache[cache_key]:
+                return jsonify({"response": ai_cache[cache_key], "count": len(selected), "mode": mode, "cached": True})
 
         prompt = _build_paper_prompt(selected, mode, lang)
         if lang == "en":
@@ -433,13 +456,15 @@ def create_app():
                     yield chunk
                 result = "".join(full_response)
                 if result and not result.startswith("AI_ERROR:"):
-                    ai_cache[cache_key] = result
+                    with cache_lock:
+                        ai_cache[cache_key] = result
             return Response(generate(), mimetype="text/plain; charset=utf-8",
                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
         result = analysis_ai.chat(prompt, context)
         if result and not result.startswith("AI_ERROR:"):
-            ai_cache[cache_key] = result
+            with cache_lock:
+                ai_cache[cache_key] = result
         return jsonify({"response": result, "count": len(selected), "mode": mode, "cached": False})
 
     @app.route("/api/history", methods=["GET"])
@@ -449,8 +474,8 @@ def create_app():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     return jsonify(json.load(f))
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Failed to read history.json: {e}")
         return jsonify([])
 
     @app.route("/api/history", methods=["POST"])
@@ -462,7 +487,8 @@ def create_app():
                 json.dump(data[:30], f, ensure_ascii=False)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/preferences", methods=["GET"])
     def get_preferences():
@@ -484,7 +510,8 @@ def create_app():
                 json.dump(data, f, ensure_ascii=False)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/batch-doi", methods=["POST"])
     def batch_doi():
@@ -580,7 +607,7 @@ def create_app():
             referenced_papers = []
             if refs:
                 # 取前 20 个引用
-                ref_ids = "|".join([r.split("/")[-1] for r in refs[:20]])
+                ref_ids = ",".join([r.split("/")[-1] for r in refs[:20]])
                 ref_params = {**params, "filter": f"openalex:{ref_ids}", "per_page": 20}
                 r_refs = req.get("https://api.openalex.org/works", params=ref_params, timeout=15)
                 if r_refs.status_code == 200:
@@ -598,7 +625,8 @@ def create_app():
                 "referenced": referenced_papers,
             })
         except Exception as e:
-            return jsonify({"error": "citation_fetch_failed", "detail": str(e)}), 500
+            print(f"[ERROR] Citation fetch failed: {e}")
+            return jsonify({"error": "citation_fetch_failed"}), 500
 
     @app.route("/api/related-papers", methods=["POST"])
     def related_papers():
@@ -666,12 +694,14 @@ def create_app():
 
             return jsonify({"papers": results, "source_doi": doi})
         except Exception as e:
-            return jsonify({"error": "related_papers_failed", "detail": str(e)}), 500
+            print(f"[ERROR] Related papers failed: {e}")
+            return jsonify({"error": "related_papers_failed"}), 500
 
     @app.route("/api/keyword-network", methods=["POST"])
     def keyword_network():
         """关键词共现网络"""
-        papers = cached_papers["papers"]
+        with cache_lock:
+            papers = list(cached_papers["papers"])
         if not papers:
             return jsonify({"error": "no_papers_data"}), 400
 
@@ -706,7 +736,8 @@ def create_app():
     @app.route("/api/author-network", methods=["POST"])
     def author_network():
         """作者合作网络"""
-        papers = cached_papers["papers"]
+        with cache_lock:
+            papers = list(cached_papers["papers"])
         if not papers:
             return jsonify({"error": "no_papers_data"}), 400
 
@@ -740,9 +771,9 @@ def create_app():
     @app.route("/api/download-pdf", methods=["POST"])
     def download_pdf():
         """验证 OA 论文 PDF 链接并下载到指定目录"""
-        import urllib.request
         import ipaddress
         from urllib.parse import urlparse
+        import requests as req_lib
         data = request.json or {}
         url = data.get("url", "").strip()
         title = data.get("title", "paper")[:50]
@@ -751,31 +782,63 @@ def create_app():
         if not url:
             return jsonify({"error": "no_download_link"}), 400
 
-        # SSRF 防护：校验协议和内网 IP
-        try:
-            parsed = urlparse(url)
-            if parsed.scheme not in ("http", "https"):
-                return jsonify({"error": "invalid_url_scheme"}), 400
-            hostname = parsed.hostname or ""
+        # SSRF 防护：校验协议和内网 IP（含重定向检查）
+        def _check_url_safety(target_url):
+            """检查 URL 是否安全（非内网），跟随重定向时递归检查"""
             try:
-                ip = ipaddress.ip_address(hostname)
-                if ip.is_private or ip.is_loopback or ip.is_link_local:
-                    return jsonify({"error": "blocked_internal_url"}), 403
-            except ValueError:
-                # hostname 不是 IP，是域名，允许通过
-                pass
-        except Exception:
-            return jsonify({"error": "invalid_url"}), 400
+                parsed = urlparse(target_url)
+                if parsed.scheme not in ("http", "https"):
+                    return False, "invalid_url_scheme"
+                hostname = parsed.hostname or ""
+                try:
+                    ip = ipaddress.ip_address(hostname)
+                    if ip.is_private or ip.is_loopback or ip.is_link_local:
+                        return False, "blocked_internal_url"
+                except ValueError:
+                    pass
+                return True, ""
+            except Exception:
+                return False, "invalid_url"
+
+        safe, err = _check_url_safety(url)
+        if not safe:
+            return jsonify({"error": err}), 403 if err == "blocked_internal_url" else 400
 
         safe_title = re.sub(r'[^\w\-]', '_', title).strip('_') or "paper"
         filename = f"{safe_title}.pdf"
 
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Range": "bytes=0-7"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                header = resp.read(8)
-                if not header.startswith(b'%PDF'):
-                    return jsonify({"error": "not_pdf"}), 400
+            # 使用 requests 库，禁用自动重定向以手动验证重定向目标
+            resp = req_lib.get(url, headers={"User-Agent": "Mozilla/5.0"},
+                              timeout=15, stream=True, allow_redirects=False)
+            # 手动处理重定向，检查每个重定向目标
+            redirect_count = 0
+            current_url = url
+            while resp.is_redirect and redirect_count < 5:
+                redirect_url = resp.headers.get("Location", "")
+                if not redirect_url:
+                    break
+                # 相对路径转绝对路径
+                if redirect_url.startswith("/"):
+                    from urllib.parse import urljoin
+                    redirect_url = urljoin(current_url, redirect_url)
+                safe, err = _check_url_safety(redirect_url)
+                if not safe:
+                    return jsonify({"error": err}), 403 if err == "blocked_internal_url" else 400
+                current_url = redirect_url
+                resp = req_lib.get(redirect_url, headers={"User-Agent": "Mozilla/5.0"},
+                                  timeout=15, stream=True, allow_redirects=False)
+                redirect_count += 1
+
+            # 验证 PDF 头
+            header = resp.content[:8] if resp.content else b""
+            if not header.startswith(b'%PDF'):
+                return jsonify({"error": "not_pdf"}), 400
+
+            # 检查文件大小限制（100MB）
+            content_length = resp.headers.get("Content-Length")
+            if content_length and int(content_length) > 100 * 1024 * 1024:
+                return jsonify({"error": "file_too_large"}), 400
 
             if save_to_disk:
                 export_dir = load_config().get("export_path", "")
@@ -784,14 +847,31 @@ def create_app():
                 try:
                     os.makedirs(export_dir, exist_ok=True)
                     filepath = os.path.join(export_dir, filename)
-                    urllib.request.urlretrieve(url, filepath)
+                    # 验证路径安全
+                    real_export = os.path.realpath(export_dir)
+                    real_filepath = os.path.realpath(filepath)
+                    if not real_filepath.startswith(real_export):
+                        return jsonify({"error": "invalid_path"}), 400
+                    # 流式写入，限制大小
+                    total_size = 0
+                    max_size = 100 * 1024 * 1024  # 100MB
+                    with open(filepath, "wb") as f:
+                        for chunk in resp.iter_content(chunk_size=8192):
+                            total_size += len(chunk)
+                            if total_size > max_size:
+                                f.close()
+                                os.remove(filepath)
+                                return jsonify({"error": "file_too_large"}), 400
+                            f.write(chunk)
                     return jsonify({"ok": True, "path": filepath, "filename": filename})
                 except Exception as e:
-                    return jsonify({"error": "download_failed", "detail": str(e)}), 500
+                    print(f"[ERROR] PDF download failed: {e}")
+                    return jsonify({"error": "download_failed"}), 500
 
             return jsonify({"filename": filename, "url": url})
         except Exception as e:
-            return jsonify({"error": "link_verify_failed", "detail": str(e)}), 500
+            print(f"[ERROR] PDF link verify failed: {e}")
+            return jsonify({"error": "link_verify_failed"}), 500
 
     @app.route("/api/reading-history", methods=["POST"])
     def save_reading_history():
@@ -833,7 +913,8 @@ def create_app():
                 json.dump(history, f, ensure_ascii=False)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/recommendations", methods=["GET"])
     def get_recommendations():
@@ -980,12 +1061,16 @@ def create_app():
         data = request.json or {}
         fmt = data.get("format", "ris")
         indices = data.get("indices", [])
+        if not isinstance(indices, list):
+            return jsonify({"error": "invalid_indices"}), 400
         save_to_disk = data.get("save_to_disk", False)
-        papers = cached_papers["papers"]
+        with cache_lock:
+            papers = list(cached_papers["papers"])
+            query = cached_papers["query"]
         if not papers:
             return jsonify({"error": "no_export_data"}), 400
         selected = [papers[i] for i in indices if 0 <= i < len(papers)] if indices else papers
-        safe_q = re.sub(r'[^\w\-]', '_', cached_papers['query'][:40]).strip('_') or "results"
+        safe_q = re.sub(r'[^\w\-]', '_', query[:40]).strip('_') or "results"
         if fmt == "ris":
             content, filename, mime = export_ris(selected), f"lit_search_{safe_q}.ris", "application/x-research-info-systems"
         elif fmt == "bibtex":
@@ -1008,7 +1093,8 @@ def create_app():
                     f.write(content)
                 return jsonify({"ok": True, "path": filepath, "filename": filename})
             except Exception as e:
-                return jsonify({"error": str(e)}), 500
+                print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
         return jsonify({"content": content, "filename": filename, "mime": mime})
 
@@ -1068,7 +1154,8 @@ def create_app():
                 json.dump(collections, f, ensure_ascii=False, indent=2)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/collections", methods=["DELETE"])
     def remove_collection():
@@ -1094,7 +1181,8 @@ def create_app():
                 json.dump(collections, f, ensure_ascii=False, indent=2)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/collections/groups", methods=["POST"])
     def save_collection_groups():
@@ -1116,7 +1204,8 @@ def create_app():
                 json.dump(collections, f, ensure_ascii=False, indent=2)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/collections/groups", methods=["DELETE"])
     def delete_collection_group():
@@ -1150,7 +1239,8 @@ def create_app():
                 json.dump(collections, f, ensure_ascii=False, indent=2)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/data-dir", methods=["GET"])
     def get_data_dir():
@@ -1158,13 +1248,15 @@ def create_app():
 
     @app.route("/api/open-data-dir", methods=["POST"])
     def open_data_dir():
-        import subprocess
         data_dir = _get_app_data_dir()
         try:
-            subprocess.Popen(["explorer", data_dir])
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir, exist_ok=True)
+            os.startfile(data_dir)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Failed to open data dir: {e}")
+            return jsonify({"error": "open_dir_failed"}), 500
 
     @app.route("/api/config", methods=["GET"])
     def get_config():
@@ -1177,14 +1269,18 @@ def create_app():
             cfg = load_config()
             _deep_update(cfg, data)
             save_config(cfg)
+            # 线程安全地更新引擎实例
+            new_engine = SearchEngine(cfg)
+            new_search_ai = SearchAI(cfg)
+            new_analysis_ai = AnalysisAI(cfg)
             nonlocal engine, search_ai, analysis_ai
-            engine = SearchEngine(cfg)
-            search_ai = SearchAI(cfg)
-            analysis_ai = AnalysisAI(cfg)
+            engine = new_engine
+            search_ai = new_search_ai
+            analysis_ai = new_analysis_ai
             return jsonify({"ok": True})
         except Exception as e:
             print(f"[ERROR] Config update failed: {e}")
-            return jsonify({"error": "config_save_failed", "detail": str(e)}), 500
+            return jsonify({"error": "config_save_failed"}), 500
 
     @app.route("/api/ai/chat", methods=["POST"])
     def ai_chat():
@@ -1195,20 +1291,21 @@ def create_app():
             return jsonify({"response": analysis_ai.chat(data.get("message", ""), data.get("context", ""))})
         except Exception as e:
             print(f"[ERROR] AI chat failed: {e}")
-            return jsonify({"error": "request_failed", "detail": str(e)}), 500
+            return jsonify({"error": "request_failed"}), 500
 
     @app.route("/api/ai/summarize", methods=["POST"])
     def ai_summarize():
         if not analysis_ai.is_available():
             return jsonify({"error": "ai_analysis_not_enabled"}), 400
-        papers = cached_papers["papers"]
+        with cache_lock:
+            papers = list(cached_papers["papers"])
         if not papers:
             return jsonify({"error": "no_papers"}), 400
         try:
             return jsonify({"response": analysis_ai.summarize(papers)})
         except Exception as e:
             print(f"[ERROR] AI summarize failed: {e}")
-            return jsonify({"error": "request_failed", "detail": str(e)}), 500
+            return jsonify({"error": "request_failed"}), 500
 
     @app.route("/api/zotero/test", methods=["POST"])
     def zotero_test():
@@ -1218,6 +1315,8 @@ def create_app():
         user_id = data.get("user_id", "").strip()
         if not api_key or not user_id:
             return jsonify({"error": "missing_zotero_config"}), 400
+        if not user_id.isdigit():
+            return jsonify({"error": "invalid_user_id"}), 400
 
         try:
             import requests as req
@@ -1229,9 +1328,10 @@ def create_app():
             elif r.status_code == 403:
                 return jsonify({"error": "zotero_auth_failed"}), 403
             else:
-                return jsonify({"error": "zotero_connection_failed", "status": r.status_code}), 400
+                return jsonify({"error": "zotero_connection_failed"}), 400
         except Exception as e:
-            return jsonify({"error": "zotero_connection_failed", "detail": str(e)}), 500
+            print(f"[ERROR] Zotero test failed: {e}")
+            return jsonify({"error": "zotero_connection_failed"}), 500
 
     @app.route("/api/zotero/collections", methods=["POST"])
     def zotero_get_collections():
@@ -1241,6 +1341,8 @@ def create_app():
         user_id = data.get("user_id", "").strip()
         if not api_key or not user_id:
             return jsonify({"error": "missing_zotero_config"}), 400
+        if not user_id.isdigit():
+            return jsonify({"error": "invalid_user_id"}), 400
 
         try:
             import requests as req
@@ -1262,7 +1364,8 @@ def create_app():
 
             return jsonify({"collections": collections})
         except Exception as e:
-            return jsonify({"error": "zotero_fetch_failed", "detail": str(e)}), 500
+            print(f"[ERROR] Zotero collections fetch failed: {e}")
+            return jsonify({"error": "zotero_fetch_failed"}), 500
 
     @app.route("/api/zotero/sync", methods=["POST"])
     def zotero_sync():
@@ -1275,6 +1378,8 @@ def create_app():
 
         if not api_key or not user_id:
             return jsonify({"error": "missing_zotero_config"}), 400
+        if not user_id.isdigit():
+            return jsonify({"error": "invalid_user_id"}), 400
         if not papers:
             return jsonify({"error": "no_papers"}), 400
 
@@ -1328,18 +1433,20 @@ def create_app():
                     "total": len(items),
                 })
             else:
-                return jsonify({"error": "zotero_sync_failed", "status": r.status_code}), 400
+                return jsonify({"error": "zotero_sync_failed"}), 400
         except Exception as e:
-            return jsonify({"error": "zotero_sync_failed", "detail": str(e)}), 500
+            print(f"[ERROR] Zotero sync failed: {e}")
+            return jsonify({"error": "zotero_sync_failed"}), 500
 
     @app.route("/api/zotero/config", methods=["GET"])
     def zotero_get_config():
-        """获取 Zotero 配置"""
+        """获取 Zotero 配置（脱敏）"""
         path = _get_user_data_path("zotero_config.json")
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
-                    return jsonify(json.load(f))
+                    cfg = json.load(f)
+                    return jsonify(_mask_keys(cfg))
             except Exception:
                 pass
         return jsonify({"api_key": "", "user_id": ""})
@@ -1357,7 +1464,8 @@ def create_app():
                 }, f, ensure_ascii=False)
             return jsonify({"ok": True})
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"[ERROR] Operation failed: {e}")
+            return jsonify({"error": "operation_failed"}), 500
 
     return app
 

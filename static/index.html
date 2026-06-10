@@ -1644,11 +1644,9 @@ async function doSearch() {
   } catch (e) {
     showToast(`${t("networkError")}: ${e.message}`);
     setStatus(t("networkErrorRetry"), "network_error");
-    btn.textContent = t("retry");
-    btn.onclick = () => { btn.onclick = doSmartSearch; doSmartSearch(); };
   } finally {
     btn.disabled = false;
-    if (!btn.onclick || btn.onclick === doSmartSearch) btn.textContent = t("search");
+    btn.textContent = t("search");
   }
 }
 
@@ -1770,10 +1768,10 @@ function renderResults() {
     const idx = start + i;
     const isChecked = checkedSet.has(idx);
     const isFavorited = collectionsData.items && collectionsData.items.some(item => item.doi && p.doi && item.doi.toLowerCase() === p.doi.toLowerCase());
-    const authors = p.authors.length > 3 ? p.authors.slice(0, 3).join(", ") + " et al." : p.authors.join(", ");
-    const doiLink = p.doi ? `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" style="color:var(--primary);text-decoration:none">${p.doi}</a>` : "";
+    const authors = p.authors.length > 3 ? p.authors.slice(0, 3).map(a => escapeHtml(a)).join(", ") + " et al." : p.authors.map(a => escapeHtml(a)).join(", ");
+    const doiLink = p.doi ? `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" style="color:var(--primary);text-decoration:none">${escapeHtml(p.doi)}</a>` : "";
     const safeOaUrl = p.oa_url && /^https?:\/\//i.test(p.oa_url) ? p.oa_url : "";
-    const oaLink = safeOaUrl ? `<a href="${safeOaUrl}" target="_blank" class="badge badge-green">OA</a>` : "";
+    const oaLink = safeOaUrl ? `<a href="${escapeHtml(safeOaUrl)}" target="_blank" class="badge badge-green">OA</a>` : "";
     const citationTag = p.citation_count > 0 ? `<span class="badge">${t("cited")} ${p.citation_count}</span>` : "";
 
     html += `
@@ -1782,24 +1780,24 @@ function renderResults() {
         <input type="checkbox" class="paper-checkbox" data-idx="${idx}"${isChecked ? ' checked' : ''}>
         <div class="paper-content">
           <div style="display:flex;align-items:flex-start;gap:8px">
-            <div class="paper-title" onclick="toggleAbstract(${idx})" style="flex:1">${p.title || t("noTitle")}</div>
+            <div class="paper-title" onclick="toggleAbstract(${idx})" style="flex:1">${escapeHtml(p.title) || t("noTitle")}</div>
             <button class="star-btn${isFavorited ? ' active' : ''}" onclick="toggleFavorite(${idx}, this)" title="${isFavorited ? t('removeFromCollection') : t('addToCollection')}">${isFavorited ? '★' : '☆'}</button>
           </div>
           <div class="paper-meta">
             <span class="tag">${authors}</span>
-            <span class="tag"><b>${p.journal || ""}</b></span>
+            <span class="tag"><b>${escapeHtml(p.journal)}</b></span>
             <span class="tag">(${p.year || "?"})</span>
-            ${p.pmid ? `<span class="tag">PMID:${p.pmid}</span>` : ""}
+            ${p.pmid ? `<span class="tag">PMID:${escapeHtml(p.pmid)}</span>` : ""}
             ${doiLink ? `<span class="tag">DOI:${doiLink}</span>` : ""}
             ${citationTag}
             ${oaLink}
           </div>
-          <div class="paper-abstract" id="abs-${idx}">${p.abstract || `<i style='color:#94a3b8'>${t("noAbstract")}</i>`}</div>
+          <div class="paper-abstract" id="abs-${idx}">${p.abstract ? escapeHtml(p.abstract) : `<i style='color:#94a3b8'>${t("noAbstract")}</i>`}</div>
           <div class="paper-actions">
             <button class="btn btn-sm btn-outline" onclick="toggleAbstract(${idx})">${t("abstract")}</button>
             ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="recordReadingAction('view', allPapers[${idx}]); window.open('https://doi.org/${encodeURIComponent(p.doi)}')">${t("original")}</button>` : ""}
-            ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="recordReadingAction('download', allPapers[${idx}]); downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title)}')">${t("downloadPDF")}</button>` : ""}
-            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="showCitationGraph('${encodeURIComponent(p.doi)}','${encodeURIComponent(p.title)}')">${t("citationGraph")}</button>` : ""}
+            ${p.oa_url ? `<button class="btn btn-sm btn-outline" onclick="recordReadingAction('download', allPapers[${idx}]); downloadOA('${encodeURIComponent(p.oa_url)}','${encodeURIComponent(p.title || '')}')">${t("downloadPDF")}</button>` : ""}
+            ${p.doi ? `<button class="btn btn-sm btn-outline" onclick="showCitationGraph('${encodeURIComponent(p.doi)}','${encodeURIComponent(p.title || '')}')">${t("citationGraph")}</button>` : ""}
           </div>
         </div>
       </div>
@@ -2755,15 +2753,15 @@ function renderCollections() {
   }
   let html = '';
   items.forEach((item, i) => {
-    const authors = (item.authors || []).length > 2 ? item.authors.slice(0, 2).join(", ") + " et al." : (item.authors || []).join(", ");
+    const authors = (item.authors || []).length > 2 ? item.authors.slice(0, 2).map(a => escapeHtml(a)).join(", ") + " et al." : (item.authors || []).map(a => escapeHtml(a)).join(", ");
     const citedText = item.citation_count > 0 ? `· ${t("cited")} ${item.citation_count}` : '';
     html += `
     <div class="collection-item" onclick="viewCollectionItem('${encodeURIComponent(item.doi)}')">
-      <div class="title">${item.title || t("noTitle")}</div>
-      <div class="meta">${authors} · ${item.journal || ""} (${item.year || "?"}) ${citedText}</div>
+      <div class="title">${escapeHtml(item.title) || t("noTitle")}</div>
+      <div class="meta">${authors} · ${escapeHtml(item.journal)} (${item.year || "?"}) ${citedText}</div>
       <div class="actions">
         ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();window.open('https://doi.org/${encodeURIComponent(item.doi)}')">${t("original")}</button>` : ''}
-        ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showCitationGraph('${encodeURIComponent(item.doi)}','${encodeURIComponent(item.title)}')">${t("citationGraph")}</button>` : ''}
+        ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showCitationGraph('${encodeURIComponent(item.doi)}','${encodeURIComponent(item.title || '')}')">${t("citationGraph")}</button>` : ''}
         <button class="btn btn-sm btn-outline" style="color:var(--danger)" onclick="event.stopPropagation();removeFromCollection('${encodeURIComponent(item.doi)}')">${t("remove")}</button>
       </div>
     </div>`;
@@ -3264,7 +3262,7 @@ function openNewCitationGraph(doi, title) {
       <h3 style="font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t("citationGraph")} - ${(title || doi).substring(0, 50)}</h3>
       <div style="display:flex;gap:4px;align-items:center">
         <button class="btn btn-sm btn-outline" onclick="toggleFloatGraphFullscreen('${gid}')" title="${t('fullscreen')}">⛶</button>
-        <button class="btn btn-sm btn-outline" onclick="document.getElementById('${gid}-float').remove()" title="${t('closeGraph')}">✕</button>
+        <button class="btn btn-sm btn-outline" onclick="closeFloatGraph('${gid}')" title="${t('closeGraph')}">✕</button>
       </div>
     </div>
     <div id="${gid}-toolbar" style="display:none;padding:6px 12px;border-bottom:1px solid var(--border);background:#fafbfc;gap:4px;flex-wrap:wrap;align-items:center">
@@ -3330,6 +3328,8 @@ function openNewCitationGraph(doi, title) {
 // 拖动功能
 function makeDraggable(el, handle) {
   let isDragging = false, startX, startY, startLeft, startTop;
+  const ac = new AbortController();
+  const signal = ac.signal;
   handle.addEventListener("mousedown", e => {
     if (e.target.tagName === "BUTTON") return;
     isDragging = true;
@@ -3337,13 +3337,29 @@ function makeDraggable(el, handle) {
     startLeft = el.offsetLeft; startTop = el.offsetTop;
     el.style.transition = "none";
     e.preventDefault();
-  });
+  }, { signal });
   document.addEventListener("mousemove", e => {
     if (!isDragging) return;
     el.style.left = (startLeft + e.clientX - startX) + "px";
     el.style.top = (startTop + e.clientY - startY) + "px";
-  });
-  document.addEventListener("mouseup", () => { isDragging = false; el.style.transition = ""; });
+  }, { signal });
+  document.addEventListener("mouseup", () => { isDragging = false; el.style.transition = ""; }, { signal });
+  // 元素移除时清理事件监听器
+  el._dragCleanup = () => ac.abort();
+}
+
+// 关闭悬浮图谱（清理资源）
+function closeFloatGraph(gid) {
+  const el = document.getElementById(gid + "-float");
+  if (!el) return;
+  // 清理拖拽事件监听器
+  if (el._dragCleanup) el._dragCleanup();
+  // 停止 D3 simulation
+  if (el._graphSimulation) {
+    el._graphSimulation.stop();
+    el._graphSimulation = null;
+  }
+  el.remove();
 }
 
 // 悬浮图谱全屏切换
@@ -3643,6 +3659,8 @@ function renderGraphInto(svgEl, data, doi, title, overlayEl, gid) {
           .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
       node.attr("transform", d => `translate(${d.x},${d.y})`);
     });
+  // 存储 simulation 引用以便关闭时清理
+  if (overlayEl) overlayEl._graphSimulation = sim;
 }
 
 function graphAnalyze(mode) {

@@ -3,74 +3,108 @@
 import csv
 import io
 import re
-import hashlib
 
 
 def export_ris(papers: list) -> str:
     """导出 RIS 格式（EndNote 直接导入）"""
+    if not papers:
+        return ""
     lines = []
     for p in papers:
-        lines.append("TY  - JOUR")
-        if p.title:
-            lines.append(f"TI  - {p.title}")
-        for author in p.authors:
-            lines.append(f"AU  - {author}")
-        if p.year:
-            lines.append(f"PY  - {p.year}")
-        if p.journal:
-            lines.append(f"JO  - {p.journal}")
-            lines.append(f"JA  - {p.journal}")
-        if p.doi:
-            lines.append(f"DO  - {p.doi}")
-        if p.pmid:
-            lines.append(f"AN  - PMID:{p.pmid}")
-        if p.abstract:
-            # RIS 摘要长度限制
-            abs_text = p.abstract[:2000]
-            lines.append(f"AB  - {abs_text}")
-        for kw in p.keywords:
-            lines.append(f"KW  - {kw}")
-        if p.oa_url:
-            lines.append(f"UR  - {p.oa_url}")
-        elif p.doi:
-            lines.append(f"UR  - https://doi.org/{p.doi}")
-        lines.append("ER  - ")
-        lines.append("")
+        try:
+            lines.append("TY  - JOUR")
+            if getattr(p, 'title', None):
+                lines.append(f"TI  - {p.title}")
+            for author in (getattr(p, 'authors', None) or []):
+                lines.append(f"AU  - {author}")
+            if getattr(p, 'year', None):
+                lines.append(f"PY  - {p.year}")
+            if getattr(p, 'journal', None):
+                lines.append(f"JO  - {p.journal}")
+                lines.append(f"JA  - {p.journal}")
+            if getattr(p, 'doi', None):
+                lines.append(f"DO  - {p.doi}")
+            if getattr(p, 'pmid', None):
+                lines.append(f"AN  - PMID:{p.pmid}")
+            if getattr(p, 'abstract', None):
+                abs_text = p.abstract[:2000]
+                lines.append(f"AB  - {abs_text}")
+            for kw in (getattr(p, 'keywords', None) or []):
+                lines.append(f"KW  - {kw}")
+            if getattr(p, 'oa_url', None):
+                lines.append(f"UR  - {p.oa_url}")
+            elif getattr(p, 'doi', None):
+                lines.append(f"UR  - https://doi.org/{p.doi}")
+            lines.append("ER  - ")
+            lines.append("")
+        except Exception as e:
+            print(f"[WARN] Skipping paper in RIS export: {e}")
+            continue
 
     return "\n".join(lines)
+
+
+def _bibtex_escape(text: str) -> str:
+    """BibTeX 特殊字符转义"""
+    if not text:
+        return ""
+    # 先截断再转义，避免截断点在转义序列中间
+    text = text[:2000]
+    text = text.replace("\\", "\\\\")
+    text = text.replace("{", "\\{")
+    text = text.replace("}", "\\}")
+    text = text.replace("%", "\\%")
+    return text
 
 
 def export_bibtex(papers: list) -> str:
     """导出 BibTeX 格式"""
+    if not papers:
+        return ""
     lines = []
     for i, p in enumerate(papers, 1):
-        key = _make_bibtex_key(p, i)
-        lines.append(f"@article{{{key},")
-        if p.title:
-            lines.append(f"  title = {{{p.title}}},")
-        if p.authors:
-            lines.append(f"  author = {{{' and '.join(p.authors)}}},")
-        if p.journal:
-            lines.append(f"  journal = {{{p.journal}}},")
-        if p.year:
-            lines.append(f"  year = {{{p.year}}},")
-        if p.doi:
-            lines.append(f"  doi = {{{p.doi}}},")
-        if p.pmid:
-            lines.append(f"  pmid = {{{p.pmid}}},")
-        if p.abstract:
-            abs_text = p.abstract.replace("{", "\\{").replace("}", "\\}")
-            lines.append(f"  abstract = {{{abs_text[:2000]}}},")
-        if p.keywords:
-            lines.append(f"  keywords = {{{', '.join(p.keywords)}}},")
-        lines.append("}")
-        lines.append("")
+        try:
+            key = _make_bibtex_key(p, i)
+            entry_type = _infer_entry_type(p)
+            lines.append(f"@{entry_type}{{{key},")
+            if getattr(p, 'title', None):
+                lines.append(f"  title = {{{_bibtex_escape(p.title)}}},")
+            if getattr(p, 'authors', None):
+                lines.append(f"  author = {{{' and '.join(p.authors)}}},")
+            if getattr(p, 'journal', None):
+                lines.append(f"  journal = {{{_bibtex_escape(p.journal)}}},")
+            if getattr(p, 'year', None):
+                lines.append(f"  year = {{{p.year}}},")
+            if getattr(p, 'doi', None):
+                lines.append(f"  doi = {{{p.doi}}},")
+            if getattr(p, 'pmid', None):
+                lines.append(f"  pmid = {{{p.pmid}}},")
+            if getattr(p, 'abstract', None):
+                lines.append(f"  abstract = {{{_bibtex_escape(p.abstract)}}},")
+            if getattr(p, 'keywords', None):
+                lines.append(f"  keywords = {{{', '.join(p.keywords)}}},")
+            lines.append("}")
+            lines.append("")
+        except Exception as e:
+            print(f"[WARN] Skipping paper in BibTeX export: {e}")
+            continue
 
     return "\n".join(lines)
 
 
+def _infer_entry_type(paper) -> str:
+    """根据论文字段推断 BibTeX 条目类型"""
+    if getattr(paper, 'journal', None):
+        return "article"
+    if hasattr(paper, 'booktitle') and paper.booktitle:
+        return "inproceedings"
+    return "misc"
+
+
 def export_csv(papers: list) -> str:
     """导出 CSV 格式"""
+    if not papers:
+        return ""
     output = io.StringIO()
     writer = csv.writer(output)
 
@@ -81,18 +115,22 @@ def export_csv(papers: list) -> str:
     ])
 
     for p in papers:
-        writer.writerow([
-            p.title,
-            "; ".join(p.authors),
-            p.journal,
-            p.year,
-            p.doi,
-            p.pmid,
-            p.citation_count,
-            p.oa_url,
-            "; ".join(p.keywords),
-            p.abstract[:2000] if p.abstract else "",
-        ])
+        try:
+            writer.writerow([
+                getattr(p, 'title', ''),
+                "; ".join(getattr(p, 'authors', None) or []),
+                getattr(p, 'journal', ''),
+                getattr(p, 'year', ''),
+                getattr(p, 'doi', ''),
+                getattr(p, 'pmid', ''),
+                getattr(p, 'citation_count', 0),
+                getattr(p, 'oa_url', ''),
+                "; ".join(getattr(p, 'keywords', None) or []),
+                (getattr(p, 'abstract', '') or '')[:2000],
+            ])
+        except Exception as e:
+            print(f"[WARN] Skipping paper in CSV export: {e}")
+            continue
 
     return output.getvalue()
 
@@ -101,11 +139,20 @@ def _make_bibtex_key(paper, index: int) -> str:
     """生成 BibTeX 引用键"""
     # 第一作者姓氏
     first_author = ""
-    if paper.authors:
-        first_author = paper.authors[0].split(",")[0].strip()
+    authors = getattr(paper, 'authors', None) or []
+    if authors:
+        name = authors[0]
+        if "," in name:
+            # "Smith, John" -> "Smith"
+            first_author = name.split(",")[0].strip()
+        else:
+            # "John Smith" -> "Smith"
+            parts = name.strip().split()
+            first_author = parts[-1] if parts else ""
+        # 只保留 ASCII 字母
         first_author = re.sub(r"[^a-zA-Z]", "", first_author)
 
-    year = str(paper.year) if paper.year else "xxxx"
+    year = str(getattr(paper, 'year', '') or "xxxx")
     author_part = first_author[:8] if first_author else "unknown"
 
     return f"{author_part}{year}_{index}"
