@@ -769,6 +769,7 @@ let collectionsData = { groups: [{ id: "default", name: "默认收藏夹" }], it
 let currentGroupId = "default";
 let checkedSet = new Set();
 let currentSort = "";
+let lastAIQuery = "";  // 保存上次 AI 生成的查询，用于重新筛选
 
 function escapeHtml(str) {
   if (!str) return "";
@@ -811,6 +812,7 @@ const LANGS = {
     // AI
     aiAnalyzing: "AI 正在分析...", aiWaiting: "AI 正在分析中... 已等待", seconds: "秒",
     aiSearchStrategy: "AI 检索策略：", suggestedKeywords: "推荐关键词：", actualQuery: "实际检索式：",
+    refilter: "用新条件重新筛选", noPreviousQuery: "没有上次 AI 查询，请先进行 AI 搜索",
     aiSearchComplete: "AI 智能检索完成，找到", papersFound: "篇文献（耗时",
     aiSummarizing: "AI 总结中...", aiDetailing: "AI 详析中...", aiComparing: "AI 对比中...", aiNoveltyDetecting: "AI 创新点检测中...",
     resultFor: "结果（", papersCount: "篇）", cached: "缓存",
@@ -958,6 +960,7 @@ const LANGS = {
     // AI
     aiAnalyzing: "AI is analyzing...", aiWaiting: "AI analyzing... waited", seconds: "s",
     aiSearchStrategy: "AI Search Strategy:", suggestedKeywords: "Suggested Keywords:", actualQuery: "Actual Query:",
+    refilter: "Refilter with new criteria", noPreviousQuery: "No previous AI query. Please run AI search first.",
     aiSearchComplete: "AI search complete, found", papersFound: "papers (took",
     aiSummarizing: "AI Summarizing...", aiDetailing: "AI Detailing...", aiComparing: "AI Comparing...", aiNoveltyDetecting: "AI Novelty Detection...",
     resultFor: "Result (", papersCount: " papers)", cached: "Cached",
@@ -1605,10 +1608,11 @@ async function doSearch() {
   const modeEl = document.getElementById("searchMode");
   if (modeEl) modeEl.innerHTML = `<span style="color:#2563eb">${t("normalSearch")}</span>`;
 
+  const now = new Date().getFullYear();
   const body = {
     query,
-    year_from: parseInt(document.getElementById("yearFrom").value) || 2020,
-    year_to: parseInt(document.getElementById("yearTo").value) || 2026,
+    year_from: parseInt(document.getElementById("yearFrom").value) || now - 5,
+    year_to: parseInt(document.getElementById("yearTo").value) || now,
     sort: document.getElementById("sortBy").value,
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
     use_pubmed: document.getElementById("usePubmed").checked,
@@ -1667,8 +1671,11 @@ async function doAISearch() {
     setStatus(`${t("aiWaiting")} ${elapsed} ${t("seconds")}`);
   }, 1000);
 
+  const now = new Date().getFullYear();
   const body = {
     query,
+    year_from: parseInt(document.getElementById("yearFrom").value) || now - 5,
+    year_to: parseInt(document.getElementById("yearTo").value) || now,
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
@@ -1694,6 +1701,8 @@ async function doAISearch() {
       currentPage = 1;
       checkedSet.clear();
       currentSort = "";
+      // 保存 AI 生成的查询，用于后续重新筛选
+      if (data.query) lastAIQuery = data.query;
       renderResults();
 
       if (data.explanation) {
@@ -1702,7 +1711,8 @@ async function doAISearch() {
         aiPanel.classList.add("show");
         aiContent.innerHTML = `<b>${t("aiSearchStrategy")}</b>${escapeHtml(data.explanation)}` +
           (data.analysis?.suggested_keywords ? `<br><b>${t("suggestedKeywords")}</b>${escapeHtml(data.analysis.suggested_keywords.join(", "))}` : "") +
-          `<br><b>${t("actualQuery")}</b><code>${escapeHtml(data.query)}</code>`;
+          `<br><b>${t("actualQuery")}</b><code>${escapeHtml(data.query)}</code>` +
+          `<br><button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="refilterWithAI()">${t("refilter") || "用新条件重新筛选"}</button>`;
       }
       setStatus(`${t("aiSearchComplete")} ${data.total} ${t("papersFound")} ${elapsed} ${t("seconds")})`);
     } else {
@@ -1713,6 +1723,63 @@ async function doAISearch() {
     clearInterval(timer);
     showToast(`${t("networkError")}: ${e.message}`);
     setStatus(t("networkError"), "network_error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t("search");
+  }
+}
+
+// 用 AI 生成的查询 + 新的筛选条件重新搜索（不重新调用 AI）
+async function refilterWithAI() {
+  if (!lastAIQuery) {
+    showToast(t("noPreviousQuery") || "没有上次 AI 查询，请先进行 AI 搜索");
+    return;
+  }
+  const btn = document.getElementById("searchBtn");
+  btn.disabled = true;
+  btn.textContent = t("searching");
+  setStatus(t("searching"));
+
+  const now = new Date().getFullYear();
+  const body = {
+    query: lastAIQuery,
+    year_from: parseInt(document.getElementById("yearFrom").value) || now - 5,
+    year_to: parseInt(document.getElementById("yearTo").value) || now,
+    sort: document.getElementById("sortBy").value,
+    max_results: parseInt(document.getElementById("maxResults").value) || 50,
+    use_pubmed: document.getElementById("usePubmed").checked,
+    use_openalex: document.getElementById("useOpenalex").checked,
+    use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
+    use_bing_academic: document.getElementById("useBingAcademic")?.checked || false,
+    use_cnki: document.getElementById("useCNKI")?.checked || false,
+    use_wanfang: document.getElementById("useWanfang")?.checked || false,
+    use_vip: document.getElementById("useVIP")?.checked || false,
+    journal: document.getElementById("filterJournal").value.trim(),
+    field: document.getElementById("filterField").value,
+    pub_type: document.getElementById("filterPubType").value,
+  };
+
+  try {
+    const r = await fetch(`${API}/api/search`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      allPapers = data.papers;
+      currentPage = 1;
+      checkedSet.clear();
+      currentSort = "";
+      renderResults();
+      setStatus(`${t("totalPapers")} ${data.total} ${t("papers")}`);
+    } else {
+      showToast(te(data.error) || t("searchFailed"));
+      setStatus(t("searchFailed"));
+    }
+  } catch (e) {
+    showToast(`${t("networkError")}: ${e.message}`);
+    setStatus(t("networkErrorRetry"), "network_error");
   } finally {
     btn.disabled = false;
     btn.textContent = t("search");
@@ -1758,6 +1825,7 @@ function renderResults() {
       <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', t("csv"))}</button>
       <button class="btn btn-sm btn-outline" onclick="exportSelected('endnotexml')">${exportLabel('endnotexml', t("endnotexml"))}</button>
       <button class="btn btn-sm btn-outline" onclick="syncToZotero()" title="${t("syncToZotero")}">📤 Zotero</button>
+      ${lastAIQuery ? `<button class="btn btn-sm btn-outline" onclick="refilterWithAI()" title="${t("refilter")}">🔄 ${t("refilter")}</button>` : ''}
       <button class="btn btn-sm btn-outline" onclick="showKeywordNetwork()">${t("keywordNetwork")}</button>
       <button class="btn btn-sm btn-outline" onclick="showAuthorNetwork()">${t("authorNetwork")}</button>
     </div>
