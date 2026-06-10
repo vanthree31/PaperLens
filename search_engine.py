@@ -140,11 +140,13 @@ def build_pubmed_query(keywords: str, journal: str = "", field: str = "",
     if pub_type:
         parts.append(f"{pub_type}[pt]")
 
-    # 年份范围（year_from=0 视为无下限，year_to=0 视为无上限）
-    y_from = year_from if year_from else 1900
-    y_to = year_to if year_to else datetime.now().year
-    if year_from or year_to:
-        parts.append(f"{y_from}:{y_to}[pdat]")
+    # 年份范围（0 表示不限制）
+    if year_from and year_to:
+        parts.append(f"{year_from}:{year_to}[pdat]")
+    elif year_from:
+        parts.append(f"{year_from}:{datetime.now().year}[pdat]")
+    elif year_to:
+        parts.append(f"1900:{year_to}[pdat]")
 
     return " AND ".join(parts) if parts else keywords
 
@@ -358,15 +360,23 @@ class OpenAlexSearch:
             if len(word) > 2 and word.lower() not in ('and', 'or', 'not', 'the', 'for', 'with'):
                 self._last_keywords.add(word.lower())
 
+        # 构建过滤条件
+        filter_parts = []
+        if year_from and year_to:
+            filter_parts.append(f"publication_year:{year_from}-{year_to}")
+        elif year_from:
+            filter_parts.append(f"publication_year:{year_from}-{datetime.now().year}")
+        elif year_to:
+            filter_parts.append(f"publication_year:1800-{year_to}")
+        if journal:
+            filter_parts.append(f"primary_location.source.display_name:{journal}")
+
         params = {
             "search": clean_query,
-            "filter": f"publication_year:{year_from}-{year_to}",
+            "filter": ",".join(filter_parts) if filter_parts else "",
             "per_page": min(max_results * 2, 200),  # 多取一些，后续过滤
             "sort": "relevance_score:desc",
         }
-        if journal:
-            # OpenAlex 用 source.display_name 过滤
-            params["filter"] += f",primary_location.source.display_name:{journal}"
         if self.email:
             params["mailto"] = self.email
 

@@ -383,13 +383,17 @@ def create_app():
                 year_to = max(year_from, min(int(ai_year_to), current_year))
             except (ValueError, TypeError):
                 year_from, year_to = 2020, current_year
-            # 客户端年份过滤优先（用户明确指定的范围）
+            # 客户端年份过滤优先（用户明确指定的范围覆盖 AI 的建议）
             try:
                 client_year_from = int(data.get("year_from", 0))
                 client_year_to = int(data.get("year_to", 0))
-                if client_year_from:
+                if client_year_from and client_year_to:
+                    # 客户端指定了完整范围，直接使用
+                    year_from = client_year_from
+                    year_to = client_year_to
+                elif client_year_from:
                     year_from = max(year_from, client_year_from)
-                if client_year_to:
+                elif client_year_to:
                     year_to = min(year_to, client_year_to)
             except (ValueError, TypeError):
                 pass
