@@ -27,6 +27,7 @@ ai_search:
   api_key: ""
   base_url: ""
   model: ""
+  max_tokens: 16384
 
 # AI 模型 - 论文分析（总结/详析/对比，建议用高质量模型）
 ai_analysis:
@@ -35,6 +36,7 @@ ai_analysis:
   api_key: ""
   base_url: ""
   model: ""
+  max_tokens: 16384
 
 # 网络代理
 proxy:

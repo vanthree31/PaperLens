@@ -632,6 +632,11 @@ body {
       <label data-i18n="endpointURL">端点 URL</label>
       <input type="text" id="cfgAnalysisAiUrl" data-i18n-placeholder="cfgAnalysisAiUrl" placeholder="留空使用默认端点">
     </div>
+    <div class="form-group">
+      <label data-i18n="maxTokens">最大输出 Tokens</label>
+      <input type="number" id="cfgMaxTokens" min="1024" max="131072" step="1024" value="16384">
+      <div class="hint" data-i18n="maxTokensHint">控制 AI 单次回复的最大长度，默认 16384。多篇论文分析建议 16384+</div>
+    </div>
   </div>
   <div class="settings-section">
     <h3 data-i18n="networkProxy">网络代理</h3>
@@ -882,6 +887,7 @@ const LANGS = {
     cfgSearchAiUrl: "留空使用默认端点",
     cfgAnalysisAiModel: "如 deepseek-reasoner（高质量模型）",
     cfgAnalysisAiUrl: "留空使用默认端点",
+    maxTokens: "最大输出 Tokens", maxTokensHint: "控制 AI 单次回复的最大长度，默认 16384。多篇论文分析建议 16384+",
     cfgExportPath: "留空则弹出浏览器下载",
     aiAnalysisModel: "AI 论文分析模型（总结/详析/对比，建议用高质量模型）",
     enableAnalysisAI: "启用分析 AI",
@@ -1040,6 +1046,7 @@ const LANGS = {
     cfgSearchAiUrl: "Leave empty to use default endpoint",
     cfgAnalysisAiModel: "e.g. deepseek-reasoner (high-quality)",
     cfgAnalysisAiUrl: "Leave empty to use default endpoint",
+    maxTokens: "Max Output Tokens", maxTokensHint: "Max tokens per AI response, default 16384. Recommend 16384+ for multi-paper analysis",
     cfgExportPath: "Leave empty to use browser's default download location",
     aiAnalysisModel: "AI Analysis Model (summary/detail/comparison, recommend high-quality model)",
     enableAnalysisAI: "Enable Analysis AI",
@@ -2112,6 +2119,7 @@ async function loadSettings() {
     document.getElementById("cfgAnalysisAiKey").title = analysisAi.api_key ? t("keyMaskedTip") : "";
     document.getElementById("cfgAnalysisAiModel").value = analysisAi.model || "";
     document.getElementById("cfgAnalysisAiUrl").value = analysisAi.base_url || "";
+    document.getElementById("cfgMaxTokens").value = analysisAi.max_tokens || 16384;
 
     document.getElementById("cfgProxyHttp").value = px.http || "";
     document.getElementById("cfgProxyHttps").value = px.https || "";
@@ -2164,6 +2172,7 @@ async function saveSettings() {
       api_key: isMasked(searchAiKey) ? undefined : searchAiKey,
       base_url: document.getElementById("cfgSearchAiUrl").value.trim(),
       model: document.getElementById("cfgSearchAiModel").value.trim(),
+      max_tokens: parseInt(document.getElementById("cfgMaxTokens").value) || 16384,
     },
     ai_analysis: {
       enabled: document.getElementById("cfgAnalysisAiEnabled").checked,
@@ -2171,6 +2180,7 @@ async function saveSettings() {
       api_key: isMasked(analysisAiKey) ? undefined : analysisAiKey,
       base_url: document.getElementById("cfgAnalysisAiUrl").value.trim(),
       model: document.getElementById("cfgAnalysisAiModel").value.trim(),
+      max_tokens: parseInt(document.getElementById("cfgMaxTokens").value) || 16384,
     },
     proxy: {
       http: document.getElementById("cfgProxyHttp").value.trim(),

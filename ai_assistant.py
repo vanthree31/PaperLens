@@ -58,6 +58,7 @@ class AIAssistant:
         self.api_key = cfg.get("api_key", "")
         self.model = cfg.get("model", "")
         self.base_url = cfg.get("base_url", "")
+        self.max_tokens = cfg.get("max_tokens", 16384)
         if not self.base_url and self.provider in PROVIDERS:
             self.base_url = PROVIDERS[self.provider]["base_url"]
         if not self.model and self.provider in PROVIDERS:
@@ -82,11 +83,11 @@ class AIAssistant:
                     system_msg = m["content"]
                 else:
                     user_messages.append(m)
-            payload = {"model": self.model, "max_tokens": 16384, "messages": user_messages, "stream": stream}
+            payload = {"model": self.model, "max_tokens": self.max_tokens, "messages": user_messages, "stream": stream}
             if system_msg:
                 payload["system"] = system_msg
             return payload
-        return {"model": self.model, "messages": messages, "temperature": 0.7, "max_tokens": 16384, "stream": stream}
+        return {"model": self.model, "messages": messages, "temperature": 0.7, "max_tokens": self.max_tokens, "stream": stream}
 
     def _get_endpoint(self) -> str:
         url = self.base_url.rstrip("/")
