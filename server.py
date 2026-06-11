@@ -4,7 +4,6 @@ import os
 import sys
 import re
 import json
-import html
 import threading
 import yaml
 from datetime import datetime
@@ -79,7 +78,7 @@ def _escape_paper(paper) -> dict:
     def esc(s):
         if s is None:
             return ""
-        return html.escape(str(s))
+        return str(s)
     return {
         "title": esc(paper.title), "authors": [esc(a) for a in paper.authors],
         "journal": esc(paper.journal), "year": paper.year,
@@ -473,6 +472,9 @@ def create_app():
                 if result and not result.startswith("AI_ERROR:"):
                     with cache_lock:
                         ai_cache[cache_key] = result
+                        if len(ai_cache) > 50:
+                            for k in list(ai_cache.keys())[:len(ai_cache) - 50]:
+                                del ai_cache[k]
             return Response(generate(), mimetype="text/plain; charset=utf-8",
                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -480,6 +482,9 @@ def create_app():
         if result and not result.startswith("AI_ERROR:"):
             with cache_lock:
                 ai_cache[cache_key] = result
+                if len(ai_cache) > 50:
+                    for k in list(ai_cache.keys())[:len(ai_cache) - 50]:
+                        del ai_cache[k]
         return jsonify({"response": result, "count": len(selected), "mode": mode, "cached": False})
 
     @app.route("/api/history", methods=["GET"])
@@ -512,8 +517,8 @@ def create_app():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     return jsonify(json.load(f))
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[ERROR] Failed to read preferences.json: {e}")
         return jsonify({})
 
     @app.route("/api/preferences", methods=["POST"])
@@ -1494,8 +1499,8 @@ def create_app():
                 with open(path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
                     return jsonify(_mask_keys(cfg))
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[ERROR] Failed to read zotero_config.json: {e}")
         return jsonify({"api_key": "", "user_id": ""})
 
     @app.route("/api/zotero/config", methods=["POST"])

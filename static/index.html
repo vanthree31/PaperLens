@@ -181,6 +181,10 @@ body {
   color: var(--text);
   cursor: pointer;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .paper-title:hover { color: var(--primary); }
 .paper-meta {
@@ -355,6 +359,10 @@ body {
   border-color: var(--primary);
   color: var(--primary);
   background: #eff6ff;
+}
+.suggest-chip:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 /* 引用关系图谱 */
 .graph-overlay {
@@ -799,6 +807,7 @@ let collectionsData = { groups: [{ id: "default", name: "默认收藏夹" }], it
 let currentGroupId = "default";
 let checkedSet = new Set();
 let currentSort = "";
+let _sortReversed = false;
 let lastAIQuery = "";  // 保存上次 AI 生成的查询，用于重新筛选
 
 function escapeHtml(str) {
@@ -855,6 +864,7 @@ const LANGS = {
     normalSearch: "● 普通检索模式", aiSearchMode: "● AI 智能检索模式",
     // 状态
     ready: "就绪", searching: "正在检索...", searchFailed: "检索失败",
+    analysisInProgress: "AI 分析进行中，请等待完成",
     networkErrorRetry: "网络错误 - 点击重试", noResultsFound: "未找到相关文献",
     dataSource: "数据源: PubMed + OpenAlex",
     // 历史
@@ -1014,6 +1024,7 @@ const LANGS = {
     normalSearch: "● Normal Search", aiSearchMode: "● AI Smart Search",
     // Status
     ready: "Ready", searching: "Searching...", searchFailed: "Search failed",
+    analysisInProgress: "AI analysis in progress, please wait",
     networkErrorRetry: "Network error - click to retry", noResultsFound: "No papers found",
     dataSource: "Data Source: PubMed + OpenAlex",
     // History
@@ -1434,7 +1445,7 @@ function initSuggestions() {
   // 从历史和默认建议中各取一些混合
   const chips = [];
   const histChips = _historyCache.slice(0, 5).map(h => ({ text: h.q, fromHistory: true }));
-  const defChips = DEFAULT_SUGGESTIONS
+  const defChips = [...DEFAULT_SUGGESTIONS]
     .sort(() => Math.random() - 0.5)
     .slice(0, 5)
     .map(t => ({ text: t, fromHistory: false }));
@@ -1451,7 +1462,9 @@ function initSuggestions() {
     chip.className = "suggest-chip";
     chip.textContent = item.text;
     chip.title = item.text;
-    chip.onclick = () => {
+    chip.tabIndex = 0;
+    chip.setAttribute("role", "button");
+    const activate = () => {
       const input = document.getElementById("searchInput");
       if (input.value.trim() && input.value.trim() !== item.text) {
         if (!confirm(`${t("replaceConfirm")}${item.text}？`)) return;
@@ -1459,6 +1472,8 @@ function initSuggestions() {
       input.value = item.text;
       doSmartSearch();
     };
+    chip.onclick = activate;
+    chip.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } };
     bar.appendChild(chip);
   });
 
@@ -1596,6 +1611,7 @@ function getAllSuggestions() {
 
 function showSuggestDropdown(val) {
   const dd = document.getElementById("suggestDropdown");
+  document.getElementById("historyDropdown").classList.remove("show");
   const all = getAllSuggestions();
   const filtered = val
     ? all.filter(s => s.toLowerCase().includes(val.toLowerCase())).slice(0, 8)
@@ -1640,7 +1656,7 @@ let _forceSearchMode = null; // null = auto, "ai" = force AI, "normal" = force n
 function updateSearchModeHint() {
   const input = document.getElementById("searchInput").value.trim();
   const hint = document.getElementById("searchModeHint");
-  if (!input) { hint.style.display = "none"; _forceSearchMode = null; return; }
+  if (!input) { hint.style.display = "none"; return; }
   hint.style.display = "inline-block";
   const isAI = _forceSearchMode === "ai" || (_forceSearchMode !== "normal" && detectNeedAI(input));
   hint.className = `search-mode-hint ${isAI ? "ai" : "normal"}`;
@@ -1670,6 +1686,8 @@ function detectNeedAI(input) {
 }
 
 async function doSmartSearch() {
+  if (doSmartSearch._running) return;
+  doSmartSearch._running = true;
   const input = document.getElementById("searchInput");
   let query = input.value.trim();
   if (!query) { input.focus(); showToast(t("enterQuery")); return; }
@@ -1684,6 +1702,7 @@ async function doSmartSearch() {
     btn.disabled = false;
     btn.textContent = t("search");
     document.getElementById("results").classList.remove("loading");
+    doSmartSearch._running = false;
   }
 }
 
@@ -1695,7 +1714,6 @@ async function doSearch() {
   btn.disabled = true;
   btn.textContent = t("searching");
   setStatus(t("searching"));
-  document.getElementById("results").classList.add("loading");
   const modeEl = document.getElementById("searchMode");
   if (modeEl) modeEl.innerHTML = `<span style="color:#2563eb">${t("normalSearch")}</span>`;
 
@@ -1730,11 +1748,12 @@ async function doSearch() {
       currentPage = 1;
       checkedSet.clear();
       currentSort = "";
+      _sortReversed = false;
       renderResults();
       setStatus(`${t("totalPapers")} ${data.total} ${t("papers")}`);
     } else {
       showToast(te(data.error) || t("searchFailed"));
-      setStatus(t("searchFailed"));
+      if (allPapers.length === 0) setStatus(t("searchFailed"));
     }
   } catch (e) {
     showToast(`${t("networkError")}: ${e.message}`);
@@ -1794,6 +1813,7 @@ async function doAISearch() {
       currentPage = 1;
       checkedSet.clear();
       currentSort = "";
+      _sortReversed = false;
       // 保存 AI 生成的查询，用于后续重新筛选
       if (data.query) lastAIQuery = data.query;
       renderResults();
@@ -1864,11 +1884,12 @@ async function refilterWithAI() {
       currentPage = 1;
       checkedSet.clear();
       currentSort = "";
+      _sortReversed = false;
       renderResults();
       setStatus(`${t("totalPapers")} ${data.total} ${t("papers")}`);
     } else {
       showToast(te(data.error) || t("searchFailed"));
-      setStatus(t("searchFailed"));
+      if (allPapers.length === 0) setStatus(t("searchFailed"));
     }
   } catch (e) {
     showToast(`${t("networkError")}: ${e.message}`);
@@ -1897,14 +1918,12 @@ function renderResults() {
   const end = Math.min(start + pageSize, allPapers.length);
   const page = allPapers.slice(start, end);
   const selCount = checkedSet.size;
-  const exportLabel = (fmt, name) => name;
-
   let html = `<div class="toolbar">
     <div class="toolbar-left">${t("totalPapers")} ${allPapers.length} ${t("papers")}, ${t("showing")} ${start+1}-${end} <span id="selectedCount" style="color:var(--primary);font-weight:500">${selCount > 0 ? `(${t("selected")} ${selCount} ${t("papers")})` : ""}</span>
       <span style="margin-left:16px;font-size:12px" id="sortBtns">
-        ${t("sortBtn")} <span class="sort-btn${currentSort==='citations'?' active':''}" onclick="sortPapers('citations')">${t("cited")}↓</span>
-        <span class="sort-btn${currentSort==='date'?' active':''}" onclick="sortPapers('date')">${t("date")}↓</span>
-        <span class="sort-btn${currentSort==='title'?' active':''}" onclick="sortPapers('title')">${t("title")}↑</span>
+        ${t("sortBtn")} <span class="sort-btn${currentSort==='citations'?' active':''}" onclick="sortPapers('citations')">${t("cited")}${currentSort==='citations'&&_sortReversed?'↑':'↓'}</span>
+        <span class="sort-btn${currentSort==='date'?' active':''}" onclick="sortPapers('date')">${t("date")}${currentSort==='date'&&_sortReversed?'↑':'↓'}</span>
+        <span class="sort-btn${currentSort==='title'?' active':''}" onclick="sortPapers('title')">${t("title")}${currentSort==='title'&&_sortReversed?'↓':'↑'}</span>
       </span>
     </div>
     <div class="toolbar-right">
@@ -1913,10 +1932,10 @@ function renderResults() {
       <button class="btn btn-sm btn-ai" id="btnDetail" onclick="aiAnalyzePapers('detail')">${t("aiDetail")}</button>
       <button class="btn btn-sm btn-ai" id="btnCompare" onclick="aiAnalyzePapers('compare')" ${selCount < 2 ? 'style="display:none"' : ''} title="${t("aiCompareTip")}">${t("aiCompare")}</button>
       <button class="btn btn-sm btn-ai" id="btnNovelty" onclick="aiAnalyzePapers('novelty')" ${selCount < 1 ? 'style="display:none"' : ''} title="${t("aiNoveltyTip")}">${t("aiNovelty")}</button>
-      <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${exportLabel('ris', t("exportRIS"))}</button>
-      <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${exportLabel('bibtex', t("bibtex"))}</button>
-      <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${exportLabel('csv', t("csv"))}</button>
-      <button class="btn btn-sm btn-outline" onclick="exportSelected('endnotexml')">${exportLabel('endnotexml', t("endnotexml"))}</button>
+      <button class="btn btn-sm btn-primary" onclick="exportSelected('ris')">${t("exportRIS")}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('bibtex')">${t("bibtex")}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('csv')">${t("csv")}</button>
+      <button class="btn btn-sm btn-outline" onclick="exportSelected('endnotexml')">${t("endnotexml")}</button>
       <button class="btn btn-sm btn-outline" onclick="syncToZotero()" title="${t("syncToZotero")}">📤 Zotero</button>
       ${lastAIQuery ? `<button class="btn btn-sm btn-outline" onclick="refilterWithAI()" title="${t("refilter")}">🔄 ${t("refilter")}</button>` : ''}
       <button class="btn btn-sm btn-outline" onclick="showKeywordNetwork()">${t("keywordNetwork")}</button>
@@ -2172,7 +2191,7 @@ async function saveSettings() {
       api_key: isMasked(searchAiKey) ? undefined : searchAiKey,
       base_url: document.getElementById("cfgSearchAiUrl").value.trim(),
       model: document.getElementById("cfgSearchAiModel").value.trim(),
-      max_tokens: parseInt(document.getElementById("cfgMaxTokens").value) || 16384,
+      max_tokens: Math.max(1024, Math.min(131072, parseInt(document.getElementById("cfgMaxTokens").value) || 16384)),
     },
     ai_analysis: {
       enabled: document.getElementById("cfgAnalysisAiEnabled").checked,
@@ -2180,7 +2199,7 @@ async function saveSettings() {
       api_key: isMasked(analysisAiKey) ? undefined : analysisAiKey,
       base_url: document.getElementById("cfgAnalysisAiUrl").value.trim(),
       model: document.getElementById("cfgAnalysisAiModel").value.trim(),
-      max_tokens: parseInt(document.getElementById("cfgMaxTokens").value) || 16384,
+      max_tokens: Math.max(1024, Math.min(131072, parseInt(document.getElementById("cfgMaxTokens").value) || 16384)),
     },
     proxy: {
       http: document.getElementById("cfgProxyHttp").value.trim(),
@@ -2306,6 +2325,9 @@ async function aiSummarize() {
 
 // AI 论文分析（流式输出）
 async function aiAnalyzePapers(mode, forceRefresh) {
+  if (aiAnalyzePapers._controller) aiAnalyzePapers._controller.abort();
+  const controller = new AbortController();
+  aiAnalyzePapers._controller = controller;
   const indices = getSelectedIndices();
   if (!indices.length) { showToast(t("pleaseSelectPapers")); return; }
 
@@ -2334,8 +2356,10 @@ async function aiAnalyzePapers(mode, forceRefresh) {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({indices, mode, force_refresh: !!forceRefresh, stream: true, lang: currentLang}),
+      signal: controller.signal,
     });
     clearInterval(timer);
+    if (controller.signal.aborted) return;
 
     if (!r.ok) {
       const ct = r.headers.get("content-type") || "";
@@ -2376,6 +2400,7 @@ async function aiAnalyzePapers(mode, forceRefresh) {
     }
   } catch (e) {
     clearInterval(timer);
+    if (controller.signal.aborted) return;
     el.textContent = `${t("requestFailed")} ${e.message}`;
   }
 }
@@ -2429,11 +2454,13 @@ function setStatus(text, statusKey) {
   if (statusKey) el.dataset.status = statusKey;
 }
 
+let _toastTimer = null;
 function showToast(msg) {
   const el = document.getElementById("toast");
+  clearTimeout(_toastTimer);
   el.textContent = msg;
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2500);
+  _toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
 }
 
 // ========== 搜索历史（服务器端持久化） ==========
@@ -2463,6 +2490,7 @@ async function saveHistory(query, total) {
 
 function toggleHistory() {
   const dd = document.getElementById("historyDropdown");
+  document.getElementById("suggestDropdown").classList.remove("show");
   if (dd.classList.contains("show")) { dd.classList.remove("show"); return; }
   if (!_historyCache.length) { showToast(t("noHistory")); return; }
   dd.innerHTML = "";
@@ -2976,15 +3004,21 @@ function viewCollectionItem(encodedDoi) {
 }
 
 async function toggleFavorite(idx, btn) {
-  const paper = allPapers[idx];
-  if (!paper || !paper.doi) return;
-  const existingItem = collectionsData.items && collectionsData.items.find(item => item.doi && item.doi.toLowerCase() === paper.doi.toLowerCase());
-  if (existingItem) {
-    await removeFromCollection(encodeURIComponent(paper.doi), existingItem.group_id || "default");
-  } else {
-    await addToCollection(paper);
+  if (toggleFavorite._running) return;
+  toggleFavorite._running = true;
+  try {
+    const paper = allPapers[idx];
+    if (!paper || !paper.doi) return;
+    const existingItem = collectionsData.items && collectionsData.items.find(item => item.doi && item.doi.toLowerCase() === paper.doi.toLowerCase());
+    if (existingItem) {
+      await removeFromCollection(encodeURIComponent(paper.doi), existingItem.group_id || "default");
+    } else {
+      await addToCollection(paper);
+    }
+    // renderResults() 已在 addToCollection/removeFromCollection 中调用
+  } finally {
+    toggleFavorite._running = false;
   }
-  // renderResults() 已在 addToCollection/removeFromCollection 中调用
 }
 
 async function addToCollection(paper) {
@@ -3097,13 +3131,15 @@ async function batchDoiLookup() {
 function sortPapers(by) {
   if (!allPapers.length) return;
   // 有选中论文时排序会清空选择，先确认
-  if (checkedSet.size > 0 && currentSort !== by) {
+  if (checkedSet.size > 0) {
     if (!confirm(t("sortClearSelection"))) return;
   }
   // 再次点击同一排序 → 反转
   if (currentSort === by) {
     allPapers.reverse();
+    _sortReversed = !_sortReversed;
   } else {
+    _sortReversed = false;
     if (by === "citations") {
       allPapers.sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
     } else if (by === "date") {
@@ -3169,7 +3205,6 @@ async function showCitationGraph(encodedDoi, encodedTitle) {
   const doi = decodeURIComponent(encodedDoi);
   const title = decodeURIComponent(encodedTitle);
 
-  _graphExpanded.clear();
   _graphPaper = null;
   document.getElementById("graphTitle").textContent = `${t("citationGraph")} - ${title.substring(0, 60)}`;
   document.getElementById("legendCenter").textContent = t("legendCenter");
@@ -3211,7 +3246,6 @@ let _graphSimulation = null;
 function closeGraph() {
   if (_graphSimulation) { _graphSimulation.stop(); _graphSimulation = null; }
   _graphPaper = null;
-  _graphExpanded.clear();
   _graphAiFs = false;
   _graphFs = false;
   document.getElementById("graphAiPanel")?.classList.remove("fullscreen");
@@ -3400,7 +3434,7 @@ function renderGraph(data) {
 // ========== 图谱内功能 ==========
 
 let _graphPaper = null;       // 当前图谱中的焦点论文 {doi, title, oa_url, ...}
-let _graphExpanded = new Set(); // 已展开的节点 DOI
+let _graphAnalysisLock = false;
 
 function setGraphPaper(paper) {
   _graphPaper = paper;
@@ -3588,9 +3622,11 @@ function setFloatGraphPaper(gid, paper) {
 
 // 悬浮图谱 AI 分析
 function floatGraphAnalyze(gid, mode) {
+  if (_graphAnalysisLock) { showToast(t("analysisInProgress")); return; }
+  _graphAnalysisLock = true;
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper) { showToast(t("clickNodeFirst")); return; }
+  if (!paper) { _graphAnalysisLock = false; showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById(gid + "-aiPanel");
   const content = document.getElementById(gid + "-aiContent");
   panel.classList.add("show");
@@ -3600,13 +3636,13 @@ function floatGraphAnalyze(gid, mode) {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: paper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
+    if (!data.paper) { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     const savedChecked = new Set(checkedSet);
     allPapers = [data.paper];
     checkedSet.clear();
     checkedSet.add(0);
-    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); };
+    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); _graphAnalysisLock = false; };
     fetch(`${API}/api/ai/analyze-papers`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ indices: [0], mode, stream: true, lang: currentLang, force_refresh: true }),
@@ -3614,14 +3650,14 @@ function floatGraphAnalyze(gid, mode) {
       if (!r.ok) { content.textContent = t("aiFailed"); restore(); return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); restore(); });
+        r.json().then(d => { window._lastGraphAIText = teAI(d.response) || t("noResults"); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(teAI(fullText)); restore(); return; }
+            if (done) { window._lastGraphAIText = teAI(fullText); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); return; }
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
@@ -3630,14 +3666,16 @@ function floatGraphAnalyze(gid, mode) {
         readChunk();
       }
     }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; restore(); });
-  }).catch(e => { content.textContent = t("fetchPaperFailed"); });
+  }).catch(e => { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed"); });
 }
 
 // 悬浮图谱创新点检测
 function floatGraphNovelty(gid) {
+  if (_graphAnalysisLock) { showToast(t("analysisInProgress")); return; }
+  _graphAnalysisLock = true;
   const state = document.getElementById(gid + "-float")._graphState;
   const paper = state.current;
-  if (!paper) { showToast(t("clickNodeFirst")); return; }
+  if (!paper) { _graphAnalysisLock = false; showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById(gid + "-aiPanel");
   const content = document.getElementById(gid + "-aiContent");
   panel.classList.add("show");
@@ -3647,13 +3685,13 @@ function floatGraphNovelty(gid) {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: paper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
+    if (!data.paper) { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     const savedChecked = new Set(checkedSet);
     allPapers = [data.paper];
     checkedSet.clear();
     checkedSet.add(0);
-    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); };
+    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); _graphAnalysisLock = false; };
     fetch(`${API}/api/ai/analyze-papers`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ indices: [0], mode: "novelty", stream: true, lang: currentLang, force_refresh: true }),
@@ -3661,14 +3699,14 @@ function floatGraphNovelty(gid) {
       if (!r.ok) { content.textContent = t("aiFailed"); restore(); return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); restore(); });
+        r.json().then(d => { window._lastGraphAIText = teAI(d.response) || t("noResults"); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(teAI(fullText)); restore(); return; }
+            if (done) { window._lastGraphAIText = teAI(fullText); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); return; }
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
@@ -3677,7 +3715,7 @@ function floatGraphNovelty(gid) {
         readChunk();
       }
     }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; restore(); });
-  }).catch(e => { content.textContent = t("fetchPaperFailed"); });
+  }).catch(e => { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed"); });
 }
 
 // 悬浮图谱在新图谱中打开
@@ -3852,7 +3890,9 @@ function renderGraphInto(svgEl, data, doi, title, overlayEl, gid) {
 }
 
 function graphAnalyze(mode) {
-  if (!_graphPaper) { showToast(t("clickNodeFirst")); return; }
+  if (_graphAnalysisLock) { showToast(t("analysisInProgress")); return; }
+  _graphAnalysisLock = true;
+  if (!_graphPaper) { _graphAnalysisLock = false; showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById("graphAiPanel");
   const content = document.getElementById("graphAiContent");
   panel.style.display = "block";
@@ -3863,13 +3903,13 @@ function graphAnalyze(mode) {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: _graphPaper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
+    if (!data.paper) { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     const savedChecked = new Set(checkedSet);
     allPapers = [data.paper];
     checkedSet.clear();
     checkedSet.add(0);
-    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); };
+    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); _graphAnalysisLock = false; };
 
     fetch(`${API}/api/ai/analyze-papers`, {
       method: "POST", headers: {"Content-Type": "application/json"},
@@ -3878,14 +3918,14 @@ function graphAnalyze(mode) {
       if (!r.ok) { content.textContent = t("aiFailed"); restore(); return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); restore(); });
+        r.json().then(d => { window._lastGraphAIText = teAI(d.response) || t("noResults"); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(teAI(fullText)); restore(); return; }
+            if (done) { window._lastGraphAIText = teAI(fullText); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); return; }
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
@@ -3894,14 +3934,12 @@ function graphAnalyze(mode) {
         readChunk();
       }
     }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; restore(); });
-  }).catch(e => { content.textContent = t("fetchPaperFailed") + ": " + e.message; });
+  }).catch(e => { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed") + ": " + e.message; });
 }
 
 function graphAiCopy() {
-  const el = document.getElementById("graphAiContent");
-  if (!el) return;
-  const text = el.innerText || el.textContent;
-  navigator.clipboard.writeText(text).then(() => showToast(t("copied"))).catch(() => showToast(t("copyFailed")));
+  if (!window._lastGraphAIText) return;
+  navigator.clipboard.writeText(window._lastGraphAIText).then(() => showToast(t("copied"))).catch(() => showToast(t("copyFailed")));
 }
 
 let _graphAiFs = false;
@@ -3947,7 +3985,9 @@ function openGraphNodeInNewGraph() {
 
 // ========== Novelty Detection ==========
 function graphNoveltyDetection() {
-  if (!_graphPaper) { showToast(t("clickNodeFirst")); return; }
+  if (_graphAnalysisLock) { showToast(t("analysisInProgress")); return; }
+  _graphAnalysisLock = true;
+  if (!_graphPaper) { _graphAnalysisLock = false; showToast(t("clickNodeFirst")); return; }
   const panel = document.getElementById("graphAiPanel");
   const content = document.getElementById("graphAiContent");
   panel.style.display = "block";
@@ -3958,13 +3998,13 @@ function graphNoveltyDetection() {
     method: "POST", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ doi: _graphPaper.doi }),
   }).then(r => r.json()).then(data => {
-    if (!data.paper) { content.textContent = t("fetchPaperFailed"); return; }
+    if (!data.paper) { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed"); return; }
     const saved = allPapers;
     const savedChecked = new Set(checkedSet);
     allPapers = [data.paper];
     checkedSet.clear();
     checkedSet.add(0);
-    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); };
+    const restore = () => { allPapers = saved; checkedSet.clear(); savedChecked.forEach(i => checkedSet.add(i)); _graphAnalysisLock = false; };
 
     fetch(`${API}/api/ai/analyze-papers`, {
       method: "POST", headers: {"Content-Type": "application/json"},
@@ -3973,14 +4013,14 @@ function graphNoveltyDetection() {
       if (!r.ok) { content.textContent = t("aiFailed"); restore(); return; }
       const ct = r.headers.get("content-type") || "";
       if (ct.includes("application/json")) {
-        r.json().then(d => { content.innerHTML = formatAIText(teAI(d.response) || t("noResults")); restore(); });
+        r.json().then(d => { window._lastGraphAIText = teAI(d.response) || t("noResults"); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); });
       } else {
         const reader = r.body.getReader();
         const decoder = new TextDecoder();
         let fullText = "";
         function readChunk() {
           reader.read().then(({ done, value }) => {
-            if (done) { content.innerHTML = formatAIText(teAI(fullText)); restore(); return; }
+            if (done) { window._lastGraphAIText = teAI(fullText); content.innerHTML = formatAIText(window._lastGraphAIText); restore(); return; }
             fullText += decoder.decode(value, { stream: true });
             content.innerHTML = formatAIText(teAI(fullText));
             readChunk();
@@ -3989,7 +4029,7 @@ function graphNoveltyDetection() {
         readChunk();
       }
     }).catch(e => { content.textContent = t("requestFailed") + " " + e.message; restore(); });
-  }).catch(e => { content.textContent = t("fetchPaperFailed") + ": " + e.message; });
+  }).catch(e => { _graphAnalysisLock = false; content.textContent = t("fetchPaperFailed") + ": " + e.message; });
 }
 
 // ========== 关键词共现 / 作者合作网络 ==========
