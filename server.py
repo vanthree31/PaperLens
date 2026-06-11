@@ -319,6 +319,7 @@ def create_app():
     cached_papers = {"papers": [], "query": ""}
     ai_cache = {}
     cache_lock = threading.Lock()
+    collections_lock = threading.Lock()
 
     @app.route("/")
     def index():
@@ -806,7 +807,7 @@ def create_app():
                 hostname = parsed.hostname or ""
                 try:
                     ip = ipaddress.ip_address(hostname)
-                    if ip.is_private or ip.is_loopback or ip.is_link_local:
+                    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_unspecified:
                         return False, "blocked_internal_url"
                 except ValueError:
                     pass
@@ -844,9 +845,9 @@ def create_app():
                                   timeout=15, stream=True, allow_redirects=False)
                 redirect_count += 1
 
-            # 验证 PDF 头
-            header = resp.content[:8] if resp.content else b""
-            if not header.startswith(b'%PDF'):
+            # 验证 PDF 头（只读第一个 chunk，避免将整个响应读入内存）
+            first_chunk = next(resp.iter_content(chunk_size=8192), b"")
+            if not first_chunk.startswith(b'%PDF'):
                 return jsonify({"error": "not_pdf"}), 400
 
             # 检查文件大小限制（100MB）
@@ -870,6 +871,8 @@ def create_app():
                     total_size = 0
                     max_size = 100 * 1024 * 1024  # 100MB
                     with open(filepath, "wb") as f:
+                        f.write(first_chunk)
+                        total_size += len(first_chunk)
                         for chunk in resp.iter_content(chunk_size=8192):
                             total_size += len(chunk)
                             if total_size > max_size:
@@ -1108,7 +1111,7 @@ def create_app():
                 return jsonify({"ok": True, "path": filepath, "filename": filename})
             except Exception as e:
                 print(f"[ERROR] Operation failed: {e}")
-            return jsonify({"error": "operation_failed"}), 500
+                return jsonify({"error": "operation_failed", "content": content, "filename": filename, "mime": mime}), 500
 
         return jsonify({"content": content, "filename": filename, "mime": mime})
 
@@ -1134,69 +1137,76 @@ def create_app():
             return jsonify({"error": "missing_paper_info"}), 400
 
         path = _get_user_data_path("collections.json")
-        collections = {"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []}
-        if os.path.exists(path):
+        with collections_lock:
+            collections = {"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []}
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        collections = json.load(f)
+                except Exception as e:
+                    print(f"[ERROR] Failed to read collections.json for add: {e}")
+                    return jsonify({"error": "collection_read_failed"}), 500
+
+            # 检查是否已收藏
+            doi = paper.get("doi", "").lower()
+            for item in collections.get("items", []):
+                if item.get("doi", "").lower() == doi and item.get("group_id") == group_id:
+                    return jsonify({"ok": True, "message": "已收藏"})
+
+            collections.setdefault("items", []).append({
+                "doi": paper.get("doi", ""),
+                "title": paper.get("title", ""),
+                "authors": paper.get("authors", []),
+                "journal": paper.get("journal", ""),
+                "year": paper.get("year", 0),
+                "citation_count": paper.get("citation_count", 0),
+                "oa_url": paper.get("oa_url", ""),
+                "pmid": paper.get("pmid", ""),
+                "abstract": paper.get("abstract", ""),
+                "group_id": group_id,
+                "added_at": datetime.now().isoformat(),
+            })
+
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    collections = json.load(f)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(collections, f, ensure_ascii=False, indent=2)
+                return jsonify({"ok": True})
             except Exception as e:
-                print(f"[ERROR] Failed to read collections.json for add: {e}")
-                return jsonify({"error": "collection_read_failed"}), 500
-
-        # 检查是否已收藏
-        doi = paper.get("doi", "").lower()
-        for item in collections.get("items", []):
-            if item.get("doi", "").lower() == doi and item.get("group_id") == group_id:
-                return jsonify({"ok": True, "message": "已收藏"})
-
-        collections.setdefault("items", []).append({
-            "doi": paper.get("doi", ""),
-            "title": paper.get("title", ""),
-            "authors": paper.get("authors", []),
-            "journal": paper.get("journal", ""),
-            "year": paper.get("year", 0),
-            "citation_count": paper.get("citation_count", 0),
-            "oa_url": paper.get("oa_url", ""),
-            "pmid": paper.get("pmid", ""),
-            "abstract": paper.get("abstract", ""),
-            "group_id": group_id,
-            "added_at": datetime.now().isoformat(),
-        })
-
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(collections, f, ensure_ascii=False, indent=2)
-            return jsonify({"ok": True})
-        except Exception as e:
-            print(f"[ERROR] Operation failed: {e}")
-            return jsonify({"error": "operation_failed"}), 500
+                print(f"[ERROR] Operation failed: {e}")
+                return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/collections", methods=["DELETE"])
     def remove_collection():
         """删除收藏"""
         data = request.json or {}
-        doi = data.get("doi", "").lower()
+        doi = (data.get("doi") or "").lower()
+        title = data.get("title") or ""
         group_id = data.get("group_id", "default")
-        if not doi:
-            return jsonify({"error": "no_doi"}), 400
+        if not doi and not title:
+            return jsonify({"error": "no_identifier"}), 400
 
         path = _get_user_data_path("collections.json")
         if not os.path.exists(path):
             return jsonify({"ok": True})
 
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                collections = json.load(f)
-            collections["items"] = [
-                item for item in collections.get("items", [])
-                if not (item.get("doi", "").lower() == doi and item.get("group_id") == group_id)
-            ]
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(collections, f, ensure_ascii=False, indent=2)
-            return jsonify({"ok": True})
-        except Exception as e:
-            print(f"[ERROR] Operation failed: {e}")
-            return jsonify({"error": "operation_failed"}), 500
+        with collections_lock:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    collections = json.load(f)
+                collections["items"] = [
+                    item for item in collections.get("items", [])
+                    if not (
+                        (doi and item.get("doi", "").lower() == doi or
+                         not doi and title and item.get("title") == title)
+                        and item.get("group_id") == group_id
+                    )
+                ]
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(collections, f, ensure_ascii=False, indent=2)
+                return jsonify({"ok": True})
+            except Exception as e:
+                print(f"[ERROR] Operation failed: {e}")
+                return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/collections/groups", methods=["POST"])
     def save_collection_groups():
@@ -1204,22 +1214,25 @@ def create_app():
         data = request.json or {}
         groups = data.get("groups", [])
         path = _get_user_data_path("collections.json")
-        collections = {"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []}
-        if os.path.exists(path):
+        with collections_lock:
+            collections = {"groups": [{"id": "default", "name": "默认收藏夹"}], "items": []}
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        collections = json.load(f)
+                except Exception as e:
+                    print(f"[ERROR] Failed to read collections.json for group save: {e}")
+                    return jsonify({"error": "collection_read_failed"}), 500
+            collections["groups"] = groups
+            if not any(g.get("id") == "default" for g in collections["groups"]):
+                collections["groups"].insert(0, {"id": "default", "name": "默认收藏夹"})
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    collections = json.load(f)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(collections, f, ensure_ascii=False, indent=2)
+                return jsonify({"ok": True})
             except Exception as e:
-                print(f"[ERROR] Failed to read collections.json for group save: {e}")
-                return jsonify({"error": "collection_read_failed"}), 500
-        collections["groups"] = groups
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(collections, f, ensure_ascii=False, indent=2)
-            return jsonify({"ok": True})
-        except Exception as e:
-            print(f"[ERROR] Operation failed: {e}")
-            return jsonify({"error": "operation_failed"}), 500
+                print(f"[ERROR] Operation failed: {e}")
+                return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/collections/groups", methods=["DELETE"])
     def delete_collection_group():
@@ -1233,28 +1246,29 @@ def create_app():
         if not os.path.exists(path):
             return jsonify({"ok": True})
 
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                collections = json.load(f)
+        with collections_lock:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    collections = json.load(f)
 
-            # 删除该收藏夹
-            collections["groups"] = [
-                g for g in collections.get("groups", [])
-                if g.get("id") != group_id
-            ]
+                # 删除该收藏夹
+                collections["groups"] = [
+                    g for g in collections.get("groups", [])
+                    if g.get("id") != group_id
+                ]
 
-            # 删除该收藏夹下的所有收藏
-            collections["items"] = [
-                item for item in collections.get("items", [])
-                if item.get("group_id") != group_id
-            ]
+                # 删除该收藏夹下的所有收藏
+                collections["items"] = [
+                    item for item in collections.get("items", [])
+                    if item.get("group_id") != group_id
+                ]
 
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(collections, f, ensure_ascii=False, indent=2)
-            return jsonify({"ok": True})
-        except Exception as e:
-            print(f"[ERROR] Operation failed: {e}")
-            return jsonify({"error": "operation_failed"}), 500
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(collections, f, ensure_ascii=False, indent=2)
+                return jsonify({"ok": True})
+            except Exception as e:
+                print(f"[ERROR] Operation failed: {e}")
+                return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/data-dir", methods=["GET"])
     def get_data_dir():
@@ -1272,6 +1286,24 @@ def create_app():
             print(f"[ERROR] Failed to open data dir: {e}")
             return jsonify({"error": "open_dir_failed"}), 500
 
+    @app.route("/api/choose-folder", methods=["POST"])
+    def choose_folder():
+        """打开系统原生文件夹选择对话框"""
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            folder = filedialog.askdirectory(parent=root, title="选择导出文件夹")
+            root.destroy()
+            if folder:
+                return jsonify({"path": folder})
+            return jsonify({"path": ""})
+        except Exception as e:
+            print(f"[ERROR] Folder dialog failed: {e}")
+            return jsonify({"error": "dialog_failed"}), 500
+
     @app.route("/api/config", methods=["GET"])
     def get_config():
         return jsonify(_mask_keys(load_config()))
@@ -1288,9 +1320,10 @@ def create_app():
             new_search_ai = SearchAI(cfg)
             new_analysis_ai = AnalysisAI(cfg)
             nonlocal engine, search_ai, analysis_ai
-            engine = new_engine
-            search_ai = new_search_ai
-            analysis_ai = new_analysis_ai
+            with cache_lock:
+                engine = new_engine
+                search_ai = new_search_ai
+                analysis_ai = new_analysis_ai
             return jsonify({"ok": True})
         except Exception as e:
             print(f"[ERROR] Config update failed: {e}")
@@ -1495,7 +1528,7 @@ def _mask_keys(obj):
                 if isinstance(v, str) and len(v) > 4:
                     result[k] = v[:4] + "****" + v[-4:]
                 else:
-                    result[k] = v
+                    result[k] = "****"
             else:
                 result[k] = _mask_keys(v)
         return result

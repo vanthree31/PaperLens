@@ -112,7 +112,7 @@ class AIAssistant:
             messages.append({"role": "system", "content": context})
         messages.append({"role": "user", "content": message})
         try:
-            r = requests.post(self._get_endpoint(), headers=self._build_headers(),
+            r = self.session.post(self._get_endpoint(), headers=self._build_headers(),
                               json=self._build_payload(messages, stream=False), timeout=120)
             r.raise_for_status()
             return self._extract_content(r.json())
@@ -129,7 +129,7 @@ class AIAssistant:
             messages.append({"role": "system", "content": context})
         messages.append({"role": "user", "content": message})
         try:
-            r = requests.post(self._get_endpoint(), headers=self._build_headers(),
+            r = self.session.post(self._get_endpoint(), headers=self._build_headers(),
                               json=self._build_payload(messages, stream=True),
                               timeout=120, stream=True)
             r.raise_for_status()

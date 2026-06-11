@@ -535,6 +535,8 @@ class OpenAlexSearch:
                 oa = w.get("open_access", {})
                 p.oa_url = oa.get("oa_url", "") or ""
                 for kw in w.get("keywords", []):
+                    if isinstance(kw, dict):
+                        kw = kw.get("display_name", "")
                     if isinstance(kw, str) and kw:
                         p.keywords.append(kw)
                 return [p]
@@ -567,30 +569,25 @@ class GoogleScholarSearch:
 
         try:
             from scholarly import scholarly as sch
-            import socket
-            old_timeout = socket.getdefaulttimeout()
-            socket.setdefaulttimeout(30)
-            try:
-                results = []
-                search_query = sch.search_pubs(query, year_low=year_from, year_high=year_to)
-                for i, result in enumerate(search_query):
-                    if i >= max_results:
-                        break
-                    p = Paper(source="google_scholar")
-                    bib = result.get("bib", {})
-                    p.title = bib.get("title", "")
-                    p.authors = bib.get("author", []) if isinstance(bib.get("author"), list) else [bib.get("author", "")]
-                    p.journal = bib.get("venue", "")
-                    p.year = int(bib.get("pub_year", 0)) if bib.get("pub_year") else 0
-                    p.abstract = bib.get("abstract", "")
-                    p.doi = result.get("doi", "") or ""
-                    # Google Scholar 引用数
-                    p.citation_count = result.get("num_citations", 0) or 0
-                    p.oa_url = result.get("eprint_url", "") or ""
-                    results.append(p)
-                return results
-            finally:
-                socket.setdefaulttimeout(old_timeout)
+            sch.set_timeout(30)
+            results = []
+            search_query = sch.search_pubs(query, year_low=year_from, year_high=year_to)
+            for i, result in enumerate(search_query):
+                if i >= max_results:
+                    break
+                p = Paper(source="google_scholar")
+                bib = result.get("bib", {})
+                p.title = bib.get("title", "")
+                p.authors = bib.get("author", []) if isinstance(bib.get("author"), list) else [bib.get("author", "")]
+                p.journal = bib.get("venue", "")
+                p.year = int(bib.get("pub_year", 0)) if bib.get("pub_year") else 0
+                p.abstract = bib.get("abstract", "")
+                p.doi = result.get("doi", "") or ""
+                # Google Scholar 引用数
+                p.citation_count = result.get("num_citations", 0) or 0
+                p.oa_url = result.get("eprint_url", "") or ""
+                results.append(p)
+            return results
         except Exception as e:
             print(f"Google Scholar search error: {e}")
             return []
@@ -1078,7 +1075,7 @@ class SearchEngine:
         seen_dois = set()
         unique = []
         for p in all_papers:
-            key = p.doi.lower() if p.doi else f"pmid:{p.pmid}"
+            key = p.doi.lower() if p.doi else (f"pmid:{p.pmid}" if p.pmid else f"title:{(p.title or '').lower()[:80]}")
             if key not in seen_dois:
                 seen_dois.add(key)
                 unique.append(p)

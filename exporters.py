@@ -54,6 +54,7 @@ def _bibtex_escape(text: str) -> str:
     text = text.replace("{", "\\{")
     text = text.replace("}", "\\}")
     text = text.replace("%", "\\%")
+    text = text.replace("#", "\\#")
     return text
 
 
@@ -70,7 +71,7 @@ def export_bibtex(papers: list) -> str:
             if getattr(p, 'title', None):
                 lines.append(f"  title = {{{_bibtex_escape(p.title)}}},")
             if getattr(p, 'authors', None):
-                lines.append(f"  author = {{{' and '.join(p.authors)}}},")
+                lines.append(f"  author = {{{' and '.join(_bibtex_escape(a) for a in p.authors)}}},")
             if getattr(p, 'journal', None):
                 lines.append(f"  journal = {{{_bibtex_escape(p.journal)}}},")
             if getattr(p, 'year', None):
@@ -82,7 +83,7 @@ def export_bibtex(papers: list) -> str:
             if getattr(p, 'abstract', None):
                 lines.append(f"  abstract = {{{_bibtex_escape(p.abstract)}}},")
             if getattr(p, 'keywords', None):
-                lines.append(f"  keywords = {{{', '.join(p.keywords)}}},")
+                lines.append(f"  keywords = {{{', '.join(_bibtex_escape(kw) for kw in p.keywords)}}},")
             lines.append("}")
             lines.append("")
         except Exception as e:
