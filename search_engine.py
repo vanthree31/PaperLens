@@ -224,7 +224,16 @@ class PubMedSearch:
             params["api_key"] = self.api_key
 
         try:
-            r = self.session.get(f"{self.BASE}/esearch.fcgi", params=params, timeout=20)
+            # 带重试的请求（应对 PubMed 限流）
+            r = None
+            for attempt in range(3):
+                r = self.session.get(f"{self.BASE}/esearch.fcgi", params=params, timeout=20)
+                if r.status_code == 429:
+                    wait = min(2 ** attempt, 5)
+                    print(f"PubMed rate limited, waiting {wait}s (attempt {attempt+1}/3)")
+                    time.sleep(wait)
+                    continue
+                break
             r.raise_for_status()
             data = r.json()
             return data.get("esearchresult", {}).get("idlist", []), exact_doi
@@ -251,7 +260,16 @@ class PubMedSearch:
                 params["api_key"] = self.api_key
 
             try:
-                r = self.session.get(f"{self.BASE}/efetch.fcgi", params=params, timeout=30)
+                # 带重试的请求
+                r = None
+                for attempt in range(3):
+                    r = self.session.get(f"{self.BASE}/efetch.fcgi", params=params, timeout=30)
+                    if r.status_code == 429:
+                        wait = min(2 ** attempt, 5)
+                        print(f"PubMed rate limited (fetch), waiting {wait}s")
+                        time.sleep(wait)
+                        continue
+                    break
                 r.raise_for_status()
                 papers.extend(self._parse_xml(r.text))
             except Exception as e:
