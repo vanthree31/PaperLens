@@ -1824,14 +1824,38 @@ async function doAISearch() {
       // 保存 AI 生成的查询，用于后续重新筛选
       if (data.query) lastAIQuery = data.query;
 
-      // AI 搜索完成后，自动同步年份范围到前端
+      // AI 搜索完成后，自动同步筛选条件到前端
       if (data.analysis) {
+        // 更新年份范围
         if (data.analysis.year_from) {
           document.getElementById("yearFrom").value = data.analysis.year_from;
         }
         if (data.analysis.year_to) {
           document.getElementById("yearTo").value = data.analysis.year_to;
         }
+
+        // 更新数据源勾选
+        const sources = data.analysis.data_sources;
+        if (sources && sources.length > 0) {
+          // 用户指定了数据源 → 只勾选指定源
+          document.getElementById("usePubmed").checked = sources.includes("pubmed");
+          document.getElementById("useOpenalex").checked = sources.includes("openalex");
+          document.getElementById("useCNKI").checked = sources.includes("cnki");
+          document.getElementById("useWanfang").checked = sources.includes("wanfang");
+          document.getElementById("useVIP").checked = sources.includes("vip");
+          document.getElementById("useGoogleScholar").checked = sources.includes("google_scholar");
+          document.getElementById("useBingAcademic").checked = sources.includes("bing_academic");
+        } else {
+          // 默认全部勾选
+          document.getElementById("usePubmed").checked = true;
+          document.getElementById("useOpenalex").checked = true;
+          document.getElementById("useGoogleScholar").checked = true;
+          document.getElementById("useBingAcademic").checked = true;
+          document.getElementById("useCNKI").checked = true;
+          document.getElementById("useWanfang").checked = true;
+          document.getElementById("useVIP").checked = true;
+        }
+        updateDataSourceDisplay();
       }
 
       renderResults();

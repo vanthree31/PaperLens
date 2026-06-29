@@ -218,12 +218,9 @@ class SearchAI:
 }}
 
 data_sources 选择规则：
-- 用户提到"知网""CNKI"→ 仅包含 ["cnki"]
-- 用户提到"万方"→ 仅包含 ["wanfang"]
-- 用户提到"维普"→ 仅包含 ["vip"]
-- 用户提到"中文文献""国内论文"→ 包含 ["cnki", "wanfang", "vip"]
-- 用户提到"PubMed"→ 仅包含 ["pubmed"]
-- 默认 → ["pubmed", "openalex"]"""
+- 用户明确提到某个数据源时，仅返回该源，如"搜知网"→ ["cnki"]
+- 用户未指定数据源时，返回空数组 []，前端会默认全部勾选
+- 示例：用户说"搜知网"→ ["cnki"]；用户说"找论文"→ []"""
 
         # 截断过长输入
         if len(user_input) > 2000:
@@ -242,7 +239,7 @@ data_sources 选择规则：
             "query": user_input, "journal": "", "field": "tiab",
             "year_from": 2020, "year_to": datetime.now().year,
             "mesh_term": "", "pub_type": "",
-            "data_sources": ["pubmed", "openalex"],
+            "data_sources": [],
             "explanation": f"AI 解析失败，使用原始输入: {user_input}",
             "suggested_keywords": [],
         }
