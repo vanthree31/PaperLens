@@ -9,12 +9,12 @@
   keyword[tw]   - 自由词（Title/Abstract/Keywords）
 
 布尔运算：AND / OR / NOT
-年份过滤：2020:2026[pdat]
+年份过滤：2020:2025[pdat]
 
 示例：
   super-resolution microscopy[ti]
   Nature Methods[ta] AND single-molecule[tiab]
-  (expansion microscopy[ti] OR light-sheet[ti]) AND 2024:2026[pdat]
+  (expansion microscopy[ti] OR light-sheet[ti]) AND 2023:2025[pdat]
 """
 
 import re
