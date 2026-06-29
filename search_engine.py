@@ -266,7 +266,11 @@ class PubMedSearch:
         papers = []
         try:
             # 使用安全的 XML 解析器，禁用外部实体
-            parser = ET.XMLParser(resolve_entities=False)
+            try:
+                parser = ET.XMLParser(resolve_entities=False)
+            except TypeError:
+                # 某些 Python 版本不支持 resolve_entities 参数
+                parser = ET.XMLParser()
             root = ET.fromstring(xml_text, parser=parser)
         except ET.ParseError:
             return papers
