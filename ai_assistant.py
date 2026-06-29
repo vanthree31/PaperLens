@@ -186,21 +186,44 @@ class SearchAI:
         except Exception:
             pass
 
-        system_prompt = """你是一个 PubMed 文献检索专家。用户用自然语言描述想搜索的论文，你生成最优的 PubMed 检索参数。
+        current_year = datetime.now().year
+        system_prompt = f"""你是一个文献检索专家。用户用自然语言描述想搜索的论文，你生成最优的检索参数。
+
+当前年份：{current_year}年。请根据用户描述的时间范围计算准确的年份。
+例如用户说"近两年"，则 year_from={current_year-1}, year_to={current_year}；
+用户说"最近三年"，则 year_from={current_year-2}, year_to={current_year}。
+
+数据源说明：
+- pubmed: PubMed（生物医学文献，国际主流）
+- openalex: OpenAlex（开放学术数据库，覆盖广）
+- cnki: 中国知网（中文文献为主，需机构权限）
+- wanfang: 万方（中文文献，需机构权限）
+- vip: 维普（中文文献，需机构权限）
+- google_scholar: Google Scholar（实验性，反爬风险）
+- bing_academic: Bing 学术（实验性）
 
 请严格按以下 JSON 格式返回，不要包含其他内容：
-{
-  "query": "PubMed 检索式（可含字段标签 [ti] [tiab] [ta] [mh]，布尔运算 AND/OR/NOT）",
+{{
+  "query": "检索式（可含 PubMed 字段标签 [ti] [tiab] [ta] [mh]，布尔运算 AND/OR/NOT）",
   "journal": "期刊名或缩写（无则空字符串）",
   "field": "默认字段标签（默认 tiab）",
   "year_from": 年份数字,
   "year_to": 年份数字,
   "mesh_term": "MeSH 主题词（无则空）",
   "pub_type": "文献类型 review/clinical trial（无则空）",
+  "data_sources": ["推荐启用的数据源列表，根据用户意图选择"],
   "explanation": "用中文详细说明检索策略，包括：1）为什么选择这些关键词；2）检索式的逻辑结构；3）预期的检索范围",
   "suggested_keywords": ["3-5个专业英文关键词"],
-  "search_reasoning": "简要说明检索策略的推理过程，帮助用户理解为什么这样设计检索式"
-}"""
+  "search_reasoning": "简要说明检索策略的推理过程"
+}}
+
+data_sources 选择规则：
+- 用户提到"知网""CNKI"→ 仅包含 ["cnki"]
+- 用户提到"万方"→ 仅包含 ["wanfang"]
+- 用户提到"维普"→ 仅包含 ["vip"]
+- 用户提到"中文文献""国内论文"→ 包含 ["cnki", "wanfang", "vip"]
+- 用户提到"PubMed"→ 仅包含 ["pubmed"]
+- 默认 → ["pubmed", "openalex"]"""
 
         # 截断过长输入
         if len(user_input) > 2000:
@@ -219,6 +242,7 @@ class SearchAI:
             "query": user_input, "journal": "", "field": "tiab",
             "year_from": 2020, "year_to": datetime.now().year,
             "mesh_term": "", "pub_type": "",
+            "data_sources": ["pubmed", "openalex"],
             "explanation": f"AI 解析失败，使用原始输入: {user_input}",
             "suggested_keywords": [],
         }
