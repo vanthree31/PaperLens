@@ -422,7 +422,17 @@ class OpenAlexSearch:
             params["mailto"] = self.email
 
         try:
-            r = self.session.get(f"{self.BASE}/works", params=params, timeout=15)
+            # 带重试的请求（应对 OpenAlex 限流 429）
+            r = None
+            for attempt in range(3):
+                r = self.session.get(f"{self.BASE}/works", params=params, timeout=15)
+                if r.status_code == 429:
+                    # 限流，等待后重试
+                    wait = min(2 ** attempt * 2, 10)  # 2s, 4s, 8s
+                    print(f"OpenAlex rate limited, waiting {wait}s (attempt {attempt+1}/3)")
+                    time.sleep(wait)
+                    continue
+                break
             r.raise_for_status()
             data = r.json()
             results = self._parse_results(data.get("results", []))
@@ -468,7 +478,16 @@ class OpenAlexSearch:
                 params["mailto"] = self.email
 
             try:
-                r = self.session.get(f"{self.BASE}/works", params=params, timeout=15)
+                # 带重试的请求（应对 OpenAlex 限流 429）
+                r = None
+                for attempt in range(3):
+                    r = self.session.get(f"{self.BASE}/works", params=params, timeout=15)
+                    if r.status_code == 429:
+                        wait = min(2 ** attempt * 2, 10)
+                        print(f"OpenAlex rate limited (enrich), waiting {wait}s")
+                        time.sleep(wait)
+                        continue
+                    break
                 r.raise_for_status()
                 data = r.json()
 
@@ -494,7 +513,7 @@ class OpenAlexSearch:
                 print(f"OpenAlex enrich error: {e}")
 
             if i + 25 < len(papers_with_doi):
-                time.sleep(0.3)
+                time.sleep(1)  # 批次间延迟，避免限流
 
         return papers
 
