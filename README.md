@@ -52,7 +52,7 @@ PaperLens solves all of these with a single interface.
 | **Multi Data Source** | PubMed + OpenAlex (+ Google Scholar / Bing Academic / CNKI / Wanfang / VIP experimental), automatic deduplication, citation counts, and OA links |
 | **Batch DOI Import** | Paste a list of DOIs and look them up in one click |
 | **Advanced Filtering** | Filter by journal, field tags, year range, publication type |
-| **In-result Sorting** | Sort by citations, date, or title without re-searching |
+| **In-result Sorting** | Sort by citations, date, title, or recent impact (citation growth rate) |
 
 ### AI Analysis
 
@@ -76,12 +76,12 @@ PaperLens solves all of these with a single interface.
 
 | Feature | Description |
 |---------|-------------|
-| **Multi-format Export** | RIS (EndNote), BibTeX (LaTeX), CSV, EndNote XML |
+| **Multi-format Export** | RIS (EndNote), BibTeX (LaTeX), CSV, EndNote XML — with academic fields (volume, issue, pages, ISSN) |
 | **PDF Download** | Direct OA PDF download with link verification |
 | **Search History** | Persistent history with smart suggestions |
-| **Dual AI Models** | Configure separate models for search (fast) and analysis (high-quality) |
+| **Dual AI Models** | Configure separate models for search (fast) and analysis (high-quality), each with independent max_tokens |
 | **Zotero Sync** | Direct sync papers to Zotero with collection selection |
-| **Reading Recommendations** | Personalized paper recommendations based on reading history |
+| **Reading Recommendations** | Personalized recommendations via keyword-based (deep) and citation-based (exploration) strategies |
 
 ## Architecture
 
@@ -215,8 +215,8 @@ PaperLens/
 - [x] Floating Citation Graph (draggable windows with full AI toolbar)
 - [x] Novelty Detection (AI identifies research gaps)
 - [x] Batch DOI Import
-- [x] Multi-format Export (RIS / BibTeX / CSV / EndNote XML)
-- [x] Dual AI model configuration
+- [x] Multi-format Export (RIS / BibTeX / CSV / EndNote XML) with academic fields
+- [x] Dual AI model configuration with independent max_tokens
 - [x] Streaming output for AI analysis
 - [x] User preference persistence (year range, sort, filters)
 - [x] Search history with smart suggestions
@@ -232,7 +232,7 @@ PaperLens/
 - [x] Author collaboration network visualization
 
 ### Planned
-- [x] Paper recommendation based on reading history
+- [x] Paper recommendation (keyword-based deep + citation-based exploration)
 - [ ] RAG integration for literature review writing (complex, deferred)
 - [x] Zotero direct sync
 - [ ] Mendeley direct sync
