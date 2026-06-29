@@ -1846,21 +1846,6 @@ async function doAISearch() {
           document.getElementById("useBingAcademic").checked = sources.includes("bing_academic");
         }
 
-        // 更新期刊过滤
-        if (data.analysis.journal) {
-          document.getElementById("filterJournal").value = data.analysis.journal;
-        }
-
-        // 更新字段标签
-        if (data.analysis.field) {
-          document.getElementById("filterField").value = data.analysis.field;
-        }
-
-        // 更新文献类型
-        if (data.analysis.pub_type) {
-          document.getElementById("filterPubType").value = data.analysis.pub_type;
-        }
-
         // 更新状态栏数据源显示
         updateDataSourceDisplay();
       }
