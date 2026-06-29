@@ -13,3 +13,4 @@ data/
 
 # Claude Code local settings
 .claude/
+CLAUDE.md
