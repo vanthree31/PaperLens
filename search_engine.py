@@ -40,6 +40,10 @@ class Paper:
     oa_url: str = ""
     keywords: List[str] = field(default_factory=list)
     source: str = ""
+    volume: str = ""
+    issue: str = ""
+    pages: str = ""
+    issn: str = ""
 
 
 # 常用期刊缩写映射（用于智能查询构建）
@@ -301,6 +305,31 @@ class PubMedSearch:
             for aid in article.findall(".//ArticleId"):
                 if aid.get("IdType") == "doi":
                     p.doi = aid.text or ""
+
+            # 提取卷号、期号、页码
+            volume_el = article.find(".//JournalIssue/Volume")
+            if volume_el is not None and volume_el.text:
+                p.volume = volume_el.text.strip()
+            issue_el = article.find(".//JournalIssue/Issue")
+            if issue_el is not None and issue_el.text:
+                p.issue = issue_el.text.strip()
+            # 页码：尝试 Pagination/StartPage-EndPage 或 MedlinePgn
+            pagination_el = article.find(".//Pagination")
+            if pagination_el is not None:
+                start_page = pagination_el.find("StartPage")
+                end_page = pagination_el.find("EndPage")
+                if start_page is not None and start_page.text:
+                    p.pages = start_page.text.strip()
+                    if end_page is not None and end_page.text:
+                        p.pages += f"-{end_page.text.strip()}"
+            if not p.pages:
+                medline_pgn = article.find(".//MedlinePgn")
+                if medline_pgn is not None and medline_pgn.text:
+                    p.pages = medline_pgn.text.strip()
+            # ISSN
+            issn_el = article.find(".//ISSN")
+            if issn_el is not None and issn_el.text:
+                p.issn = issn_el.text.strip()
 
             abstract_el = article.find(".//Abstract")
             if abstract_el is not None:

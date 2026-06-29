@@ -1972,6 +1972,7 @@ function renderResults() {
       <span style="margin-left:16px;font-size:12px" id="sortBtns">
         ${t("sortBtn")} <span class="sort-btn${currentSort==='citations'?' active':''}" onclick="sortPapers('citations')">${t("cited")}${currentSort==='citations'&&_sortReversed?'↑':'↓'}</span>
         <span class="sort-btn${currentSort==='date'?' active':''}" onclick="sortPapers('date')">${t("date")}${currentSort==='date'&&_sortReversed?'↑':'↓'}</span>
+        <span class="sort-btn${currentSort==='recent_impact'?' active':''}" onclick="sortPapers('recent_impact')">${t("sortRecentImpact")}${currentSort==='recent_impact'&&_sortReversed?'↑':'↓'}</span>
         <span class="sort-btn${currentSort==='title'?' active':''}" onclick="sortPapers('title')">${t("title")}${currentSort==='title'&&_sortReversed?'↓':'↑'}</span>
       </span>
     </div>
@@ -1996,7 +1997,13 @@ function renderResults() {
   page.forEach((p, i) => {
     const idx = start + i;
     const isChecked = checkedSet.has(idx);
-    const isFavorited = collectionsData.items && collectionsData.items.some(item => item.doi && p.doi && item.doi.toLowerCase() === p.doi.toLowerCase());
+    const isFavorited = collectionsData.items && collectionsData.items.some(item => {
+      // 优先用 DOI 匹配
+      if (p.doi && item.doi && item.doi.toLowerCase() === p.doi.toLowerCase()) return true;
+      // 无 DOI 时用 title 匹配
+      if (!p.doi && p.title && item.title && item.title === p.title) return true;
+      return false;
+    });
     const authors = p.authors.length > 3 ? p.authors.slice(0, 3).map(a => escapeHtml(a)).join(", ") + " et al." : p.authors.map(a => escapeHtml(a)).join(", ");
     const doiLink = p.doi ? `<a href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" style="color:var(--primary);text-decoration:none">${escapeHtml(p.doi)}</a>` : "";
     const safeOaUrl = p.oa_url && /^https?:\/\//i.test(p.oa_url) ? p.oa_url : "";

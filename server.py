@@ -8,7 +8,7 @@ import threading
 import yaml
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, Response
-from search_engine import SearchEngine
+from search_engine import SearchEngine, Paper
 from exporters import export_ris, export_bibtex, export_csv, export_endnote_xml
 from ai_assistant import SearchAI, AnalysisAI
 
@@ -86,6 +86,8 @@ def _escape_paper(paper) -> dict:
         "abstract": esc(paper.abstract), "citation_count": paper.citation_count,
         "oa_url": esc(paper.oa_url), "keywords": [esc(k) for k in paper.keywords],
         "source": esc(paper.source),
+        "volume": esc(paper.volume), "issue": esc(paper.issue),
+        "pages": esc(paper.pages), "issn": esc(paper.issn),
     }
 
 
@@ -376,7 +378,7 @@ def create_app():
                 max_results = min(int(data.get("max_results", 50)), 200)
             except (ValueError, TypeError):
                 max_results = 50
-            # 钳位 AI 返回的年份参数
+            # AI 搜索：优先使用 AI 返回的年份，钳位到合理范围
             ai_year_from = analysis.get("year_from", 2020)
             ai_year_to = analysis.get("year_to", current_year)
             try:
@@ -384,30 +386,36 @@ def create_app():
                 year_to = max(year_from, min(int(ai_year_to), current_year))
             except (ValueError, TypeError):
                 year_from, year_to = 2020, current_year
-            # 客户端年份过滤优先（用户明确指定的范围覆盖 AI 的建议）
-            try:
-                client_year_from = int(data.get("year_from", 0))
-                client_year_to = int(data.get("year_to", 0))
-                if client_year_from and client_year_to:
-                    # 客户端指定了完整范围，直接使用
-                    year_from = client_year_from
-                    year_to = client_year_to
-                elif client_year_from:
-                    year_from = max(year_from, client_year_from)
-                elif client_year_to:
-                    year_to = min(year_to, client_year_to)
-            except (ValueError, TypeError):
-                pass
+
+            # AI 搜索：优先使用 AI 推荐的数据源，回退到客户端复选框状态
+            ai_sources = analysis.get("data_sources", [])
+            if ai_sources:
+                # AI 明确推荐了数据源
+                use_pubmed = "pubmed" in ai_sources
+                use_openalex = "openalex" in ai_sources
+                use_google_scholar = "google_scholar" in ai_sources
+                use_cnki = "cnki" in ai_sources
+                use_wanfang = "wanfang" in ai_sources
+                use_vip = "vip" in ai_sources
+                use_bing_academic = "bing_academic" in ai_sources
+            else:
+                # AI 未推荐，使用客户端复选框状态
+                use_pubmed = data.get("use_pubmed", True)
+                use_openalex = data.get("use_openalex", True)
+                use_google_scholar = data.get("use_google_scholar", False)
+                use_cnki = data.get("use_cnki", False)
+                use_wanfang = data.get("use_wanfang", False)
+                use_vip = data.get("use_vip", False)
+                use_bing_academic = data.get("use_bing_academic", False)
+
             papers = engine.search(
                 query=analysis.get("query", user_input),
                 year_from=year_from, year_to=year_to,
                 sort="relevance", max_results=max_results,
-                use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
-                use_google_scholar=data.get("use_google_scholar", False),
-                use_cnki=data.get("use_cnki", False),
-                use_wanfang=data.get("use_wanfang", False),
-                use_vip=data.get("use_vip", False),
-                use_bing_academic=data.get("use_bing_academic", False),
+                use_pubmed=use_pubmed, use_openalex=use_openalex,
+                use_google_scholar=use_google_scholar,
+                use_cnki=use_cnki, use_wanfang=use_wanfang,
+                use_vip=use_vip, use_bing_academic=use_bing_academic,
                 journal=analysis.get("journal", ""), field=analysis.get("field", ""),
                 mesh_term=analysis.get("mesh_term", ""), pub_type=analysis.get("pub_type", ""),
             )
