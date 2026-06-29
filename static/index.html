@@ -581,6 +581,11 @@ body {
       <label data-i18n="pubmedAPIKey">PubMed API Key</label>
       <input type="text" id="cfgPubmedKey" placeholder="可选">
     </div>
+    <div class="form-group">
+      <label data-i18n="openalexEmail">OpenAlex Email</label>
+      <input type="email" id="cfgOpenalexEmail" placeholder="your@email.com">
+      <div class="hint" data-i18n="openalexEmailHint">推荐配置，加入 polite pool 可获得 10 倍请求速率，减少限流</div>
+    </div>
   </div>
   <div class="settings-section">
     <h3 data-i18n="aiSearchModel">AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）</h3>
@@ -895,6 +900,7 @@ const LANGS = {
     settingsTitle: "⚙ 设置", dataSourceConfig: "数据源配置",
     pubmedEmail: "PubMed Email", pubmedEmailHint: "可选，提高 NCBI API 速率限制",
     pubmedAPIKey: "PubMed API Key", optional: "可选",
+    openalexEmail: "OpenAlex Email", openalexEmailHint: "推荐配置，加入 polite pool 可获得 10 倍请求速率，减少限流",
     aiSearchModel: "AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）",
     enableSearchAI: "启用检索 AI", provider: "提供商",
     apiKey: "API Key", modelName: "模型名称", endpointURL: "端点 URL",
@@ -1055,6 +1061,7 @@ const LANGS = {
     settingsTitle: "⚙ Settings", dataSourceConfig: "Data Source Configuration",
     pubmedEmail: "PubMed Email", pubmedEmailHint: "Optional, improves NCBI API rate limit",
     pubmedAPIKey: "PubMed API Key", optional: "Optional",
+    openalexEmail: "OpenAlex Email", openalexEmailHint: "Recommended: join polite pool for 10x request rate, reduces 429 rate limits",
     aiSearchModel: "AI Search Model (parses natural language → generates search queries, recommend fast model)",
     enableSearchAI: "Enable Search AI", provider: "Provider",
     apiKey: "API Key", modelName: "Model Name", endpointURL: "Endpoint URL",
@@ -2174,12 +2181,14 @@ async function loadSettings() {
     const r = await fetch(`${API}/api/config`);
     const cfg = await r.json();
     const pm = cfg.sources?.pubmed || {};
+    const oa = cfg.sources?.openalex || {};
     const searchAi = cfg.ai_search || cfg.ai || {};
     const analysisAi = cfg.ai_analysis || cfg.ai || {};
     const px = cfg.proxy || {};
 
     document.getElementById("cfgPubmedEmail").value = pm.email || "";
     document.getElementById("cfgPubmedKey").value = pm.api_key || "";
+    document.getElementById("cfgOpenalexEmail").value = oa.email || "";
 
     document.getElementById("cfgSearchAiEnabled").checked = searchAi.enabled || false;
     document.getElementById("cfgSearchAiProvider").value = searchAi.provider || "deepseek";
@@ -2240,7 +2249,7 @@ async function saveSettings() {
   const cfg = removeUndefined({
     sources: {
       pubmed: { enabled: true, email: document.getElementById("cfgPubmedEmail").value.trim(), api_key: isMasked(pubmedKey) ? undefined : pubmedKey },
-      openalex: { enabled: true, email: "" },
+      openalex: { enabled: true, email: document.getElementById("cfgOpenalexEmail").value.trim() },
     },
     ai_search: {
       enabled: document.getElementById("cfgSearchAiEnabled").checked,
