@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **PaperLens** (666 symbols, 1033 relationships, 42 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **PaperLens** (680 symbols, 1047 relationships, 42 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -41,3 +41,10 @@ This project is indexed by GitNexus as **PaperLens** (666 symbols, 1033 relation
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## Project Conventions
+
+- 提交信息使用英文，conventional commit 格式（feat:, fix:, docs:, refactor:）
+- 错误信息使用错误码系统（te()/teAI()），不要硬编码字符串
+- 修 i18n bug 时，搜索所有层（server、ai_assistant、frontend）的未翻译字符串
+- 年份过滤逻辑必须验证边界情况（无年份字段、部分日期、仅年份范围）

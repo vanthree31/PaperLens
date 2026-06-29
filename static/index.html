@@ -528,6 +528,7 @@ body {
         <option value="relevance" data-i18n="sortRelevance">相关度</option>
         <option value="date" data-i18n="sortDate">时间</option>
         <option value="citations" data-i18n="sortCitations">引用</option>
+        <option value="recent_impact" data-i18n="sortRecentImpact">近期影响力</option>
       </select>
     </div>
     <div class="filter-group">
@@ -610,6 +611,11 @@ body {
       <label data-i18n="endpointURL">端点 URL</label>
       <input type="text" id="cfgSearchAiUrl" data-i18n-placeholder="cfgSearchAiUrl" placeholder="留空使用默认端点">
     </div>
+    <div class="form-group">
+      <label data-i18n="maxTokens">最大输出 Tokens</label>
+      <input type="number" id="cfgSearchMaxTokens" min="1024" max="131072" step="1024" value="4096">
+      <div class="hint">检索模型建议 4096（快速响应）</div>
+    </div>
   </div>
   <div class="settings-section">
     <h3 data-i18n="aiAnalysisModel">AI 论文分析模型（总结/详析/对比，建议用高质量模型）</h3>
@@ -642,7 +648,7 @@ body {
     </div>
     <div class="form-group">
       <label data-i18n="maxTokens">最大输出 Tokens</label>
-      <input type="number" id="cfgMaxTokens" min="1024" max="131072" step="1024" value="16384">
+      <input type="number" id="cfgAnalysisMaxTokens" min="1024" max="131072" step="1024" value="16384">
       <div class="hint" data-i18n="maxTokensHint">控制 AI 单次回复的最大长度，默认 16384。多篇论文分析建议 16384+</div>
     </div>
   </div>
@@ -768,6 +774,7 @@ body {
         <div><span class="dot" style="background:#10b981"></span> <span id="legendCiting">引用了此论文</span></div>
         <div><span class="dot" style="background:#f59e0b"></span> <span id="legendReferenced">此论文引用</span></div>
         <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px"><span id="graphZoomLevel">100%</span> · <span id="graphHintText">滚轮缩放 · 拖拽平移 · 点击节点展开引用</span> · <a href="#" onclick="resetGraphZoom();return false" style="color:#64748b" id="resetZoomLink">重置缩放</a></div>
+        <div style="margin-top:4px;color:#94a3b8;font-size:10px">数据来源：OpenAlex（引用数据可能不完整，仅供参考）</div>
       </div>
     </div>
     <div id="graphAiPanel" style="display:none;padding:12px 16px;border-top:1px solid var(--border);background:#f0fdf4;overflow-y:auto">
@@ -831,7 +838,7 @@ const LANGS = {
     journal: "期刊", field: "字段", year: "年份", type: "类型", sort: "排序", count: "数量",
     fieldDefault: "默认", fieldTitle: "标题", fieldTitleAbstract: "标题+摘要", fieldAuthor: "作者", fieldFree: "自由词",
     typeAll: "全部", typeReview: "综述", typeClinical: "临床试验", typeMeta: "Meta分析",
-    sortRelevance: "相关度", sortDate: "时间", sortCitations: "引用",
+    sortRelevance: "相关度", sortDate: "时间", sortCitations: "引用", sortRecentImpact: "近期影响力",
     // 数据源
     pubmed: "PubMed", openalex: "OpenAlex", bing_academic: "Bing 学术",
     // 结果
@@ -991,7 +998,7 @@ const LANGS = {
     journal: "Journal", field: "Field", year: "Year", type: "Type", sort: "Sort", count: "Count",
     fieldDefault: "Default", fieldTitle: "Title", fieldTitleAbstract: "Title+Abstract", fieldAuthor: "Author", fieldFree: "Free Word",
     typeAll: "All", typeReview: "Review", typeClinical: "Clinical Trial", typeMeta: "Meta-analysis",
-    sortRelevance: "Relevance", sortDate: "Date", sortCitations: "Citations",
+    sortRelevance: "Relevance", sortDate: "Date", sortCitations: "Citations", sortRecentImpact: "Recent Impact",
     // Data sources
     pubmed: "PubMed", openalex: "OpenAlex", bing_academic: "Bing Academic",
     // Results
@@ -1822,10 +1829,17 @@ async function doAISearch() {
         const aiPanel = document.getElementById("aiPanel");
         const aiContent = document.getElementById("aiContent");
         aiPanel.classList.add("show");
-        aiContent.innerHTML = `<b>${t("aiSearchStrategy")}</b>${escapeHtml(data.explanation)}` +
-          (data.analysis?.suggested_keywords ? `<br><b>${t("suggestedKeywords")}</b>${escapeHtml(data.analysis.suggested_keywords.join(", "))}` : "") +
-          `<br><b>${t("actualQuery")}</b><code>${escapeHtml(data.query)}</code>` +
-          `<br><button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="refilterWithAI()">${t("refilter") || "用新条件重新筛选"}</button>`;
+        let strategyHtml = `<b>${t("aiSearchStrategy")}</b>${escapeHtml(data.explanation)}`;
+        // 显示检索推理过程（如果有）
+        if (data.analysis?.search_reasoning) {
+          strategyHtml += `<br><br><b>检索推理：</b>${escapeHtml(data.analysis.search_reasoning)}`;
+        }
+        if (data.analysis?.suggested_keywords) {
+          strategyHtml += `<br><b>${t("suggestedKeywords")}</b>${escapeHtml(data.analysis.suggested_keywords.join(", "))}`;
+        }
+        strategyHtml += `<br><b>${t("actualQuery")}</b><code>${escapeHtml(data.query)}</code>`;
+        strategyHtml += `<br><button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="refilterWithAI()">${t("refilter") || "用新条件重新筛选"}</button>`;
+        aiContent.innerHTML = strategyHtml;
       }
       setStatus(`${t("aiSearchComplete")} ${data.total} ${t("papersFound")} ${elapsed} ${t("seconds")})`);
     } else {
@@ -2138,7 +2152,8 @@ async function loadSettings() {
     document.getElementById("cfgAnalysisAiKey").title = analysisAi.api_key ? t("keyMaskedTip") : "";
     document.getElementById("cfgAnalysisAiModel").value = analysisAi.model || "";
     document.getElementById("cfgAnalysisAiUrl").value = analysisAi.base_url || "";
-    document.getElementById("cfgMaxTokens").value = analysisAi.max_tokens || 16384;
+    document.getElementById("cfgSearchMaxTokens").value = searchAi.max_tokens || 4096;
+    document.getElementById("cfgAnalysisMaxTokens").value = analysisAi.max_tokens || 16384;
 
     document.getElementById("cfgProxyHttp").value = px.http || "";
     document.getElementById("cfgProxyHttps").value = px.https || "";
@@ -2191,7 +2206,7 @@ async function saveSettings() {
       api_key: isMasked(searchAiKey) ? undefined : searchAiKey,
       base_url: document.getElementById("cfgSearchAiUrl").value.trim(),
       model: document.getElementById("cfgSearchAiModel").value.trim(),
-      max_tokens: Math.max(1024, Math.min(131072, parseInt(document.getElementById("cfgMaxTokens").value) || 16384)),
+      max_tokens: Math.max(1024, Math.min(131072, parseInt(document.getElementById("cfgSearchMaxTokens").value) || 4096)),
     },
     ai_analysis: {
       enabled: document.getElementById("cfgAnalysisAiEnabled").checked,
@@ -2199,7 +2214,7 @@ async function saveSettings() {
       api_key: isMasked(analysisAiKey) ? undefined : analysisAiKey,
       base_url: document.getElementById("cfgAnalysisAiUrl").value.trim(),
       model: document.getElementById("cfgAnalysisAiModel").value.trim(),
-      max_tokens: Math.max(1024, Math.min(131072, parseInt(document.getElementById("cfgMaxTokens").value) || 16384)),
+      max_tokens: Math.max(1024, Math.min(131072, parseInt(document.getElementById("cfgAnalysisMaxTokens").value) || 16384)),
     },
     proxy: {
       http: document.getElementById("cfgProxyHttp").value.trim(),
@@ -2418,7 +2433,10 @@ function renderAIResult(el, modeName, text, count, cached) {
         <button class="btn btn-sm btn-outline" onclick="aiAnalyzePapers('${modeKey}', true)">${t("regenerate")}</button>
       </div>
     </div>
-    <div style="line-height:1.8;font-size:14px">${formatAIText(translatedText)}</div>`;
+    <div style="line-height:1.8;font-size:14px">${formatAIText(translatedText)}</div>
+    <div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px">
+      ⚠️ 此分析由 AI 生成，基于论文摘要信息。可能存在不准确之处，请以原文为准。关键结论请查阅原文验证。
+    </div>`;
 }
 
 function copyAIText() {
@@ -2565,8 +2583,11 @@ async function refreshCollections() {
   } catch { /* 忽略 */ }
 }
 
-// 定期轮询收藏数据（每 30 秒）
+// 定期轮询收藏数据（每 30 秒，仅在面板打开时执行）
 setInterval(async () => {
+  const panel = document.getElementById("collectionsPanel");
+  // 面板关闭时跳过轮询，节省资源
+  if (!panel || !panel.classList.contains("show")) return;
   try {
     const r = await fetch(`${API}/api/collections`);
     if (r.ok) {
@@ -2575,11 +2596,7 @@ setInterval(async () => {
       if (JSON.stringify(newData) !== JSON.stringify(collectionsData)) {
         collectionsData = newData;
         renderGroupTabs();
-        // 如果收藏面板是打开的，重新渲染
-        const panel = document.getElementById("collectionsPanel");
-        if (panel && panel.classList.contains("show")) {
-          renderCollections();
-        }
+        renderCollections();
       }
     }
   } catch { /* 忽略 */ }
@@ -2644,6 +2661,16 @@ function renderRecommendations(data) {
   if (!body) return;
 
   let html = '';
+
+  // 显示推荐类型说明
+  const recommendType = data.recommendation_type || "keyword";
+  const typeHint = recommendType === "citation"
+    ? "基于你收藏的论文引用关系推荐（探索性推荐）"
+    : "基于你的阅读兴趣关键词推荐（深耕性推荐）";
+
+  html += `<div style="padding:6px 12px;margin-bottom:8px;background:#f8fafc;border-radius:6px;font-size:11px;color:#64748b">
+    💡 ${typeHint}
+  </div>`;
 
   // 显示兴趣关键词
   if (data.keywords && data.keywords.length > 0) {
@@ -3008,10 +3035,23 @@ async function toggleFavorite(idx, btn) {
   toggleFavorite._running = true;
   try {
     const paper = allPapers[idx];
-    if (!paper || !paper.doi) return;
-    const existingItem = collectionsData.items && collectionsData.items.find(item => item.doi && item.doi.toLowerCase() === paper.doi.toLowerCase());
+    if (!paper) return;
+    // 支持无 DOI 论文（用 title 匹配）
+    const existingItem = collectionsData.items && collectionsData.items.find(item => {
+      if (paper.doi && item.doi) {
+        return item.doi.toLowerCase() === paper.doi.toLowerCase();
+      }
+      if (!paper.doi && paper.title && item.title) {
+        return item.title === paper.title;
+      }
+      return false;
+    });
     if (existingItem) {
-      await removeFromCollection(encodeURIComponent(paper.doi), existingItem.group_id || "default");
+      await removeFromCollection(
+        paper.doi ? encodeURIComponent(paper.doi) : null,
+        paper.doi ? null : encodeURIComponent(paper.title || ''),
+        existingItem.group_id || "default"
+      );
     } else {
       await addToCollection(paper);
     }
@@ -3091,8 +3131,30 @@ function closeDoiModal() {
 async function batchDoiLookup() {
   const raw = document.getElementById("doiTextarea").value.trim();
   if (!raw) { showToast(t("enterDOI")); return; }
-  const dois = raw.split("\n").map(l => l.trim().replace(/^doi:\s*/i, "")).filter(l => l);
-  if (!dois.length) { showToast(t("noValidDOI")); return; }
+  const lines = raw.split("\n").map(l => l.trim()).filter(l => l);
+  const dois = [];
+  const invalidLines = [];
+  for (const line of lines) {
+    // 移除 doi: 前缀
+    const doi = line.replace(/^doi:\s*/i, "").trim();
+    if (!doi) continue;
+    // 验证 DOI 格式（基本检查：以 10. 开头，包含 /）
+    if (/^10\.\d{4,}\/\S+$/.test(doi)) {
+      dois.push(doi);
+    } else {
+      invalidLines.push(line);
+    }
+  }
+  if (!dois.length) {
+    showToast(t("noValidDOI"));
+    if (invalidLines.length > 0) {
+      document.getElementById("doiResult").textContent = `${t("noValidDOI")}，无效行：${invalidLines.slice(0, 3).join(", ")}${invalidLines.length > 3 ? "..." : ""}`;
+    }
+    return;
+  }
+  if (invalidLines.length > 0) {
+    document.getElementById("doiResult").textContent = `已识别 ${dois.length} 个有效 DOI，${invalidLines.length} 行格式无效已跳过`;
+  }
 
   const btn = document.getElementById("doiBtn");
   btn.disabled = true;
@@ -3107,15 +3169,25 @@ async function batchDoiLookup() {
     });
     const data = await r.json();
     if (r.ok) {
-      allPapers = data.papers;
-      checkedSet.clear();
+      // 合并到现有结果（避免丢失之前的搜索结果）
+      const existingDois = new Set(allPapers.filter(p => p.doi).map(p => p.doi.toLowerCase()));
+      const newPapers = data.papers.filter(p => !p.doi || !existingDois.has(p.doi.toLowerCase()));
+      if (newPapers.length > 0) {
+        allPapers = [...newPapers, ...allPapers];
+        // 更新 checkedSet 索引（新论文在前面）
+        const shifted = new Set();
+        checkedSet.forEach(i => shifted.add(i + newPapers.length));
+        checkedSet = shifted;
+      }
       currentPage = 1;
       renderResults();
+      const mergeInfo = newPapers.length > 0 && allPapers.length > newPapers.length
+        ? `（新增 ${newPapers.length} 篇，合并后共 ${allPapers.length} 篇）` : "";
       const msg = data.not_found > 0
-        ? `${t("foundPapers")} ${data.total} ${t("papers")}, ${data.not_found} ${t("doiNotFound")}`
-        : `${t("foundPapers")} ${data.total} ${t("papers")}${t("doiReplaced")}`;
+        ? `${t("foundPapers")} ${data.total} ${t("papers")}, ${data.not_found} ${t("doiNotFound")}${mergeInfo}`
+        : `${t("foundPapers")} ${data.total} ${t("papers")}${t("doiReplaced")}${mergeInfo}`;
       document.getElementById("doiResult").textContent = msg;
-      setStatus(`${t("batchDOI")} ${t("completed")}, ${data.total} ${t("papers")}`);
+      setStatus(`${t("batchDOI")} ${t("completed")}, ${allPapers.length} ${t("papers")}`);
     } else {
       document.getElementById("doiResult").textContent = te(data.error) || t("queryFailed");
     }
@@ -3146,6 +3218,16 @@ function sortPapers(by) {
       allPapers.sort((a, b) => (b.year || 0) - (a.year || 0));
     } else if (by === "title") {
       allPapers.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    } else if (by === "recent_impact") {
+      // 近期影响力：按引用数/年份差排序（年份越新、引用越多，影响力越高）
+      const currentYear = new Date().getFullYear();
+      allPapers.sort((a, b) => {
+        const ageA = Math.max(1, currentYear - (a.year || currentYear));
+        const ageB = Math.max(1, currentYear - (b.year || currentYear));
+        const impactA = (a.citation_count || 0) / ageA;
+        const impactB = (b.citation_count || 0) / ageB;
+        return impactB - impactA;
+      });
     }
   }
   currentSort = by;

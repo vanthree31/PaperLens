@@ -19,9 +19,20 @@ def export_ris(papers: list) -> str:
                 lines.append(f"AU  - {author}")
             if getattr(p, 'year', None):
                 lines.append(f"PY  - {p.year}")
+                lines.append(f"DA  - {p.year}")
             if getattr(p, 'journal', None):
                 lines.append(f"JO  - {p.journal}")
                 lines.append(f"JA  - {p.journal}")
+                lines.append(f"T2  - {p.journal}")
+            # 尝试提取卷号、期号、页码（如果有）
+            if getattr(p, 'volume', None):
+                lines.append(f"VL  - {p.volume}")
+            if getattr(p, 'issue', None):
+                lines.append(f"IS  - {p.issue}")
+            if getattr(p, 'pages', None):
+                lines.append(f"SP  - {p.pages}")
+            if getattr(p, 'issn', None):
+                lines.append(f"SN  - {p.issn}")
             if getattr(p, 'doi', None):
                 lines.append(f"DO  - {p.doi}")
             if getattr(p, 'pmid', None):
@@ -76,6 +87,15 @@ def export_bibtex(papers: list) -> str:
                 lines.append(f"  journal = {{{_bibtex_escape(p.journal)}}},")
             if getattr(p, 'year', None):
                 lines.append(f"  year = {{{p.year}}},")
+            # 补充学术字段
+            if getattr(p, 'volume', None):
+                lines.append(f"  volume = {{{p.volume}}},")
+            if getattr(p, 'issue', None):
+                lines.append(f"  number = {{{p.issue}}},")
+            if getattr(p, 'pages', None):
+                lines.append(f"  pages = {{{p.pages}}},")
+            if getattr(p, 'issn', None):
+                lines.append(f"  issn = {{{p.issn}}},")
             if getattr(p, 'doi', None):
                 lines.append(f"  doi = {{{p.doi}}},")
             if getattr(p, 'pmid', None):
@@ -84,6 +104,10 @@ def export_bibtex(papers: list) -> str:
                 lines.append(f"  abstract = {{{_bibtex_escape(p.abstract)}}},")
             if getattr(p, 'keywords', None):
                 lines.append(f"  keywords = {{{', '.join(_bibtex_escape(kw) for kw in p.keywords)}}},")
+            if getattr(p, 'oa_url', None):
+                lines.append(f"  url = {{{p.oa_url}}},")
+            elif getattr(p, 'doi', None):
+                lines.append(f"  url = {{https://doi.org/{p.doi}}},")
             lines.append("}")
             lines.append("")
         except Exception as e:
@@ -109,10 +133,10 @@ def export_csv(papers: list) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # 表头
+    # 表头（包含学术字段）
     writer.writerow([
-        "Title", "Authors", "Journal", "Year", "DOI",
-        "PMID", "Citations", "OA_URL", "Keywords", "Abstract"
+        "Title", "Authors", "Journal", "Year", "Volume", "Issue", "Pages",
+        "DOI", "PMID", "ISSN", "Citations", "OA_URL", "Keywords", "Abstract"
     ])
 
     for p in papers:
@@ -122,8 +146,12 @@ def export_csv(papers: list) -> str:
                 "; ".join(getattr(p, 'authors', None) or []),
                 getattr(p, 'journal', ''),
                 getattr(p, 'year', ''),
+                getattr(p, 'volume', ''),
+                getattr(p, 'issue', ''),
+                getattr(p, 'pages', ''),
                 getattr(p, 'doi', ''),
                 getattr(p, 'pmid', ''),
+                getattr(p, 'issn', ''),
                 getattr(p, 'citation_count', 0),
                 getattr(p, 'oa_url', ''),
                 "; ".join(getattr(p, 'keywords', None) or []),
@@ -185,6 +213,15 @@ def export_endnote_xml(papers: list) -> str:
             lines.append(f'<periodical><full-title><style face="normal" font="default" size="100">{_xml_escape(p.journal)}</style></full-title></periodical>')
         if p.year:
             lines.append(f'<dates><year><style face="normal" font="default" size="100">{p.year}</style></year></dates>')
+        # 补充学术字段
+        if getattr(p, 'volume', None):
+            lines.append(f'<volume><style face="normal" font="default" size="100">{_xml_escape(p.volume)}</style></volume>')
+        if getattr(p, 'issue', None):
+            lines.append(f'<number><style face="normal" font="default" size="100">{_xml_escape(p.issue)}</style></number>')
+        if getattr(p, 'pages', None):
+            lines.append(f'<pages><style face="normal" font="default" size="100">{_xml_escape(p.pages)}</style></pages>')
+        if getattr(p, 'issn', None):
+            lines.append(f'<isbn-issn><style face="normal" font="default" size="100">{_xml_escape(p.issn)}</style></isbn-issn>')
         if p.doi:
             lines.append(f'<electronic-resource-num><style face="normal" font="default" size="100">{_xml_escape(p.doi)}</style></electronic-resource-num>')
         if p.abstract:

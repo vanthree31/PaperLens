@@ -197,8 +197,9 @@ class SearchAI:
   "year_to": 年份数字,
   "mesh_term": "MeSH 主题词（无则空）",
   "pub_type": "文献类型 review/clinical trial（无则空）",
-  "explanation": "用中文简要说明检索策略",
-  "suggested_keywords": ["3-5个专业英文关键词"]
+  "explanation": "用中文详细说明检索策略，包括：1）为什么选择这些关键词；2）检索式的逻辑结构；3）预期的检索范围",
+  "suggested_keywords": ["3-5个专业英文关键词"],
+  "search_reasoning": "简要说明检索策略的推理过程，帮助用户理解为什么这样设计检索式"
 }"""
 
         # 截断过长输入

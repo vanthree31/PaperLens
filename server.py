@@ -319,6 +319,7 @@ def create_app():
     ai_cache = {}
     cache_lock = threading.Lock()
     collections_lock = threading.Lock()
+    history_lock = threading.Lock()
 
     @app.route("/")
     def index():
@@ -490,25 +491,27 @@ def create_app():
     @app.route("/api/history", methods=["GET"])
     def get_history():
         path = _get_user_data_path("history.json")
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return jsonify(json.load(f))
-            except Exception as e:
-                print(f"[WARN] Failed to read history.json: {e}")
+        with history_lock:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        return jsonify(json.load(f))
+                except Exception as e:
+                    print(f"[WARN] Failed to read history.json: {e}")
         return jsonify([])
 
     @app.route("/api/history", methods=["POST"])
     def save_history():
         data = request.json or []
         path = _get_user_data_path("history.json")
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data[:30], f, ensure_ascii=False)
-            return jsonify({"ok": True})
-        except Exception as e:
-            print(f"[ERROR] Operation failed: {e}")
-            return jsonify({"error": "operation_failed"}), 500
+        with history_lock:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data[:30], f, ensure_ascii=False)
+                return jsonify({"ok": True})
+            except Exception as e:
+                print(f"[ERROR] Operation failed: {e}")
+                return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/preferences", methods=["GET"])
     def get_preferences():
@@ -905,51 +908,53 @@ def create_app():
             return jsonify({"error": "missing_paper_info"}), 400
 
         path = _get_user_data_path("reading_history.json")
-        history = []
-        if os.path.exists(path):
+        with history_lock:
+            history = []
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        history = json.load(f)
+                except Exception:
+                    history = []
+
+            # 添加记录
+            record = {
+                "action": action,
+                "timestamp": datetime.now().isoformat(),
+                "doi": paper.get("doi", ""),
+                "title": paper.get("title", ""),
+                "journal": paper.get("journal", ""),
+                "year": paper.get("year", 0),
+                "authors": paper.get("authors", []),
+                "keywords": paper.get("keywords", []),
+                "abstract": paper.get("abstract", "")[:500],  # 只保存前500字符
+            }
+            history.append(record)
+
+            # 只保留最近500条记录
+            history = history[-500:]
+
             try:
-                with open(path, "r", encoding="utf-8") as f:
-                    history = json.load(f)
-            except Exception:
-                history = []
-
-        # 添加记录
-        record = {
-            "action": action,
-            "timestamp": datetime.now().isoformat(),
-            "doi": paper.get("doi", ""),
-            "title": paper.get("title", ""),
-            "journal": paper.get("journal", ""),
-            "year": paper.get("year", 0),
-            "authors": paper.get("authors", []),
-            "keywords": paper.get("keywords", []),
-            "abstract": paper.get("abstract", "")[:500],  # 只保存前500字符
-        }
-        history.append(record)
-
-        # 只保留最近500条记录
-        history = history[-500:]
-
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(history, f, ensure_ascii=False)
-            return jsonify({"ok": True})
-        except Exception as e:
-            print(f"[ERROR] Operation failed: {e}")
-            return jsonify({"error": "operation_failed"}), 500
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(history, f, ensure_ascii=False)
+                return jsonify({"ok": True})
+            except Exception as e:
+                print(f"[ERROR] Operation failed: {e}")
+                return jsonify({"error": "operation_failed"}), 500
 
     @app.route("/api/recommendations", methods=["GET"])
     def get_recommendations():
         """基于阅读历史推荐论文"""
         path = _get_user_data_path("reading_history.json")
-        if not os.path.exists(path):
-            return jsonify({"papers": [], "keywords": []})
+        with history_lock:
+            if not os.path.exists(path):
+                return jsonify({"papers": [], "keywords": []})
 
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                history = json.load(f)
-        except Exception:
-            return jsonify({"papers": [], "keywords": []})
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            except Exception:
+                return jsonify({"papers": [], "keywords": []})
 
         if not history:
             return jsonify({"papers": [], "keywords": []})
@@ -984,13 +989,14 @@ def create_app():
             return jsonify({"papers": [], "keywords": []})
 
         # 构建推荐查询
-        # 策略1：基于高频关键词
+        # 策略1：基于高频关键词（深耕性推荐）
         # 策略2：基于高频期刊
-        # 策略3：结合关键词和期刊
+        # 策略3：基于引用关系（探索性推荐）
 
         recommended_papers = []
+        recommendation_type = "keyword"  # 标记推荐类型
 
-        # 策略1：基于关键词推荐
+        # 策略1：基于关键词推荐（深耕性：与已读内容相似）
         if top_keywords:
             query = " OR ".join(top_keywords[:5])
             try:
@@ -1010,11 +1016,10 @@ def create_app():
             except Exception as e:
                 print(f"Recommendation search error: {e}")
 
-        # 策略2：基于期刊推荐（如果关键词推荐不够）
+        # 策略2：基于期刊推荐
         if len(recommended_papers) < 10 and top_journals:
             for journal in top_journals[:2]:
                 try:
-                    # 用关键词作为查询，结合期刊过滤
                     journal_query = " OR ".join(top_keywords[:3]) if top_keywords else "research"
                     papers = engine.search(
                         query=journal_query,
@@ -1028,11 +1033,58 @@ def create_app():
                     )
                     for p in papers:
                         if p.doi and p.doi.lower() not in recent_dois:
-                            # 检查是否已经存在
                             if not any(r.doi == p.doi for r in recommended_papers):
                                 recommended_papers.append(p)
                 except Exception:
                     continue
+
+        # 策略3：基于引用关系（探索性推荐）
+        # 从收藏的论文中找引用关系
+        if len(recommended_papers) < 10:
+            try:
+                collections_path = _get_user_data_path("collections.json")
+                if os.path.exists(collections_path):
+                    with open(collections_path, "r", encoding="utf-8") as f:
+                        collections = json.load(f)
+                    # 取收藏中最近的论文 DOI
+                    collection_dois = [item.get("doi") for item in collections.get("items", []) if item.get("doi")][-3:]
+                    for doi in collection_dois[:2]:
+                        try:
+                            import requests as req
+                            email = config.get("sources", {}).get("openalex", {}).get("email", "")
+                            params = {"mailto": email} if email else {}
+                            r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=10)
+                            if r.status_code == 200:
+                                work = r.json()
+                                refs = work.get("referenced_works", [])
+                                if refs:
+                                    # 取引用文献的前5个
+                                    ref_ids = ",".join([rid.split("/")[-1] for rid in refs[:5]])
+                                    ref_params = {**params, "filter": f"openalex:{ref_ids}", "per_page": 5}
+                                    r_refs = req.get("https://api.openalex.org/works", params=ref_params, timeout=10)
+                                    if r_refs.status_code == 200:
+                                        for w in r_refs.json().get("results", []):
+                                            oa_doi = (w.get("doi", "") or "").replace("https://doi.org/", "")
+                                            if oa_doi and oa_doi.lower() not in recent_dois:
+                                                if not any(r.doi == oa_doi for r in recommended_papers):
+                                                    p = Paper(source="openalex")
+                                                    p.title = re.sub(r'<[^>]+>', '', w.get("title", "") or "")
+                                                    p.doi = oa_doi
+                                                    p.year = w.get("publication_year", 0)
+                                                    p.citation_count = w.get("cited_by_count", 0)
+                                                    loc = w.get("primary_location") or {}
+                                                    src = loc.get("source") or {}
+                                                    p.journal = src.get("display_name", "") or ""
+                                                    for author in w.get("authorships", []):
+                                                        name = author.get("author", {}).get("display_name", "")
+                                                        if name:
+                                                            p.authors.append(name)
+                                                    recommended_papers.append(p)
+                                                    recommendation_type = "citation"
+                        except Exception:
+                            continue
+            except Exception:
+                pass
 
         # 限制推荐数量
         recommended_papers = recommended_papers[:15]
@@ -1045,20 +1097,22 @@ def create_app():
             "keywords": top_keywords,
             "journals": top_journals,
             "total": len(results),
+            "recommendation_type": recommendation_type,
         })
 
     @app.route("/api/reading-history", methods=["GET"])
     def get_reading_history():
         """获取阅读历史统计"""
         path = _get_user_data_path("reading_history.json")
-        if not os.path.exists(path):
-            return jsonify({"total": 0, "keywords": [], "journals": []})
+        with history_lock:
+            if not os.path.exists(path):
+                return jsonify({"total": 0, "keywords": [], "journals": []})
 
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                history = json.load(f)
-        except Exception:
-            return jsonify({"total": 0, "keywords": [], "journals": []})
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    history = json.load(f)
+            except Exception:
+                return jsonify({"total": 0, "keywords": [], "journals": []})
 
         from collections import Counter
         keyword_counter = Counter()
@@ -1134,11 +1188,13 @@ def create_app():
 
     @app.route("/api/collections", methods=["POST"])
     def add_collection():
-        """添加收藏"""
+        """添加收藏（支持无 DOI 论文，使用 title 作为备选标识）"""
         data = request.json or {}
         paper = data.get("paper")
         group_id = data.get("group_id", "default")
-        if not paper or not paper.get("doi"):
+        if not paper:
+            return jsonify({"error": "missing_paper_info"}), 400
+        if not paper.get("doi") and not paper.get("title"):
             return jsonify({"error": "missing_paper_info"}), 400
 
         path = _get_user_data_path("collections.json")
@@ -1152,10 +1208,17 @@ def create_app():
                     print(f"[ERROR] Failed to read collections.json for add: {e}")
                     return jsonify({"error": "collection_read_failed"}), 500
 
-            # 检查是否已收藏
-            doi = paper.get("doi", "").lower()
+            # 检查是否已收藏（支持 DOI 或 title 去重）
+            doi = (paper.get("doi") or "").lower()
+            title = paper.get("title") or ""
             for item in collections.get("items", []):
-                if item.get("doi", "").lower() == doi and item.get("group_id") == group_id:
+                if item.get("group_id") != group_id:
+                    continue
+                # DOI 匹配（有 DOI 时优先用 DOI）
+                if doi and item.get("doi", "").lower() == doi:
+                    return jsonify({"ok": True, "message": "已收藏"})
+                # 无 DOI 时用 title 匹配
+                if not doi and title and item.get("title") == title:
                     return jsonify({"ok": True, "message": "已收藏"})
 
             collections.setdefault("items", []).append({
@@ -1168,6 +1231,8 @@ def create_app():
                 "oa_url": paper.get("oa_url", ""),
                 "pmid": paper.get("pmid", ""),
                 "abstract": paper.get("abstract", ""),
+                "keywords": paper.get("keywords", []),
+                "source": paper.get("source", ""),
                 "group_id": group_id,
                 "added_at": datetime.now().isoformat(),
             })
@@ -1201,8 +1266,8 @@ def create_app():
                 collections["items"] = [
                     item for item in collections.get("items", [])
                     if not (
-                        (doi and item.get("doi", "").lower() == doi or
-                         not doi and title and item.get("title") == title)
+                        ((doi and item.get("doi", "").lower() == doi) or
+                         (not doi and title and item.get("title") == title))
                         and item.get("group_id") == group_id
                     )
                 ]

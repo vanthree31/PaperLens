@@ -162,7 +162,7 @@ class PubMedSearch:
         if proxy:
             self.session.proxies = proxy
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                sort="relevance", max_results=50,
                journal="", field="", mesh_term="", pub_type="") -> tuple:
         """返回 (PMID 列表, 精确 DOI 或 None)
@@ -174,6 +174,10 @@ class PubMedSearch:
             mesh_term: MeSH 主题词
             pub_type: 文献类型
         """
+        # 动态获取当前年份
+        if not year_to:
+            year_to = datetime.now().year
+
         # 检测是否是 DOI 查询
         exact_doi = None
         doi_match = re.match(r'^(10\.\d{4,}/\S+)$', query.strip())
@@ -333,9 +337,13 @@ class OpenAlexSearch:
         if proxy:
             self.session.proxies = proxy
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                max_results=50, journal="") -> list:
         """OpenAlex 检索"""
+        # 动态获取当前年份
+        if not year_to:
+            year_to = datetime.now().year
+
         # 检测 DOI 查询，使用专用端点
         doi_match = re.match(r'^(10\.\d{4,}/\S+)$', query.strip())
         if doi_match:
@@ -386,16 +394,21 @@ class OpenAlexSearch:
             data = r.json()
             results = self._parse_results(data.get("results", []))
 
-            # 基本相关性过滤：标题至少包含一个搜索关键词
+            # 基本相关性过滤：标题或摘要包含搜索关键词
             keywords = getattr(self, '_last_keywords', set())
-            if keywords:
+            if keywords and len(keywords) >= 2:
+                # 只有多个关键词时才进行过滤，避免短关键词误杀
                 filtered = []
                 for p in results:
                     title_lower = p.title.lower()
-                    if any(kw in title_lower for kw in keywords):
+                    abstract_lower = (p.abstract or "").lower()
+                    # 标题包含任意关键词，或摘要包含多个关键词
+                    title_match = any(kw in title_lower for kw in keywords)
+                    abstract_match = sum(1 for kw in keywords if kw in abstract_lower) >= 2
+                    if title_match or abstract_match:
                         filtered.append(p)
                 # 如果过滤后结果太少，回退到原始结果
-                if len(filtered) >= 2:
+                if len(filtered) >= 3:
                     return filtered[:max_results]
             return results[:max_results]
         except Exception as e:
@@ -562,10 +575,14 @@ class GoogleScholarSearch:
                 print("Google Scholar: scholarly 库未安装，请运行 pip install scholarly")
         return self._available
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
         if not self._check_available():
             return []
+
+        # 动态获取当前年份
+        if not year_to:
+            year_to = datetime.now().year
 
         try:
             from scholarly import scholarly as sch
@@ -604,7 +621,7 @@ class CNKISearch:
         if proxy:
             self.session.proxies = proxy
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
         try:
             from bs4 import BeautifulSoup
@@ -687,7 +704,7 @@ class WanfangSearch:
         if proxy:
             self.session.proxies = proxy
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
         try:
             from bs4 import BeautifulSoup
@@ -768,7 +785,7 @@ class VIPSearch:
         if proxy:
             self.session.proxies = proxy
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
         try:
             from bs4 import BeautifulSoup
@@ -844,7 +861,7 @@ class BingScholarSearch:
         if proxy:
             self.session.proxies = proxy
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
         try:
             from bs4 import BeautifulSoup
@@ -992,7 +1009,7 @@ class SearchEngine:
             proxy=proxy
         ) if bing_cfg.get("enabled", False) else None
 
-    def search(self, query: str, year_from=2020, year_to=2026,
+    def search(self, query: str, year_from=2020, year_to=0,
                sort="relevance", max_results=50,
                use_pubmed=True, use_openalex=True,
                use_google_scholar=False, use_cnki=False,
@@ -1013,6 +1030,10 @@ class SearchEngine:
             use_vip: 启用维普（实验性）
             use_bing_academic: 启用 Bing 学术（实验性）
         """
+        # 动态获取当前年份
+        if not year_to:
+            year_to = datetime.now().year
+
         all_papers = []
 
         # PubMed 检索
@@ -1081,11 +1102,13 @@ class SearchEngine:
                 unique.append(p)
 
         # 年份过滤：确保结果在指定范围内
+        # 注意：年份为 0 表示年份未知，保留这些论文（中文数据库常见）
         if year_from or year_to:
             filtered = []
             for p in unique:
-                # year=0 表示年份未知，当年份过滤激活时剔除
+                # 年份未知的论文保留
                 if not p.year:
+                    filtered.append(p)
                     continue
                 if year_from and p.year < year_from:
                     continue
