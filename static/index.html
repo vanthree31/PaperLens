@@ -955,6 +955,8 @@ const LANGS = {
     recommendations: "为你推荐", recommendLoading: "正在加载推荐...", recommendEmpty: "暂无推荐",
     recommendHint: "开始搜索和阅读论文后，这里会显示个性化推荐",
     recommendAdded: "已添加到结果列表", recommendFailed: "加载推荐失败",
+    recommendTypeKeyword: "基于你的阅读兴趣关键词推荐（深耕性推荐）",
+    recommendTypeCitation: "基于你收藏的论文引用关系推荐（探索性推荐）",
     yourInterests: "你的研究兴趣", interestKeywords: "你的兴趣关键词",
     // Zotero 同步
     zoteroSync: "Zotero 同步", zoteroApiKey: "Zotero API Key", zoteroApiKeyHint: "需要在 Zotero 设置中生成 API Key",
@@ -1116,6 +1118,8 @@ const LANGS = {
     recommendations: "For You", recommendLoading: "Loading recommendations...", recommendEmpty: "No recommendations yet",
     recommendHint: "Start searching and reading papers to get personalized recommendations",
     recommendAdded: "Added to results", recommendFailed: "Failed to load recommendations",
+    recommendTypeKeyword: "Based on your reading interest keywords (deep recommendation)",
+    recommendTypeCitation: "Based on citation relationships from your collections (exploration recommendation)",
     yourInterests: "Your Research Interests", interestKeywords: "Your interest keywords",
     // Zotero sync
     zoteroSync: "Zotero Sync", zoteroApiKey: "Zotero API Key", zoteroApiKeyHint: "Generate API Key in Zotero settings",
@@ -2735,11 +2739,11 @@ function renderRecommendations(data) {
 
   let html = '';
 
-  // 显示推荐类型说明
+  // 显示推荐类型说明（国际化）
   const recommendType = data.recommendation_type || "keyword";
   const typeHint = recommendType === "citation"
-    ? "基于你收藏的论文引用关系推荐（探索性推荐）"
-    : "基于你的阅读兴趣关键词推荐（深耕性推荐）";
+    ? t("recommendTypeCitation")
+    : t("recommendTypeKeyword");
 
   html += `<div style="padding:6px 12px;margin-bottom:8px;background:#f8fafc;border-radius:6px;font-size:11px;color:#64748b">
     💡 ${typeHint}
@@ -3084,7 +3088,11 @@ function renderCollections() {
 }
 
 function viewCollectionItem(encodedDoi) {
-  const doi = decodeURIComponent(encodedDoi);
+  const doi = encodedDoi ? decodeURIComponent(encodedDoi) : "";
+  if (!doi) {
+    showToast(t("noDOI"));
+    return;
+  }
   // 先检查当前搜索结果中是否有这篇论文
   const idx = allPapers.findIndex(p => p.doi && p.doi.toLowerCase() === doi.toLowerCase());
   if (idx >= 0) {

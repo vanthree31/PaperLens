@@ -1557,6 +1557,10 @@ def create_app():
                     "date": str(p.get("year", "")),
                     "DOI": p.get("doi", ""),
                     "abstractNote": p.get("abstract", ""),
+                    "volume": p.get("volume", ""),
+                    "issue": p.get("issue", ""),
+                    "pages": p.get("pages", ""),
+                    "ISSN": p.get("issn", ""),
                     "tags": [
                         {"tag": kw} for kw in p.get("keywords", [])[:5]
                     ],
