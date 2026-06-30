@@ -1390,6 +1390,46 @@ def create_app():
             print(f"[ERROR] Failed to open export dir: {e}")
             return jsonify({"error": "open_dir_failed"}), 500
 
+    @app.route("/api/playwright/status", methods=["GET"])
+    def playwright_status():
+        """检查 Playwright 是否已安装"""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["playwright", "--version"],
+                capture_output=True, text=True, timeout=5
+            )
+            installed = result.returncode == 0
+            version = result.stdout.strip() if installed else ""
+            return jsonify({"installed": installed, "version": version})
+        except Exception:
+            return jsonify({"installed": False, "version": ""})
+
+    @app.route("/api/playwright/install", methods=["POST"])
+    def playwright_install():
+        """安装 Playwright 浏览器"""
+        try:
+            import subprocess
+            # 安装 Playwright 包
+            result1 = subprocess.run(
+                ["pip", "install", "playwright"],
+                capture_output=True, text=True, timeout=120
+            )
+            if result1.returncode != 0:
+                return jsonify({"ok": False, "error": result1.stderr}), 500
+
+            # 安装 Chromium 浏览器
+            result2 = subprocess.run(
+                ["playwright", "install", "chromium"],
+                capture_output=True, text=True, timeout=300
+            )
+            if result2.returncode != 0:
+                return jsonify({"ok": False, "error": result2.stderr}), 500
+
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
     @app.route("/api/choose-folder", methods=["POST"])
     def choose_folder():
         """打开系统原生文件夹选择对话框"""

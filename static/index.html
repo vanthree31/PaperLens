@@ -586,6 +586,26 @@ body {
       <input type="email" id="cfgOpenalexEmail" placeholder="your@email.com">
       <div class="hint" data-i18n="openalexEmailHint">推荐配置，加入 polite pool 可获得 10 倍请求速率，减少限流</div>
     </div>
+    <div class="form-group">
+      <label data-i18n="playwrightStatus">Playwright（Bing Academic 依赖）</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="playwrightStatusText" style="font-size:12px;color:var(--text-secondary)">检查中...</span>
+        <button class="btn btn-sm btn-outline" onclick="installPlaywright()" id="installPlaywrightBtn" style="display:none" data-i18n="installPlaywright">安装 Playwright</button>
+      </div>
+      <div class="hint" data-i18n="playwrightHint">Bing Academic 搜索需要 Playwright，首次安装约 100MB</div>
+    </div>
+  </div>
+  <div class="settings-section">
+    <h3 data-i18n="wanfangConfig">万方数据配置</h3>
+    <div class="toggle-row">
+      <label data-i18n="enableWanfang">启用万方搜索</label>
+      <input type="checkbox" id="cfgWanfangEnabled">
+    </div>
+    <div class="form-group">
+      <label data-i18n="wanfangCookie">万方 Cookie</label>
+      <textarea id="cfgWanfangCookie" rows="3" placeholder="从浏览器开发者工具中复制 Cookie" style="width:100%;font-size:12px;font-family:monospace"></textarea>
+      <div class="hint" data-i18n="wanfangCookieHint">登录万方后，从浏览器 F12 → Network → 复制 Cookie 值</div>
+    </div>
   </div>
   <div class="settings-section">
     <h3 data-i18n="aiSearchModel">AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）</h3>
@@ -925,6 +945,12 @@ const LANGS = {
     exportPath: "导出文件保存路径", exportPathHint: "导出 RIS/BibTeX/CSV 和下载 PDF 时自动保存到此目录",
     exportPathPlaceholder: "留空则弹出浏览器下载", choose: "选择",
     noExportPath: "请先在设置中配置导出路径", fileSaved: "文件已保存到:",
+    playwrightStatus: "Playwright（Bing Academic 依赖）", installPlaywright: "安装 Playwright",
+    playwrightHint: "Bing Academic 搜索需要 Playwright，首次安装约 100MB",
+    playwrightInstalled: "已安装", playwrightNotInstalled: "未安装",
+    playwrightInstalling: "安装中...", playwrightInstallSuccess: "安装成功", playwrightInstallFailed: "安装失败",
+    wanfangConfig: "万方数据配置", enableWanfang: "启用万方搜索",
+    wanfangCookie: "万方 Cookie", wanfangCookieHint: "登录万方后，从浏览器 F12 → Network → 复制 Cookie 值",
     downloadSuccess: "下载成功", downloadFailed: "下载失败",
     // 引用图谱
     citationGraph: "引用关系图谱", legendCenter: "当前论文", legendCiting: "引用了此论文", legendReferenced: "此论文引用",
@@ -972,6 +998,8 @@ const LANGS = {
     zoteroUserIdPlaceholder: "在 zotero.org/settings/keys 查看",
     betaScraping: "反爬风险高，不稳定，不建议启用",
     betaAuth: "反爬机制严格，需机构网络，不保证可用",
+    manualSearch: "自动搜索失败，请手动搜索",
+    openManualSearch: "打开手动搜索",
     // 图谱面板
     noOALink: "无 OA 链接", analyzingResearchGaps: "AI 正在分析研究空白...",
     noDOILoadGraph: "该论文无 DOI，无法加载引用关系",
@@ -1088,6 +1116,12 @@ const LANGS = {
     exportPath: "Export File Save Path", exportPathHint: "Auto-save exported RIS/BibTeX/CSV and downloaded PDFs to this directory",
     exportPathPlaceholder: "Leave empty to use browser download", choose: "Choose",
     noExportPath: "Please set export path in Settings first", fileSaved: "File saved to:",
+    playwrightStatus: "Playwright (Bing Academic dependency)", installPlaywright: "Install Playwright",
+    playwrightHint: "Bing Academic search requires Playwright, ~100MB first install",
+    playwrightInstalled: "Installed", playwrightNotInstalled: "Not installed",
+    playwrightInstalling: "Installing...", playwrightInstallSuccess: "Installed successfully", playwrightInstallFailed: "Installation failed",
+    wanfangConfig: "Wanfang Data Config", enableWanfang: "Enable Wanfang Search",
+    wanfangCookie: "Wanfang Cookie", wanfangCookieHint: "After logging into Wanfang, copy Cookie from browser F12 → Network",
     downloadSuccess: "Download success", downloadFailed: "Download failed",
     // Citation graph
     citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
@@ -1135,6 +1169,8 @@ const LANGS = {
     zoteroUserIdPlaceholder: "View at zotero.org/settings/keys",
     betaScraping: "High anti-scraping risk, unstable, not recommended",
     betaAuth: "Strict anti-scraping, requires institutional network, not guaranteed to work",
+    manualSearch: "Auto search failed, please search manually",
+    openManualSearch: "Open Manual Search",
     // Graph panel
     noOALink: "No OA link available", analyzingResearchGaps: "AI is analyzing research gaps...",
     noDOILoadGraph: "This paper has no DOI, cannot load citation graph",
@@ -2217,6 +2253,11 @@ async function loadSettings() {
     // 加载导出路径
     document.getElementById("cfgExportPath").value = cfg.export_path || "";
 
+    // 加载万方配置
+    const wanfang = cfg.sources?.wanfang || {};
+    document.getElementById("cfgWanfangEnabled").checked = wanfang.enabled || false;
+    document.getElementById("cfgWanfangCookie").value = wanfang.cookie || "";
+
     // 加载数据目录路径
     try {
       const dr = await fetch(`${API}/api/data-dir`);
@@ -2225,6 +2266,9 @@ async function loadSettings() {
         document.getElementById("dataDirPath").value = d.path || "";
       }
     } catch { /* 忽略 */ }
+
+    // 检查 Playwright 状态
+    checkPlaywrightStatus();
   } catch (e) {
     console.error("Load config error:", e);
   }
@@ -2255,6 +2299,7 @@ async function saveSettings() {
     sources: {
       pubmed: { enabled: true, email: document.getElementById("cfgPubmedEmail").value.trim(), api_key: isMasked(pubmedKey) ? undefined : pubmedKey },
       openalex: { enabled: true, email: document.getElementById("cfgOpenalexEmail").value.trim() },
+      wanfang: { enabled: document.getElementById("cfgWanfangEnabled").checked, cookie: document.getElementById("cfgWanfangCookie").value.trim() },
     },
     ai_search: {
       enabled: document.getElementById("cfgSearchAiEnabled").checked,
@@ -2347,6 +2392,58 @@ async function openDataDir() {
     }
   } catch (e) {
     showToast(`${t("openFailed")} ${e.message}`);
+  }
+}
+
+async function checkPlaywrightStatus() {
+  const statusEl = document.getElementById("playwrightStatusText");
+  const installBtn = document.getElementById("installPlaywrightBtn");
+  if (!statusEl || !installBtn) return;
+
+  try {
+    const r = await fetch(`${API}/api/playwright/status`);
+    const data = await r.json();
+    if (data.installed) {
+      statusEl.textContent = t("playwrightInstalled");
+      statusEl.style.color = "var(--success)";
+      installBtn.style.display = "none";
+    } else {
+      statusEl.textContent = t("playwrightNotInstalled");
+      statusEl.style.color = "var(--text-secondary)";
+      installBtn.style.display = "inline-block";
+    }
+  } catch {
+    statusEl.textContent = t("playwrightNotInstalled");
+    statusEl.style.color = "var(--text-secondary)";
+    installBtn.style.display = "inline-block";
+  }
+}
+
+async function installPlaywright() {
+  const statusEl = document.getElementById("playwrightStatusText");
+  const installBtn = document.getElementById("installPlaywrightBtn");
+  if (!statusEl || !installBtn) return;
+
+  statusEl.textContent = t("playwrightInstalling");
+  statusEl.style.color = "var(--primary)";
+  installBtn.disabled = true;
+
+  try {
+    const r = await fetch(`${API}/api/playwright/install`, {method: "POST"});
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.textContent = t("playwrightInstallSuccess");
+      statusEl.style.color = "var(--success)";
+      installBtn.style.display = "none";
+    } else {
+      statusEl.textContent = t("playwrightInstallFailed");
+      statusEl.style.color = "var(--danger)";
+      installBtn.disabled = false;
+    }
+  } catch (e) {
+    statusEl.textContent = t("playwrightInstallFailed");
+    statusEl.style.color = "var(--danger)";
+    installBtn.disabled = false;
   }
 }
 

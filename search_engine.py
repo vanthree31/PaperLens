@@ -938,13 +938,17 @@ class CNKISearch:
 
 
 class WanfangSearch:
-    """万方数据搜索（实验性，网页抓取）"""
+    """万方数据搜索（实验性，网页抓取，支持 Cookie 登录）"""
 
     BASE = "https://s.wanfangdata.com.cn/paper"
 
-    def __init__(self, proxy=None):
+    def __init__(self, proxy=None, cookie=""):
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        self.session.headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        self.session.headers["Accept-Language"] = "zh-CN,zh;q=0.9"
+        if cookie:
+            self.session.headers["Cookie"] = cookie
         if proxy:
             self.session.proxies = proxy
 
@@ -1232,7 +1236,8 @@ class SearchEngine:
         ) if cnki_cfg.get("enabled", False) else None
 
         self.wanfang = WanfangSearch(
-            proxy=proxy
+            proxy=proxy,
+            cookie=wanfang_cfg.get("cookie", "")
         ) if wanfang_cfg.get("enabled", False) else None
 
         self.vip = VIPSearch(
