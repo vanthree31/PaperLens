@@ -345,6 +345,7 @@ def create_app():
                 query=query, year_from=year_from, year_to=year_to,
                 sort=data.get("sort", "relevance"), max_results=max_results,
                 use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
+                use_semantic_scholar=data.get("use_semantic_scholar", True),
                 use_google_scholar=data.get("use_google_scholar", False),
                 use_cnki=data.get("use_cnki", False),
                 use_wanfang=data.get("use_wanfang", False),
@@ -402,6 +403,7 @@ def create_app():
                 # AI 未推荐，使用客户端复选框状态
                 use_pubmed = data.get("use_pubmed", True)
                 use_openalex = data.get("use_openalex", True)
+                use_semantic_scholar = data.get("use_semantic_scholar", True)
                 use_google_scholar = data.get("use_google_scholar", False)
                 use_cnki = data.get("use_cnki", False)
                 use_wanfang = data.get("use_wanfang", False)
@@ -413,6 +415,7 @@ def create_app():
                 year_from=year_from, year_to=year_to,
                 sort="relevance", max_results=max_results,
                 use_pubmed=use_pubmed, use_openalex=use_openalex,
+                use_semantic_scholar=use_semantic_scholar,
                 use_google_scholar=use_google_scholar,
                 use_cnki=use_cnki, use_wanfang=use_wanfang,
                 use_vip=use_vip, use_bing_academic=use_bing_academic,

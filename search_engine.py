@@ -1195,6 +1195,109 @@ class BingScholarSearch:
                     pass
 
 
+class SemanticScholarSearch:
+    """Semantic Scholar 搜索（免费 API，收录部分中文论文）"""
+
+    BASE = "https://api.semanticscholar.org/graph/v1"
+
+    def __init__(self, api_key=""):
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "LitSearch/1.0"
+        if api_key:
+            self.session.headers["x-api-key"] = api_key
+
+    def search(self, query: str, year_from=2020, year_to=0,
+               max_results=20) -> list:
+        if not year_to:
+            year_to = datetime.now().year
+
+        try:
+            params = {
+                "query": query,
+                "limit": min(max_results, 100),
+                "fields": "title,authors,year,abstract,citationCount,externalIds,journal,openAccessPdf",
+                "year": f"{year_from}-{year_to}",
+            }
+
+            # 带重试的请求（应对限流）
+            r = None
+            for attempt in range(3):
+                r = self.session.get(f"{self.BASE}/paper/search", params=params, timeout=15)
+                if r.status_code == 429:
+                    wait = min(2 ** attempt * 2, 10)
+                    print(f"Semantic Scholar rate limited, waiting {wait}s")
+                    time.sleep(wait)
+                    continue
+                break
+            r.raise_for_status()
+            data = r.json()
+
+            papers = []
+            for item in data.get("data", []):
+                try:
+                    p = Paper(source="semantic_scholar")
+                    p.title = item.get("title", "") or ""
+                    if not p.title:
+                        continue
+
+                    # 作者
+                    for author in item.get("authors", []):
+                        name = author.get("name", "")
+                        if name:
+                            p.authors.append(name)
+
+                    p.year = item.get("year", 0) or 0
+                    p.abstract = item.get("abstract", "") or ""
+                    p.citation_count = item.get("citationCount", 0) or 0
+
+                    # 外部 ID
+                    ext_ids = item.get("externalIds", {})
+                    p.doi = ext_ids.get("DOI", "") or ""
+                    p.pmid = ext_ids.get("PubMed", "") or ""
+
+                    # 期刊
+                    journal = item.get("journal", {})
+                    if journal:
+                        p.journal = journal.get("name", "") or ""
+
+                    # OA 链接
+                    oa = item.get("openAccessPdf", {})
+                    if oa:
+                        p.oa_url = oa.get("url", "") or ""
+
+                    papers.append(p)
+                except Exception:
+                    continue
+
+            return papers
+        except Exception as e:
+            print(f"Semantic Scholar search error: {e}")
+            return []
+
+
+class ScraperAPIProxy:
+    """ScraperAPI 代理（付费服务，绕过反爬机制）"""
+
+    BASE = "http://api.scraperapi.com"
+
+    def __init__(self, api_key):
+        self.api_key = api_key
+
+    def get(self, url, params=None, timeout=30, **kwargs):
+        """通过 ScraperAPI 代理请求"""
+        proxy_params = {
+            "api_key": self.api_key,
+            "url": url,
+            "render": "true",  # 启用 JavaScript 渲染
+        }
+        if params:
+            # 将原始参数编码到 URL 中
+            from urllib.parse import urlencode
+            proxy_params["url"] = f"{url}?{urlencode(params)}"
+
+        return requests.get(self.BASE, params=proxy_params, timeout=timeout)
+
+
 class SearchEngine:
     """聚合检索引擎"""
 
@@ -1207,6 +1310,10 @@ class SearchEngine:
             proxy["https"] = proxy_cfg["https"]
         proxy = proxy if proxy else None
 
+        # ScraperAPI 配置
+        scraperapi_key = config.get("scraperapi_key", "")
+        self.scraperapi = ScraperAPIProxy(scraperapi_key) if scraperapi_key else None
+
         sources_cfg = config.get("sources", {})
         pubmed_cfg = sources_cfg.get("pubmed", {})
         openalex_cfg = sources_cfg.get("openalex", {})
@@ -1215,6 +1322,7 @@ class SearchEngine:
         wanfang_cfg = sources_cfg.get("wanfang", {})
         vip_cfg = sources_cfg.get("vip", {})
         bing_cfg = sources_cfg.get("bing_academic", {})
+        s2_cfg = sources_cfg.get("semantic_scholar", {})
 
         self.pubmed = PubMedSearch(
             email=pubmed_cfg.get("email", ""),
@@ -1248,12 +1356,16 @@ class SearchEngine:
             proxy=proxy
         ) if bing_cfg.get("enabled", False) else None
 
+        self.semantic_scholar = SemanticScholarSearch(
+            api_key=s2_cfg.get("api_key", "")
+        ) if s2_cfg.get("enabled", True) else None
+
     def search(self, query: str, year_from=2020, year_to=0,
                sort="relevance", max_results=50,
                use_pubmed=True, use_openalex=True,
                use_google_scholar=False, use_cnki=False,
                use_wanfang=False, use_vip=False,
-               use_bing_academic=False,
+               use_bing_academic=False, use_semantic_scholar=True,
                journal="", field="", mesh_term="", pub_type="") -> list:
         """聚合检索
 
@@ -1331,6 +1443,13 @@ class SearchEngine:
             )
             all_papers.extend(bing_papers)
 
+        # Semantic Scholar 检索
+        if use_semantic_scholar and self.semantic_scholar:
+            s2_papers = self.semantic_scholar.search(
+                query, year_from, year_to, max_results=min(max_results, 50)
+            )
+            all_papers.extend(s2_papers)
+
         # 去重
         seen_dois = set()
         unique = []
@@ -1385,7 +1504,8 @@ class SearchEngine:
     def close(self):
         """关闭所有搜索源的 Session"""
         for source in [self.pubmed, self.openalex, self.google_scholar,
-                       self.cnki, self.wanfang, self.vip, self.bing_academic]:
+                       self.cnki, self.wanfang, self.vip, self.bing_academic,
+                       self.semantic_scholar]:
             if source and hasattr(source, 'session'):
                 try:
                     source.session.close()

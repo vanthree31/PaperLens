@@ -493,11 +493,12 @@ body {
     <div class="filter-group">
       <label><input type="checkbox" id="usePubmed" checked> PubMed</label>
       <label><input type="checkbox" id="useOpenalex" checked> OpenAlex</label>
-      <label><input type="checkbox" id="useGoogleScholar"> Google Scholar <span class="beta-badge" data-tip="反爬风险高，不稳定，不建议启用" data-i18n-tip="betaScraping">β</span></label>
+      <label><input type="checkbox" id="useSemanticScholar" checked> Semantic Scholar</label>
+      <label><input type="checkbox" id="useGoogleScholar"> Google Scholar <span class="beta-badge" data-tip="反爬风险高，需 ScraperAPI" data-i18n-tip="betaScraping">β</span></label>
       <label><input type="checkbox" id="useBingAcademic"> Bing Academic <span class="beta-badge" data-tip="需要 Playwright，首次使用会自动安装浏览器" data-i18n-tip="betaScraping">β</span></label>
-      <label><input type="checkbox" id="useCNKI"> CNKI <span class="beta-badge" data-tip="反爬机制严格，需机构网络，不保证可用" data-i18n-tip="betaAuth">β</span></label>
-      <label><input type="checkbox" id="useWanfang"> 万方 <span class="beta-badge" data-tip="反爬机制严格，需机构网络，不保证可用" data-i18n-tip="betaAuth">β</span></label>
-      <label><input type="checkbox" id="useVIP"> 维普 <span class="beta-badge" data-tip="反爬机制严格，需机构网络，不保证可用" data-i18n-tip="betaAuth">β</span></label>
+      <label><input type="checkbox" id="useCNKI"> CNKI <span class="beta-badge" data-tip="需 ScraperAPI 或机构网络" data-i18n-tip="betaAuth">β</span></label>
+      <label><input type="checkbox" id="useWanfang"> 万方 <span class="beta-badge" data-tip="需 Cookie 登录或 ScraperAPI" data-i18n-tip="betaAuth">β</span></label>
+      <label><input type="checkbox" id="useVIP"> 维普 <span class="beta-badge" data-tip="需 ScraperAPI 或机构网络" data-i18n-tip="betaAuth">β</span></label>
     </div>
     <div class="filter-group">
       <span data-i18n="journal">期刊</span>: <input type="text" id="filterJournal" placeholder="如 Nature Methods" style="width:140px">
@@ -593,6 +594,11 @@ body {
         <button class="btn btn-sm btn-outline" onclick="installPlaywright()" id="installPlaywrightBtn" style="display:none" data-i18n="installPlaywright">安装 Playwright</button>
       </div>
       <div class="hint" data-i18n="playwrightHint">Bing Academic 搜索需要 Playwright，首次安装约 100MB</div>
+    </div>
+    <div class="form-group">
+      <label data-i18n="scraperapiKey">ScraperAPI Key</label>
+      <input type="text" id="cfgScraperapiKey" placeholder="可选，用于绕过反爬机制">
+      <div class="hint" data-i18n="scraperapiKeyHint">付费服务，可访问 CNKI/维普/Google Scholar 等反爬网站</div>
     </div>
   </div>
   <div class="settings-section">
@@ -951,6 +957,7 @@ const LANGS = {
     playwrightInstalling: "安装中...", playwrightInstallSuccess: "安装成功", playwrightInstallFailed: "安装失败",
     wanfangConfig: "万方数据配置", enableWanfang: "启用万方搜索",
     wanfangCookie: "万方 Cookie", wanfangCookieHint: "登录万方后，从浏览器 F12 → Network → 复制 Cookie 值",
+    scraperapiKey: "ScraperAPI Key", scraperapiKeyHint: "付费服务，可访问 CNKI/维普/Google Scholar 等反爬网站",
     downloadSuccess: "下载成功", downloadFailed: "下载失败",
     // 引用图谱
     citationGraph: "引用关系图谱", legendCenter: "当前论文", legendCiting: "引用了此论文", legendReferenced: "此论文引用",
@@ -1122,6 +1129,7 @@ const LANGS = {
     playwrightInstalling: "Installing...", playwrightInstallSuccess: "Installed successfully", playwrightInstallFailed: "Installation failed",
     wanfangConfig: "Wanfang Data Config", enableWanfang: "Enable Wanfang Search",
     wanfangCookie: "Wanfang Cookie", wanfangCookieHint: "After logging into Wanfang, copy Cookie from browser F12 → Network",
+    scraperapiKey: "ScraperAPI Key", scraperapiKeyHint: "Paid service to bypass anti-scraping for CNKI/维普/Google Scholar",
     downloadSuccess: "Download success", downloadFailed: "Download failed",
     // Citation graph
     citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
@@ -1779,6 +1787,7 @@ async function doSearch() {
     year_to: parseInt(document.getElementById("yearTo").value) || now,
     sort: document.getElementById("sortBy").value,
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
+    use_semantic_scholar: document.getElementById("useSemanticScholar")?.checked || false,
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
     use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
@@ -1846,6 +1855,7 @@ async function doAISearch() {
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
+    use_semantic_scholar: document.getElementById("useSemanticScholar")?.checked || false,
     use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
     use_bing_academic: document.getElementById("useBingAcademic")?.checked || false,
     use_cnki: document.getElementById("useCNKI")?.checked || false,
@@ -1959,6 +1969,7 @@ async function refilterWithAI() {
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
+    use_semantic_scholar: document.getElementById("useSemanticScholar")?.checked || false,
     use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
     use_bing_academic: document.getElementById("useBingAcademic")?.checked || false,
     use_cnki: document.getElementById("useCNKI")?.checked || false,
@@ -2258,6 +2269,9 @@ async function loadSettings() {
     document.getElementById("cfgWanfangEnabled").checked = wanfang.enabled || false;
     document.getElementById("cfgWanfangCookie").value = wanfang.cookie || "";
 
+    // 加载 ScraperAPI 配置
+    document.getElementById("cfgScraperapiKey").value = cfg.scraperapi_key || "";
+
     // 加载数据目录路径
     try {
       const dr = await fetch(`${API}/api/data-dir`);
@@ -2321,6 +2335,7 @@ async function saveSettings() {
       http: document.getElementById("cfgProxyHttp").value.trim(),
       https: document.getElementById("cfgProxyHttps").value.trim(),
     },
+    scraperapi_key: document.getElementById("cfgScraperapiKey").value.trim(),
     export_path: document.getElementById("cfgExportPath").value.trim(),
   });
   try {
