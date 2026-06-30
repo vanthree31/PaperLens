@@ -683,6 +683,7 @@ body {
       <div style="display:flex;gap:8px;align-items:center">
         <input type="text" id="cfgExportPath" data-i18n-placeholder="cfgExportPath" placeholder="留空则弹出浏览器下载" style="flex:1">
         <button class="btn btn-sm btn-outline" onclick="chooseExportPath()" data-i18n="choose">选择</button>
+        <button class="btn btn-sm btn-outline" onclick="openExportDir()" data-i18n="openFolder">打开文件夹</button>
       </div>
       <div class="hint" data-i18n="exportPathHint">导出 RIS/BibTeX/CSV 和下载 PDF 时自动保存到此目录</div>
     </div>
@@ -2028,8 +2029,8 @@ function renderResults() {
           </div>
           <div class="paper-meta">
             <span class="tag">${authors}</span>
-            <span class="tag"><b>${escapeHtml(p.journal)}</b></span>
-            <span class="tag">(${p.year || "?"})</span>
+            <span class="tag"><b>${escapeHtml(p.journal)}</b>${p.volume ? `, ${escapeHtml(p.volume)}` : ''}${p.issue ? ` (${escapeHtml(p.issue)})` : ''}${p.pages ? `, ${escapeHtml(p.pages)}` : ''}</span>
+            <span class="tag">${p.year || "?"}</span>
             ${p.pmid ? `<span class="tag">PMID:${escapeHtml(p.pmid)}</span>` : ""}
             ${doiLink ? `<span class="tag">DOI:${doiLink}</span>` : ""}
             ${citationTag}
@@ -2365,6 +2366,27 @@ async function chooseExportPath() {
     const data = await r.json();
     if (r.ok && data.path) {
       document.getElementById("cfgExportPath").value = data.path;
+    }
+  } catch (e) {
+    showToast(`${t("openFailed")} ${e.message}`);
+  }
+}
+
+async function openExportDir() {
+  const path = document.getElementById("cfgExportPath")?.value?.trim();
+  if (!path) {
+    showToast(t("noExportPath"));
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/api/open-export-dir`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ path }),
+    });
+    if (!r.ok) {
+      const data = await r.json();
+      showToast(te(data.error) || t("cannotOpenFolder"));
     }
   } catch (e) {
     showToast(`${t("openFailed")} ${e.message}`);

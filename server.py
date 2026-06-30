@@ -1153,14 +1153,16 @@ def create_app():
             return jsonify({"error": "no_export_data"}), 400
         selected = [papers[i] for i in indices if 0 <= i < len(papers)] if indices else papers
         safe_q = re.sub(r'[^\w\-]', '_', query[:40]).strip('_') or "results"
+        # 添加时间戳避免文件名重复（批量导入 DOI 时 query 可能为空或相同）
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if fmt == "ris":
-            content, filename, mime = export_ris(selected), f"lit_search_{safe_q}.ris", "application/x-research-info-systems"
+            content, filename, mime = export_ris(selected), f"lit_search_{safe_q}_{timestamp}.ris", "application/x-research-info-systems"
         elif fmt == "bibtex":
-            content, filename, mime = export_bibtex(selected), f"lit_search_{safe_q}.bib", "application/x-bibtex"
+            content, filename, mime = export_bibtex(selected), f"lit_search_{safe_q}_{timestamp}.bib", "application/x-bibtex"
         elif fmt == "csv":
-            content, filename, mime = export_csv(selected), f"lit_search_{safe_q}.csv", "text/csv"
+            content, filename, mime = export_csv(selected), f"lit_search_{safe_q}_{timestamp}.csv", "text/csv"
         elif fmt == "endnotexml":
-            content, filename, mime = export_endnote_xml(selected), f"lit_search_{safe_q}.xml", "application/xml"
+            content, filename, mime = export_endnote_xml(selected), f"lit_search_{safe_q}_{timestamp}.xml", "application/xml"
         else:
             return jsonify({"error": "unsupported_format", "format": fmt}), 400
 
@@ -1360,6 +1362,22 @@ def create_app():
             return jsonify({"ok": True})
         except Exception as e:
             print(f"[ERROR] Failed to open data dir: {e}")
+            return jsonify({"error": "open_dir_failed"}), 500
+
+    @app.route("/api/open-export-dir", methods=["POST"])
+    def open_export_dir():
+        """打开导出文件夹"""
+        data = request.json or {}
+        path = data.get("path", "").strip()
+        if not path:
+            return jsonify({"error": "no_path"}), 400
+        try:
+            if not os.path.exists(path):
+                os.makedirs(path, exist_ok=True)
+            os.startfile(path)
+            return jsonify({"ok": True})
+        except Exception as e:
+            print(f"[ERROR] Failed to open export dir: {e}")
             return jsonify({"error": "open_dir_failed"}), 500
 
     @app.route("/api/choose-folder", methods=["POST"])

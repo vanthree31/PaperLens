@@ -555,6 +555,17 @@ class OpenAlexSearch:
             p.doi = (w.get("doi", "") or "").replace("https://doi.org/", "")
             p.citation_count = w.get("cited_by_count", 0)
 
+            # 提取卷号、期号、页码
+            biblio = w.get("biblio") or {}
+            p.volume = str(biblio.get("volume", "") or "")
+            p.issue = str(biblio.get("issue", "") or "")
+            first_page = str(biblio.get("first_page", "") or "")
+            last_page = str(biblio.get("last_page", "") or "")
+            if first_page:
+                p.pages = first_page if not last_page or first_page == last_page else f"{first_page}-{last_page}"
+            # ISSN
+            p.issn = str(src.get("issn", "") or "")
+
             # OpenAlex 摘要是反转索引格式，需要重建
             abstract_inv = w.get("abstract_inverted_index")
             if abstract_inv:
@@ -607,6 +618,15 @@ class OpenAlexSearch:
                 p.year = w.get("publication_year", 0) or 0
                 p.doi = (w.get("doi", "") or "").replace("https://doi.org/", "")
                 p.citation_count = w.get("cited_by_count", 0)
+                # 提取卷号、期号、页码
+                biblio = w.get("biblio") or {}
+                p.volume = str(biblio.get("volume", "") or "")
+                p.issue = str(biblio.get("issue", "") or "")
+                first_page = str(biblio.get("first_page", "") or "")
+                last_page = str(biblio.get("last_page", "") or "")
+                if first_page:
+                    p.pages = first_page if not last_page or first_page == last_page else f"{first_page}-{last_page}"
+                p.issn = str(src.get("issn", "") or "")
                 abstract_inv = w.get("abstract_inverted_index")
                 if abstract_inv:
                     p.abstract = self._reconstruct_abstract(abstract_inv)
