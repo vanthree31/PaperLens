@@ -19,11 +19,10 @@
 
 import re
 import time
-import html
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import List
 import requests
 
 

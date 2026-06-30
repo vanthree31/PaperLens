@@ -416,8 +416,6 @@ def create_app():
                 use_google_scholar=use_google_scholar,
                 use_cnki=use_cnki, use_wanfang=use_wanfang,
                 use_vip=use_vip, use_bing_academic=use_bing_academic,
-                journal=analysis.get("journal", ""), field=analysis.get("field", ""),
-                mesh_term=analysis.get("mesh_term", ""), pub_type=analysis.get("pub_type", ""),
             )
         except Exception as e:
             print(f"[ERROR] AI search failed: {e}")
@@ -1393,15 +1391,17 @@ def create_app():
             cfg = load_config()
             _deep_update(cfg, data)
             save_config(cfg)
-            # 线程安全地更新引擎实例
+            # 线程安全地更新引擎实例和配置
             new_engine = SearchEngine(cfg)
             new_search_ai = SearchAI(cfg)
             new_analysis_ai = AnalysisAI(cfg)
             nonlocal engine, search_ai, analysis_ai
+            nonlocal config
             with cache_lock:
                 engine = new_engine
                 search_ai = new_search_ai
                 analysis_ai = new_analysis_ai
+                config = cfg
             return jsonify({"ok": True})
         except Exception as e:
             print(f"[ERROR] Config update failed: {e}")

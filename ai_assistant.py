@@ -205,12 +205,8 @@ class SearchAI:
 请严格按以下 JSON 格式返回，不要包含其他内容：
 {{
   "query": "检索式（可含 PubMed 字段标签 [ti] [tiab] [ta] [mh]，布尔运算 AND/OR/NOT）",
-  "journal": "期刊名或缩写（无则空字符串）",
-  "field": "默认字段标签（默认 tiab）",
   "year_from": 年份数字,
   "year_to": 年份数字,
-  "mesh_term": "MeSH 主题词（无则空）",
-  "pub_type": "文献类型 review/clinical trial（无则空）",
   "data_sources": ["推荐启用的数据源列表，根据用户意图选择"],
   "explanation": "用中文详细说明检索策略，包括：1）为什么选择这些关键词；2）检索式的逻辑结构；3）预期的检索范围",
   "suggested_keywords": ["3-5个专业英文关键词"],
@@ -236,9 +232,8 @@ data_sources 选择规则：
         except Exception:
             pass
         return {
-            "query": user_input, "journal": "", "field": "tiab",
+            "query": user_input,
             "year_from": 2020, "year_to": datetime.now().year,
-            "mesh_term": "", "pub_type": "",
             "data_sources": [],
             "explanation": f"AI 解析失败，使用原始输入: {user_input}",
             "suggested_keywords": [],
