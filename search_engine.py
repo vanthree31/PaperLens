@@ -700,13 +700,23 @@ class GoogleScholarSearch:
 
 
 class CNKISearch:
-    """中国知网搜索（实验性，网页抓取）"""
+    """中国知网搜索（实验性，网页抓取）
+
+    注意：CNKI 有严格的反爬机制，可能需要：
+    1. 机构网络环境
+    2. 有效的 CNKI 账号登录
+    3. 使用代理
+    """
 
     BASE = "https://kns.cnki.net/kns8s/brief/grid"
 
     def __init__(self, proxy=None):
         self.session = requests.Session()
-        self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        })
         if proxy:
             self.session.proxies = proxy
 
@@ -736,6 +746,11 @@ class CNKISearch:
             r = self.session.get(search_url, params=params, timeout=15)
             r.raise_for_status()
             r.encoding = "utf-8"
+
+            # 检查是否返回验证页面（反爬机制）
+            if "/verify/" in r.text or "验证" in r.text[:500]:
+                print("CNKI: 检测到反爬验证，可能需要机构网络或登录")
+                return []
 
             soup = BeautifulSoup(r.text, "html.parser")
             papers = []
