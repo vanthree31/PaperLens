@@ -1152,17 +1152,23 @@ def create_app():
         if not papers:
             return jsonify({"error": "no_export_data"}), 400
         selected = [papers[i] for i in indices if 0 <= i < len(papers)] if indices else papers
-        safe_q = re.sub(r'[^\w\-]', '_', query[:40]).strip('_') or "results"
-        # 添加时间戳避免文件名重复（批量导入 DOI 时 query 可能为空或相同）
+        # 文件名：用第一篇论文标题，多篇时加"等N篇"
+        first_title = ""
+        if selected and selected[0].title:
+            first_title = re.sub(r'[^\w\-]', '_', selected[0].title[:50]).strip('_')
+        safe_name = first_title or re.sub(r'[^\w\-]', '_', query[:40]).strip('_') or "papers"
+        if len(selected) > 1:
+            safe_name += f"_等{len(selected)}篇"
+        # 添加时间戳避免文件名重复
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if fmt == "ris":
-            content, filename, mime = export_ris(selected), f"lit_search_{safe_q}_{timestamp}.ris", "application/x-research-info-systems"
+            content, filename, mime = export_ris(selected), f"{safe_name}_{timestamp}.ris", "application/x-research-info-systems"
         elif fmt == "bibtex":
-            content, filename, mime = export_bibtex(selected), f"lit_search_{safe_q}_{timestamp}.bib", "application/x-bibtex"
+            content, filename, mime = export_bibtex(selected), f"{safe_name}_{timestamp}.bib", "application/x-bibtex"
         elif fmt == "csv":
-            content, filename, mime = export_csv(selected), f"lit_search_{safe_q}_{timestamp}.csv", "text/csv"
+            content, filename, mime = export_csv(selected), f"{safe_name}_{timestamp}.csv", "text/csv"
         elif fmt == "endnotexml":
-            content, filename, mime = export_endnote_xml(selected), f"lit_search_{safe_q}_{timestamp}.xml", "application/xml"
+            content, filename, mime = export_endnote_xml(selected), f"{safe_name}_{timestamp}.xml", "application/xml"
         else:
             return jsonify({"error": "unsupported_format", "format": fmt}), 400
 
@@ -1241,6 +1247,10 @@ def create_app():
                 "abstract": paper.get("abstract", ""),
                 "keywords": paper.get("keywords", []),
                 "source": paper.get("source", ""),
+                "volume": paper.get("volume", ""),
+                "issue": paper.get("issue", ""),
+                "pages": paper.get("pages", ""),
+                "issn": paper.get("issn", ""),
                 "group_id": group_id,
                 "added_at": datetime.now().isoformat(),
             })
