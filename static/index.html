@@ -493,7 +493,7 @@ body {
     <div class="filter-group">
       <label><input type="checkbox" id="usePubmed" checked> PubMed</label>
       <label><input type="checkbox" id="useOpenalex" checked> OpenAlex</label>
-      <label><input type="checkbox" id="useSemanticScholar" checked> Semantic Scholar</label>
+      <label><input type="checkbox" id="useSemanticScholar" checked> Semantic Scholar <span class="beta-badge" data-tip="免费 API，收录部分中文论文" data-i18n-tip="semanticScholarTip">✓</span></label>
       <label><input type="checkbox" id="useGoogleScholar"> Google Scholar <span class="beta-badge" data-tip="反爬风险高，需 ScraperAPI" data-i18n-tip="betaScraping">β</span></label>
       <label><input type="checkbox" id="useBingAcademic"> Bing Academic <span class="beta-badge" data-tip="需要 Playwright，首次使用会自动安装浏览器" data-i18n-tip="betaScraping">β</span></label>
       <label><input type="checkbox" id="useCNKI"> CNKI <span class="beta-badge" data-tip="需 ScraperAPI 或机构网络" data-i18n-tip="betaAuth">β</span></label>
@@ -1005,6 +1005,7 @@ const LANGS = {
     zoteroUserIdPlaceholder: "在 zotero.org/settings/keys 查看",
     betaScraping: "反爬风险高，不稳定，不建议启用",
     betaAuth: "反爬机制严格，需机构网络，不保证可用",
+    semanticScholarTip: "免费 API，收录部分中文论文",
     manualSearch: "自动搜索失败，请手动搜索",
     openManualSearch: "打开手动搜索",
     // 图谱面板
@@ -1129,7 +1130,7 @@ const LANGS = {
     playwrightInstalling: "Installing...", playwrightInstallSuccess: "Installed successfully", playwrightInstallFailed: "Installation failed",
     wanfangConfig: "Wanfang Data Config", enableWanfang: "Enable Wanfang Search",
     wanfangCookie: "Wanfang Cookie", wanfangCookieHint: "After logging into Wanfang, copy Cookie from browser F12 → Network",
-    scraperapiKey: "ScraperAPI Key", scraperapiKeyHint: "Paid service to bypass anti-scraping for CNKI/维普/Google Scholar",
+    scraperapiKey: "ScraperAPI Key", scraperapiKeyHint: "Paid service to bypass anti-scraping for CNKI/CQVIP/Google Scholar",
     downloadSuccess: "Download success", downloadFailed: "Download failed",
     // Citation graph
     citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
@@ -1177,6 +1178,7 @@ const LANGS = {
     zoteroUserIdPlaceholder: "View at zotero.org/settings/keys",
     betaScraping: "High anti-scraping risk, unstable, not recommended",
     betaAuth: "Strict anti-scraping, requires institutional network, not guaranteed to work",
+    semanticScholarTip: "Free API, indexes some Chinese papers",
     manualSearch: "Auto search failed, please search manually",
     openManualSearch: "Open Manual Search",
     // Graph panel
