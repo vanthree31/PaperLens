@@ -67,11 +67,18 @@ class AIAssistant:
         self.session = requests.Session()
 
     def is_available(self) -> bool:
-        return self.enabled and self.api_key and self.base_url
+        if not self.enabled or not self.base_url:
+            return False
+        # Ollama 是本地部署，不需要 API Key
+        if self.provider == "ollama":
+            return True
+        return bool(self.api_key)
 
     def _build_headers(self) -> dict:
         if self.provider == "anthropic":
             return {"x-api-key": self.api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+        if self.provider == "ollama":
+            return {"Content-Type": "application/json"}
         return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
     def _build_payload(self, messages: list, stream: bool = False) -> dict:
