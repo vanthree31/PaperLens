@@ -2762,11 +2762,14 @@ function renderRecommendations(data) {
     const year = paper.year || "";
     const citations = paper.citation_count || 0;
     const doi = escapeHtml(paper.doi || "");
+    const volumeInfo = paper.volume ? `, ${escapeHtml(paper.volume)}` : '';
+    const issueInfo = paper.issue ? ` (${escapeHtml(paper.issue)})` : '';
+    const pagesInfo = paper.pages ? `, ${escapeHtml(paper.pages)}` : '';
 
     html += `<div class="collection-item" onclick="openRecommendPaper(${idx})" style="cursor:pointer">
       <div class="title">${title}</div>
       <div class="meta">
-        ${authors}${authors && journal ? ' · ' : ''}${journal}${year ? ` (${year})` : ''}
+        ${authors}${authors && journal ? ' · ' : ''}${journal}${volumeInfo}${issueInfo}${pagesInfo}${year ? ` (${year})` : ''}
         ${citations > 0 ? ` · <span style="color:#2563eb">${t("cited")} ${citations}</span>` : ''}
       </div>
       ${doi ? `<div class="meta" style="color:#64748b;font-size:11px;margin-top:2px">DOI: ${doi}</div>` : ''}
@@ -3063,10 +3066,13 @@ function renderCollections() {
   items.forEach((item, i) => {
     const authors = (item.authors || []).length > 2 ? item.authors.slice(0, 2).map(a => escapeHtml(a)).join(", ") + " et al." : (item.authors || []).map(a => escapeHtml(a)).join(", ");
     const citedText = item.citation_count > 0 ? `· ${t("cited")} ${item.citation_count}` : '';
+    const volumeInfo = item.volume ? `, ${escapeHtml(item.volume)}` : '';
+    const issueInfo = item.issue ? ` (${escapeHtml(item.issue)})` : '';
+    const pagesInfo = item.pages ? `, ${escapeHtml(item.pages)}` : '';
     html += `
     <div class="collection-item" onclick="viewCollectionItem('${encodeURIComponent(item.doi)}')">
       <div class="title">${escapeHtml(item.title) || t("noTitle")}</div>
-      <div class="meta">${authors} · ${escapeHtml(item.journal)} (${item.year || "?"}) ${citedText}</div>
+      <div class="meta">${authors} · ${escapeHtml(item.journal)}${volumeInfo}${issueInfo}${pagesInfo} (${item.year || "?"}) ${citedText}</div>
       <div class="actions">
         ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();window.open('https://doi.org/${encodeURIComponent(item.doi)}')">${t("original")}</button>` : ''}
         ${item.doi ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showCitationGraph('${encodeURIComponent(item.doi)}','${encodeURIComponent(item.title || '')}')">${t("citationGraph")}</button>` : ''}
