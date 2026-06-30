@@ -4,3 +4,4 @@ requests>=2.31
 pyyaml>=6.0
 scholarly>=1.7
 beautifulsoup4>=4.12
+playwright>=1.40

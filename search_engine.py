@@ -699,6 +699,73 @@ class GoogleScholarSearch:
             return []
 
 
+class PlaywrightBrowser:
+    """Playwright 浏览器管理器（用于需要 JavaScript 渲染的网站）"""
+
+    _instance = None
+    _browser = None
+    _playwright = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        self._browser = None
+        self._playwright = None
+
+    def get_browser(self):
+        if self._browser is None or not self._browser.is_connected():
+            self._init_browser()
+        return self._browser
+
+    def _init_browser(self):
+        try:
+            from playwright.sync_api import sync_playwright
+            if self._playwright is None:
+                self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.launch(
+                headless=True,
+                args=['--disable-blink-features=AutomationControlled']
+            )
+            print("Playwright browser initialized")
+        except Exception as e:
+            print(f"Playwright init error: {e}")
+            self._browser = None
+
+    def new_page(self):
+        browser = self.get_browser()
+        if browser is None:
+            return None
+        try:
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1920, "height": 1080},
+                locale="zh-CN",
+            )
+            page = context.new_page()
+            return page
+        except Exception as e:
+            print(f"Playwright new page error: {e}")
+            return None
+
+    def close(self):
+        if self._browser:
+            try:
+                self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+        if self._playwright:
+            try:
+                self._playwright.stop()
+            except Exception:
+                pass
+            self._playwright = None
+
+
 class CNKISearch:
     """中国知网搜索（实验性，网页抓取）
 
@@ -1027,58 +1094,51 @@ class VIPSearch:
 
 
 class BingScholarSearch:
-    """Bing 学术搜索（网页抓取）"""
+    """Bing 学术搜索（中国区 cn.bing.com，需要 Playwright 渲染）"""
 
-    BASE = "https://www.bing.com/academic"
+    BASE = "https://cn.bing.com/academic"
 
     def __init__(self, proxy=None):
-        self.session = requests.Session()
-        self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        self.session.headers["Accept-Language"] = "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7"
-        if proxy:
-            self.session.proxies = proxy
+        self.proxy = proxy
 
     def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
+        """使用 Playwright 搜索 Bing Academic（中国区）"""
         try:
             from bs4 import BeautifulSoup
         except ImportError:
-            print("Bing Academic: beautifulsoup4 未安装，请运行 pip install beautifulsoup4")
+            print("Bing Academic: beautifulsoup4 未安装")
             return []
 
+        if not year_to:
+            year_to = datetime.now().year
+
+        page = None
         try:
-            # Bing Academic 搜索参数
-            params = {
-                "q": query,
-                "qs": "n",
-                "form": "QBRE",
-                "sp": "-1",
-                "pq": query.lower(),
-                "sc": "0-0",
-                "sk": "",
-            }
-            # 添加年份过滤
-            if year_from or year_to:
-                y_from = year_from if year_from else 1900
-                y_to = year_to if year_to else 2030
-                params["filters"] = f"ex1:\"ez5_{y_from}_{y_to}\""
+            pb = PlaywrightBrowser.get_instance()
+            page = pb.new_page()
+            if page is None:
+                print("Bing Academic: Playwright 不可用")
+                return []
 
-            r = self.session.get(self.BASE, params=params, timeout=15)
-            r.raise_for_status()
-            r.encoding = "utf-8"
+            # 构建搜索 URL（添加年份过滤）
+            url = f"{self.BASE}?q={query}"
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            time.sleep(5)  # 等待 JavaScript 渲染
 
-            soup = BeautifulSoup(r.text, "html.parser")
+            content = page.content()
+            soup = BeautifulSoup(content, "html.parser")
             papers = []
 
             # Bing 学术结果选择器
-            items = soup.select("li.b_algo, div.academic-card, div.sa_cc")
+            items = soup.select("li[class*='algo'], div[class*='algo']")
 
             for item in items[:max_results]:
                 try:
                     p = Paper(source="bing_academic")
 
                     # 标题
-                    title_el = item.select_one("h2 a, h3 a, .ac-title a")
+                    title_el = item.select_one("h2 a, h3 a, .ac-title a, a[href]")
                     if title_el:
                         p.title = title_el.get_text(strip=True)
                         # 尝试从链接获取 DOI
@@ -1123,7 +1183,7 @@ class BingScholarSearch:
                         if year_match:
                             p.year = int(year_match.group())
 
-                    if p.title and len(p.title) > 5:  # 过滤掉太短的标题
+                    if p.title and len(p.title) > 5:
                         papers.append(p)
                 except Exception:
                     continue
@@ -1132,6 +1192,12 @@ class BingScholarSearch:
         except Exception as e:
             print(f"Bing Academic search error: {e}")
             return []
+        finally:
+            if page:
+                try:
+                    page.context.close()
+                except Exception:
+                    pass
 
 
 class SearchEngine:
@@ -1329,3 +1395,8 @@ class SearchEngine:
                     source.session.close()
                 except Exception:
                     pass
+        # 关闭 Playwright 浏览器
+        try:
+            PlaywrightBrowser.get_instance().close()
+        except Exception:
+            pass
