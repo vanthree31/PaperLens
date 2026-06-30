@@ -702,13 +702,18 @@ class GoogleScholarSearch:
 class CNKISearch:
     """中国知网搜索（实验性，网页抓取）
 
-    注意：CNKI 有严格的反爬机制，可能需要：
-    1. 机构网络环境
-    2. 有效的 CNKI 账号登录
-    3. 使用代理
+    注意：CNKI 有严格的反爬机制，包括：
+    - JavaScript 验证
+    - 浏览器指纹检测
+    - IP 限流
+
+    即使使用 Playwright 也可能被检测。建议：
+    1. 在机构网络环境下使用
+    2. 或使用 PubMed + OpenAlex 替代
     """
 
     BASE = "https://kns.cnki.net/kns8s/brief/grid"
+    MANUAL_SEARCH_URL = "https://kns.cnki.net/kns8s/defaultresult/index"
 
     def __init__(self, proxy=None):
         self.session = requests.Session()
@@ -726,6 +731,74 @@ class CNKISearch:
             from bs4 import BeautifulSoup
         except ImportError:
             print("CNKI: beautifulsoup4 未安装，请运行 pip install beautifulsoup4")
+            return []
+
+        try:
+            # CNKI 搜索接口
+            search_url = "https://kns.cnki.net/kns8s/brief/grid"
+            params = {
+                "queryid": "1",
+                "txt_1_sel": "SU",  # 主题
+                "txt_1_value1": query,
+                "txt_1_relation": "#DIFFUSE",
+                "txt_1_special1": "=",
+                "au_1_sel": "AU",
+                "publishdate_from": str(year_from),
+                "publishdate_to": str(year_to),
+                "sorttype": "0",
+                "pageidx": "0",
+            }
+            r = self.session.get(search_url, params=params, timeout=15)
+            r.raise_for_status()
+            r.encoding = "utf-8"
+
+            # 检查是否返回验证页面（反爬机制）
+            if "/verify/" in r.text or "验证" in r.text[:500]:
+                print(f"CNKI: 反爬验证，请手动访问 {self.MANUAL_SEARCH_URL}?kw={query}")
+                return []
+
+            soup = BeautifulSoup(r.text, "html.parser")
+            papers = []
+            rows = soup.select("table.result-table-list tbody tr")
+
+            for row in rows[:max_results]:
+                try:
+                    p = Paper(source="cnki")
+                    # 标题
+                    title_el = row.select_one("td.name a")
+                    if title_el:
+                        p.title = title_el.get_text(strip=True)
+                    # 作者
+                    author_el = row.select_one("td.author")
+                    if author_el:
+                        authors_text = author_el.get_text(strip=True)
+                        p.authors = [a.strip() for a in authors_text.split(";") if a.strip()]
+                    # 期刊
+                    source_el = row.select_one("td.source")
+                    if source_el:
+                        p.journal = source_el.get_text(strip=True)
+                    # 年份
+                    date_el = row.select_one("td.date")
+                    if date_el:
+                        try:
+                            p.year = int(date_el.get_text(strip=True)[:4])
+                        except ValueError:
+                            pass
+                    # 被引
+                    quote_el = row.select_one("td.quote")
+                    if quote_el:
+                        try:
+                            p.citation_count = int(quote_el.get_text(strip=True))
+                        except ValueError:
+                            pass
+                    if p.title:
+                        papers.append(p)
+                except Exception:
+                    continue
+
+            return papers
+        except Exception as e:
+            print(f"CNKI search error: {e}")
             return []
 
         try:
