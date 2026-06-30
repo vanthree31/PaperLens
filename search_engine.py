@@ -1130,58 +1130,49 @@ class BingScholarSearch:
             soup = BeautifulSoup(content, "html.parser")
             papers = []
 
-            # Bing 学术结果选择器
-            items = soup.select("li[class*='algo'], div[class*='algo']")
+            # Bing 学术结果选择器（cn.bing.com/academic）
+            items = soup.select("li.aca_algo, li[class*='algo']")
 
             for item in items[:max_results]:
                 try:
                     p = Paper(source="bing_academic")
 
-                    # 标题
-                    title_el = item.select_one("h2 a, h3 a, .ac-title a, a[href]")
+                    # 标题（处理 HTML 标签导致的缺少空格问题）
+                    title_el = item.select_one("h2 a")
                     if title_el:
-                        p.title = title_el.get_text(strip=True)
-                        # 尝试从链接获取 DOI
-                        href = title_el.get("href", "")
-                        doi_match = re.search(r'10\.\d{4,}/\S+', href)
-                        if doi_match:
-                            p.doi = doi_match.group()
+                        p.title = " ".join(title_el.get_text(separator=" ", strip=True).split())
 
-                    # 作者和期刊信息
-                    meta_el = item.select_one(".b_attribution, .ac-meta, .sa_uc")
-                    if meta_el:
-                        meta_text = meta_el.get_text(strip=True)
-                        # 尝试解析作者
-                        author_match = re.search(r'^([^-]+?)\s*[-–]', meta_text)
-                        if author_match:
-                            authors_str = author_match.group(1)
-                            p.authors = [a.strip() for a in re.split(r'[,;]', authors_str) if a.strip()]
-                        # 尝试解析期刊和年份
-                        journal_match = re.search(r'[-–]\s*(.+?)(?:\s*,\s*(\d{4}))?$', meta_text)
-                        if journal_match:
-                            p.journal = journal_match.group(1).strip()
-                            if journal_match.group(2):
-                                p.year = int(journal_match.group(2))
+                    # 作者（在 div.caption_author 中）
+                    author_el = item.select_one(".caption_author")
+                    if author_el:
+                        author_links = author_el.select("a")
+                        p.authors = [a.get_text(strip=True) for a in author_links if a.get_text(strip=True)]
 
-                    # 摘要
-                    abstract_el = item.select_one(".b_caption p, .ac-abstract, .sa_sn")
+                    # 期刊和年份（在 div.caption_venue 中）
+                    venue_el = item.select_one(".caption_venue")
+                    if venue_el:
+                        venue_text = venue_el.get_text(strip=True)
+                        # 提取年份
+                        year_match = re.search(r'\b(20\d{2})\b', venue_text)
+                        if year_match:
+                            p.year = int(year_match.group(1))
+                        # 提取期刊名（在 a 标签中）
+                        journal_el = venue_el.select_one("a")
+                        if journal_el:
+                            p.journal = journal_el.get_text(strip=True)
+
+                    # 摘要（在 div.caption_abstract 中）
+                    abstract_el = item.select_one(".caption_abstract p")
                     if abstract_el:
                         p.abstract = abstract_el.get_text(strip=True)
 
-                    # 引用数
-                    cite_el = item.select_one(".ac-cite-count, .sa_cc strong")
+                    # 引用数（在 span.caption_cite_count 中）
+                    cite_el = item.select_one(".caption_cite_count")
                     if cite_el:
-                        try:
-                            cite_text = cite_el.get_text(strip=True)
-                            p.citation_count = int(re.sub(r'[^\d]', '', cite_text))
-                        except ValueError:
-                            pass
-
-                    # 如果没有年份，尝试从摘要或其他地方提取
-                    if not p.year:
-                        year_match = re.search(r'\b(19|20)\d{2}\b', item.get_text())
-                        if year_match:
-                            p.year = int(year_match.group())
+                        cite_text = cite_el.get_text(strip=True)
+                        cite_match = re.search(r'\d+', cite_text)
+                        if cite_match:
+                            p.citation_count = int(cite_match.group())
 
                     if p.title and len(p.title) > 5:
                         papers.append(p)
