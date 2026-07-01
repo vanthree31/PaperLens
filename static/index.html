@@ -906,7 +906,7 @@ const LANGS = {
     waitingForAction: "等待操作...",
     analysisInProgress: "AI 分析进行中，请等待完成",
     networkErrorRetry: "网络错误 - 点击重试", noResultsFound: "未找到相关文献",
-    dataSource: "数据源: PubMed + OpenAlex",
+    dataSource: "数据源: PubMed + OpenAlex", dataSourceLabel: "数据源",
     // 历史
     searchHistory: "搜索历史", noHistory: "暂无搜索历史", papersCount2: "篇",
     // DOI
@@ -933,7 +933,7 @@ const LANGS = {
     pubmedAPIKey: "PubMed API Key", optional: "可选",
     openalexEmail: "OpenAlex Email", openalexEmailHint: "推荐配置，加入 polite pool 可获得 10 倍请求速率，减少限流",
     aiSearchModel: "AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）",
-    enableSearchAI: "启用检索 AI", provider: "提供商",
+    enableSearchAI: "启用检索 AI", provider: "提供商", ollamaLocal: "Ollama (本地)", customProvider: "自定义",
     apiKey: "API Key", modelName: "模型名称", endpointURL: "端点 URL",
     searchAIHint: "推荐：deepseek-chat / gpt-4o-mini",
     endpointHint: "留空使用默认端点",
@@ -985,7 +985,7 @@ const LANGS = {
     // 建议
     replaceConfirm: "当前搜索框有内容，是否替换为：",
     // 语言
-    language: "语言", chinese: "中文", english: "English",
+    language: "语言", chinese: "中文", english: "English", switchToChinese: "切换到中文", switchToEnglish: "Switch to English",
     // 收藏
     collections: "我的收藏", collectionsEmpty: "暂无收藏，点击论文卡片上的 ☆ 添加",
     addToCollection: "收藏", removeFromCollection: "取消收藏",
@@ -1091,7 +1091,7 @@ const LANGS = {
     waitingForAction: "Waiting...",
     analysisInProgress: "AI analysis in progress, please wait",
     networkErrorRetry: "Network error - click to retry", noResultsFound: "No papers found",
-    dataSource: "Data Source: PubMed + OpenAlex",
+    dataSource: "Data Source: PubMed + OpenAlex", dataSourceLabel: "Data Source",
     // History
     searchHistory: "Search History", noHistory: "No search history", papersCount2: " papers",
     // DOI
@@ -1118,7 +1118,7 @@ const LANGS = {
     pubmedAPIKey: "PubMed API Key", optional: "Optional",
     openalexEmail: "OpenAlex Email", openalexEmailHint: "Recommended: join polite pool for 10x request rate, reduces 429 rate limits",
     aiSearchModel: "AI Search Model (parses natural language → generates search queries, recommend fast model)",
-    enableSearchAI: "Enable Search AI", provider: "Provider",
+    enableSearchAI: "Enable Search AI", provider: "Provider", ollamaLocal: "Ollama (Local)", customProvider: "Custom",
     apiKey: "API Key", modelName: "Model Name", endpointURL: "Endpoint URL",
     searchAIHint: "Recommended: deepseek-chat / gpt-4o-mini",
     endpointHint: "Leave empty to use default endpoint",
@@ -1170,7 +1170,7 @@ const LANGS = {
     // Suggestions
     replaceConfirm: "Search box has content, replace with: ",
     // Language
-    language: "Language", chinese: "中文", english: "English",
+    language: "Language", chinese: "中文", english: "English", switchToChinese: "切换到中文", switchToEnglish: "Switch to English",
     // Collections
     collections: "My Collections", collectionsEmpty: "No collections yet, click ☆ on paper cards to add",
     addToCollection: "Add to Collection", removeFromCollection: "Remove from Collection",
@@ -1273,9 +1273,9 @@ function updateDataSourceDisplay() {
   if (document.getElementById("useGoogleScholar")?.checked) sources.push("Google Scholar");
   if (document.getElementById("useBingAcademic")?.checked) sources.push("Bing Academic");
   if (document.getElementById("useCNKI")?.checked) sources.push("CNKI");
-  if (document.getElementById("useWanfang")?.checked) sources.push(currentLang === "zh" ? "万方" : "Wanfang");
-  if (document.getElementById("useVIP")?.checked) sources.push(currentLang === "zh" ? "维普" : "CQVIP");
-  const dataSourceLabel = currentLang === "en" ? "Data Source" : "数据源";
+  if (document.getElementById("useWanfang")?.checked) sources.push(t("wanfang"));
+  if (document.getElementById("useVIP")?.checked) sources.push(t("vip"));
+  const dataSourceLabel = t("dataSourceLabel");
   dataSourceSpan.textContent = sources.length > 0 ? `${dataSourceLabel}: ${sources.join(" + ")}` : t("dataSource");
 }
 
@@ -1409,7 +1409,7 @@ function applyLang() {
   const langBtn = document.getElementById("langBtn");
   if (langBtn) {
     langBtn.textContent = currentLang === "zh" ? "EN" : "中";
-    langBtn.title = currentLang === "zh" ? "Switch to English" : "切换到中文";
+    langBtn.title = currentLang === "zh" ? t("switchToEnglish") : t("switchToChinese");
   }
 
   // 引用图谱面板
@@ -1446,11 +1446,9 @@ function applySettingsLang() {
   // h3、label、hint、按钮的翻译已通过 data-i18n 属性在 applyLang() 中处理
 
   // Provider 选项中的本地化
-  const ollamaText = currentLang === "zh" ? "Ollama (本地)" : "Ollama (Local)";
-  const customText = currentLang === "zh" ? "自定义" : "Custom";
   section.querySelectorAll("select option").forEach(opt => {
-    if (opt.value === "ollama") opt.textContent = ollamaText;
-    if (opt.value === "custom") opt.textContent = customText;
+    if (opt.value === "ollama") opt.textContent = t("ollamaLocal");
+    if (opt.value === "custom") opt.textContent = t("customProvider");
   });
 }
 
