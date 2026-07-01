@@ -91,6 +91,17 @@ def _escape_paper(paper) -> dict:
     }
 
 
+def _sanitize_for_prompt(text: str) -> str:
+    """清理文本用于 prompt 构建，移除可能影响 LLM 解析的特殊字符"""
+    if not text:
+        return ""
+    # 移除控制字符，保留换行和制表符
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    # 将多个连续换行合并为两个
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def _build_paper_prompt(papers, mode, lang="zh"):
     """构建不同模式的分析 prompt
 
@@ -101,22 +112,26 @@ def _build_paper_prompt(papers, mode, lang="zh"):
     """
     paper_info = []
     for i, p in enumerate(papers, 1):
+        title = _sanitize_for_prompt(p.title)
+        abstract = _sanitize_for_prompt(p.abstract) if p.abstract else ('No abstract' if lang == "en" else '无摘要')
+        authors = ', '.join(p.authors[:10])
+        keywords = ', '.join(p.keywords) if p.keywords else ('None' if lang == "en" else '无')
         if lang == "en":
             info = f"""[Paper {i}]
-Title: {p.title}
-Authors: {', '.join(p.authors[:10])}
+Title: {title}
+Authors: {authors}
 Journal: {p.journal} ({p.year})
 DOI: {p.doi}  PMID: {p.pmid}  Citations: {p.citation_count}
-Abstract: {p.abstract if p.abstract else 'No abstract'}
-Keywords: {', '.join(p.keywords) if p.keywords else 'None'}"""
+Abstract: {abstract}
+Keywords: {keywords}"""
         else:
             info = f"""【论文 {i}】
-标题: {p.title}
-作者: {', '.join(p.authors[:10])}
+标题: {title}
+作者: {authors}
 期刊: {p.journal} ({p.year})
 DOI: {p.doi}  PMID: {p.pmid}  被引: {p.citation_count}
-摘要: {p.abstract if p.abstract else '无摘要'}
-关键词: {', '.join(p.keywords) if p.keywords else '无'}"""
+摘要: {abstract}
+关键词: {keywords}"""
         paper_info.append(info)
     papers_text = "\n\n".join(paper_info)
 
@@ -394,6 +409,7 @@ def create_app():
                 # AI 明确推荐了数据源
                 use_pubmed = "pubmed" in ai_sources
                 use_openalex = "openalex" in ai_sources
+                use_semantic_scholar = "semantic_scholar" in ai_sources
                 use_google_scholar = "google_scholar" in ai_sources
                 use_cnki = "cnki" in ai_sources
                 use_wanfang = "wanfang" in ai_sources
@@ -1385,6 +1401,13 @@ def create_app():
         if not path:
             return jsonify({"error": "no_path"}), 400
         try:
+            # 路径安全验证：只允许打开导出路径或其子目录
+            export_dir = load_config().get("export_path", "")
+            real_path = os.path.realpath(path)
+            if export_dir:
+                real_export = os.path.realpath(export_dir)
+                if not real_path.startswith(real_export):
+                    return jsonify({"error": "invalid_path"}), 400
             if not os.path.exists(path):
                 os.makedirs(path, exist_ok=True)
             os.startfile(path)
@@ -1410,7 +1433,10 @@ def create_app():
 
     @app.route("/api/playwright/install", methods=["POST"])
     def playwright_install():
-        """安装 Playwright 浏览器"""
+        """安装 Playwright 浏览器（仅允许本地请求）"""
+        # 安全检查：只允许本地请求
+        if request.remote_addr not in ("127.0.0.1", "::1", "localhost"):
+            return jsonify({"error": "local_only"}), 403
         try:
             import subprocess
             # 安装 Playwright 包

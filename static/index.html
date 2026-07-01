@@ -892,7 +892,7 @@ const LANGS = {
     searchTips: "试试更短的关键词 · 检查拼写 · 扩大年份范围 · 换一个数据源试试",
     // AI
     aiWaiting: "AI 正在分析中... 已等待", seconds: "秒",
-    aiSearchStrategy: "AI 检索策略：", suggestedKeywords: "推荐关键词：", actualQuery: "实际检索式：",
+    aiSearchStrategy: "AI 检索策略：", suggestedKeywords: "推荐关键词：", actualQuery: "实际检索式：", searchReasoning: "检索推理：",
     refilter: "用新条件重新筛选", noPreviousQuery: "没有上次 AI 查询，请先进行 AI 搜索",
     aiSearchComplete: "AI 智能检索完成，找到", papersFound: "篇文献（耗时",
     aiSummarizing: "AI 总结中...", aiDetailing: "AI 详析中...", aiComparing: "AI 对比中...", aiNoveltyDetecting: "AI 创新点检测中...",
@@ -1065,7 +1065,7 @@ const LANGS = {
     searchTips: "Try shorter keywords · Check spelling · Expand year range · Try another data source",
     // AI
     aiWaiting: "AI analyzing... waited", seconds: "s",
-    aiSearchStrategy: "AI Search Strategy:", suggestedKeywords: "Suggested Keywords:", actualQuery: "Actual Query:",
+    aiSearchStrategy: "AI Search Strategy:", suggestedKeywords: "Suggested Keywords:", actualQuery: "Actual Query:", searchReasoning: "Search Reasoning:",
     refilter: "Refilter with new criteria", noPreviousQuery: "No previous AI query. Please run AI search first.",
     aiSearchComplete: "AI search complete, found", papersFound: "papers (took",
     aiSummarizing: "AI Summarizing...", aiDetailing: "AI Detailing...", aiComparing: "AI Comparing...", aiNoveltyDetecting: "AI Novelty Detection...",
@@ -1927,7 +1927,7 @@ async function doAISearch() {
         let strategyHtml = `<b>${t("aiSearchStrategy")}</b>${escapeHtml(data.explanation)}`;
         // 显示检索推理过程（如果有）
         if (data.analysis?.search_reasoning) {
-          strategyHtml += `<br><br><b>检索推理：</b>${escapeHtml(data.analysis.search_reasoning)}`;
+          strategyHtml += `<br><br><b>${t("searchReasoning")}</b>${escapeHtml(data.analysis.search_reasoning)}`;
         }
         if (data.analysis?.suggested_keywords) {
           strategyHtml += `<br><b>${t("suggestedKeywords")}</b>${escapeHtml(data.analysis.suggested_keywords.join(", "))}`;

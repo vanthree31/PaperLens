@@ -19,6 +19,7 @@
 
 import re
 import time
+import threading
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -705,11 +706,14 @@ class PlaywrightBrowser:
     _instance = None
     _browser = None
     _playwright = None
+    _lock = threading.Lock()
 
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            cls._instance = cls()
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls()
         return cls._instance
 
     def __init__(self):
@@ -718,7 +722,9 @@ class PlaywrightBrowser:
 
     def get_browser(self):
         if self._browser is None or not self._browser.is_connected():
-            self._init_browser()
+            with self._lock:
+                if self._browser is None or not self._browser.is_connected():
+                    self._init_browser()
         return self._browser
 
     def _init_browser(self):
@@ -822,74 +828,6 @@ class CNKISearch:
             # 检查是否返回验证页面（反爬机制）
             if "/verify/" in r.text or "验证" in r.text[:500]:
                 print(f"CNKI: 反爬验证，请手动访问 {self.MANUAL_SEARCH_URL}?kw={query}")
-                return []
-
-            soup = BeautifulSoup(r.text, "html.parser")
-            papers = []
-            rows = soup.select("table.result-table-list tbody tr")
-
-            for row in rows[:max_results]:
-                try:
-                    p = Paper(source="cnki")
-                    # 标题
-                    title_el = row.select_one("td.name a")
-                    if title_el:
-                        p.title = title_el.get_text(strip=True)
-                    # 作者
-                    author_el = row.select_one("td.author")
-                    if author_el:
-                        authors_text = author_el.get_text(strip=True)
-                        p.authors = [a.strip() for a in authors_text.split(";") if a.strip()]
-                    # 期刊
-                    source_el = row.select_one("td.source")
-                    if source_el:
-                        p.journal = source_el.get_text(strip=True)
-                    # 年份
-                    date_el = row.select_one("td.date")
-                    if date_el:
-                        try:
-                            p.year = int(date_el.get_text(strip=True)[:4])
-                        except ValueError:
-                            pass
-                    # 被引
-                    quote_el = row.select_one("td.quote")
-                    if quote_el:
-                        try:
-                            p.citation_count = int(quote_el.get_text(strip=True))
-                        except ValueError:
-                            pass
-                    if p.title:
-                        papers.append(p)
-                except Exception:
-                    continue
-
-            return papers
-        except Exception as e:
-            print(f"CNKI search error: {e}")
-            return []
-
-        try:
-            # CNKI 搜索接口
-            search_url = "https://kns.cnki.net/kns8s/brief/grid"
-            params = {
-                "queryid": "1",
-                "txt_1_sel": "SU",  # 主题
-                "txt_1_value1": query,
-                "txt_1_relation": "#DIFFUSE",
-                "txt_1_special1": "=",
-                "au_1_sel": "AU",
-                "publishdate_from": str(year_from),
-                "publishdate_to": str(year_to),
-                "sorttype": "0",
-                "pageidx": "0",
-            }
-            r = self.session.get(search_url, params=params, timeout=15)
-            r.raise_for_status()
-            r.encoding = "utf-8"
-
-            # 检查是否返回验证页面（反爬机制）
-            if "/verify/" in r.text or "验证" in r.text[:500]:
-                print("CNKI: 检测到反爬验证，可能需要机构网络或登录")
                 return []
 
             soup = BeautifulSoup(r.text, "html.parser")
