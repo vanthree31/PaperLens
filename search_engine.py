@@ -25,6 +25,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from typing import List
 import requests
+from access_proxy import EZproxyRewriter
 
 
 @dataclass
@@ -817,7 +818,7 @@ class CNKISearch:
     BASE = "https://kns.cnki.net/kns8s/brief/grid"
     MANUAL_SEARCH_URL = "https://kns.cnki.net/kns8s/defaultresult/index"
 
-    def __init__(self, proxy=None):
+    def __init__(self, proxy=None, access_proxy=None):
         self.session = requests.Session()
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -826,6 +827,11 @@ class CNKISearch:
         })
         if proxy:
             self.session.proxies = proxy
+        self.access_proxy = access_proxy
+
+    def _url(self, url):
+        """通过 EZproxy 重写 URL"""
+        return self.access_proxy.rewrite(url) if self.access_proxy else url
 
     def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
@@ -837,7 +843,7 @@ class CNKISearch:
 
         try:
             # CNKI 搜索接口
-            search_url = "https://kns.cnki.net/kns8s/brief/grid"
+            search_url = self._url("https://kns.cnki.net/kns8s/brief/grid")
             params = {
                 "queryid": "1",
                 "txt_1_sel": "SU",  # 主题
@@ -909,7 +915,7 @@ class WanfangSearch:
 
     BASE = "https://s.wanfangdata.com.cn/paper"
 
-    def __init__(self, proxy=None, cookie=""):
+    def __init__(self, proxy=None, cookie="", access_proxy=None):
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         self.session.headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
@@ -918,6 +924,10 @@ class WanfangSearch:
             self.session.headers["Cookie"] = cookie
         if proxy:
             self.session.proxies = proxy
+        self.access_proxy = access_proxy
+
+    def _url(self, url):
+        return self.access_proxy.rewrite(url) if self.access_proxy else url
 
     def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
@@ -936,7 +946,7 @@ class WanfangSearch:
                 "PublishDateFrom": str(year_from),
                 "PublishDateTo": str(year_to),
             }
-            r = self.session.get(self.BASE, params=params, timeout=15)
+            r = self.session.get(self._url(self.BASE), params=params, timeout=15)
             r.raise_for_status()
             r.encoding = "utf-8"
 
@@ -994,11 +1004,15 @@ class VIPSearch:
 
     BASE = "https://www.cqvip.com/search/search.aspx"
 
-    def __init__(self, proxy=None):
+    def __init__(self, proxy=None, access_proxy=None):
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         if proxy:
             self.session.proxies = proxy
+        self.access_proxy = access_proxy
+
+    def _url(self, url):
+        return self.access_proxy.rewrite(url) if self.access_proxy else url
 
     def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
@@ -1015,7 +1029,7 @@ class VIPSearch:
                 "p": "0",
                 "y": f"{year_from}-{year_to}",
             }
-            r = self.session.get(self.BASE, params=params, timeout=15)
+            r = self.session.get(self._url(self.BASE), params=params, timeout=15)
             r.raise_for_status()
             r.encoding = "utf-8"
 
@@ -1069,8 +1083,12 @@ class BingScholarSearch:
 
     BASE = "https://cn.bing.com/academic"
 
-    def __init__(self, proxy=None):
+    def __init__(self, proxy=None, access_proxy=None):
         self.proxy = proxy
+        self.access_proxy = access_proxy
+
+    def _url(self, url):
+        return self.access_proxy.rewrite(url) if self.access_proxy else url
 
     def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
@@ -1093,7 +1111,7 @@ class BingScholarSearch:
                 return []
 
             # 构建搜索 URL（添加年份过滤）
-            url = f"{self.BASE}?q={query}"
+            url = self._url(f"{self.BASE}?q={query}")
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
             time.sleep(5)  # 等待 JavaScript 渲染
 
@@ -1279,6 +1297,12 @@ class SearchEngine:
             proxy["https"] = proxy_cfg["https"]
         proxy = proxy if proxy else None
 
+        # EZproxy 配置
+        ap_cfg = config.get("access_proxy", {})
+        self.access_proxy = None
+        if ap_cfg.get("mode") == "ezproxy" and ap_cfg.get("ezproxy_host"):
+            self.access_proxy = EZproxyRewriter(ap_cfg["ezproxy_host"])
+
         # ScraperAPI 配置
         scraperapi_key = config.get("scraperapi_key", "")
         self.scraperapi = ScraperAPIProxy(scraperapi_key) if scraperapi_key else None
@@ -1309,20 +1333,24 @@ class SearchEngine:
         ) if gs_cfg.get("enabled", False) else None
 
         self.cnki = CNKISearch(
-            proxy=proxy
+            proxy=proxy,
+            access_proxy=self.access_proxy
         ) if cnki_cfg.get("enabled", False) else None
 
         self.wanfang = WanfangSearch(
             proxy=proxy,
-            cookie=wanfang_cfg.get("cookie", "")
+            cookie=wanfang_cfg.get("cookie", ""),
+            access_proxy=self.access_proxy
         ) if wanfang_cfg.get("enabled", False) else None
 
         self.vip = VIPSearch(
-            proxy=proxy
+            proxy=proxy,
+            access_proxy=self.access_proxy
         ) if vip_cfg.get("enabled", False) else None
 
         self.bing_academic = BingScholarSearch(
-            proxy=proxy
+            proxy=proxy,
+            access_proxy=self.access_proxy
         ) if bing_cfg.get("enabled", False) else None
 
         self.semantic_scholar = SemanticScholarSearch(

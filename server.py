@@ -9,6 +9,7 @@ import yaml
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, Response
 from search_engine import SearchEngine, Paper
+from access_proxy import EZproxyRewriter, CARSIAuth, get_supported_institutions
 from exporters import export_ris, export_bibtex, export_csv, export_endnote_xml
 from ai_assistant import SearchAI, AnalysisAI
 
@@ -1712,6 +1713,37 @@ def create_app():
         except Exception as e:
             print(f"[ERROR] Operation failed: {e}")
             return jsonify({"error": "operation_failed"}), 500
+
+    # ========== CARSI 校内访问 ==========
+
+    @app.route("/api/carsi/institutions", methods=["GET"])
+    def carsi_institutions():
+        """获取 CARSI 支持的学校列表"""
+        try:
+            institutions = get_supported_institutions()
+            return jsonify({"institutions": institutions})
+        except Exception as e:
+            print(f"[ERROR] Failed to get institutions: {e}")
+            return jsonify({"institutions": [], "error": str(e)})
+
+    @app.route("/api/carsi/authenticate", methods=["POST"])
+    def carsi_authenticate():
+        """执行 CARSI 认证"""
+        if request.remote_addr not in ("127.0.0.1", "::1", "localhost"):
+            return jsonify({"error": "local_only"}), 403
+        data = request.json or {}
+        idp_url = data.get("idp_url", "").strip()
+        username = data.get("username", "").strip()
+        password = data.get("password", "")
+        if not idp_url or not username or not password:
+            return jsonify({"error": "missing_credentials"}), 400
+        try:
+            auth = CARSIAuth()
+            result = auth.authenticate(idp_url, username, password)
+            return jsonify(result)
+        except Exception as e:
+            print(f"[ERROR] CARSI auth failed: {e}")
+            return jsonify({"ok": False, "error": str(e)}), 500
 
     return app
 

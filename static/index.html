@@ -695,6 +695,44 @@ body {
     </div>
   </div>
   <div class="settings-section">
+    <h3 data-i18n="institutionalAccess">校内访问</h3>
+    <div class="form-group">
+      <label data-i18n="accessMode">访问方式</label>
+      <select id="cfgAccessMode" onchange="toggleAccessMode()">
+        <option value="none" data-i18n="accessModeNone">直连（不使用校内代理）</option>
+        <option value="ezproxy">EZproxy</option>
+        <option value="carsi">CARSI（联邦认证）</option>
+      </select>
+    </div>
+    <div id="ezproxySection" style="display:none">
+      <div class="form-group">
+        <label data-i18n="ezproxyHost">EZproxy 域名</label>
+        <input type="text" id="cfgEzproxyHost" placeholder="ezproxy.xxx.edu.cn" style="width:100%">
+        <div class="hint" data-i18n="ezproxyHint">填入学校图书馆提供的 EZproxy 域名，如 ezproxy.lib.xxx.edu.cn</div>
+      </div>
+    </div>
+    <div id="carsiSection" style="display:none">
+      <div class="form-group">
+        <label data-i18n="carsiSchool">学校</label>
+        <select id="cfgCarsiSchool" style="width:100%">
+          <option value="" data-i18n="selectSchool">选择学校...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label data-i18n="carsiUsername">学号/工号</label>
+        <input type="text" id="cfgCarsiUsername" placeholder="学号或工号" style="width:100%">
+      </div>
+      <div class="form-group">
+        <label data-i18n="carsiPassword">密码</label>
+        <input type="password" id="cfgCarsiPassword" placeholder="校园账号密码" style="width:100%">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-sm btn-outline" onclick="testCarsiAuth()" data-i18n="testConnection">测试连接</button>
+        <span id="carsiStatus" style="font-size:12px;color:var(--text-secondary)"></span>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
     <h3 data-i18n="dataStorage">数据存储</h3>
     <div class="form-group">
       <label data-i18n="dataDir">配置与历史数据目录</label>
@@ -948,6 +986,12 @@ const LANGS = {
     enableAnalysisAI: "启用分析 AI",
     analysisAIHint: "推荐：deepseek-v4-pro / gpt-4o / claude-sonnet",
     networkProxy: "网络代理", httpProxy: "HTTP 代理", httpsProxy: "HTTPS 代理",
+    institutionalAccess: "校内访问", accessMode: "访问方式",
+    accessModeNone: "直连（不使用校内代理）",
+    ezproxyHost: "EZproxy 域名", ezproxyHint: "填入学校图书馆提供的 EZproxy 域名，如 ezproxy.lib.xxx.edu.cn",
+    carsiSchool: "学校", selectSchool: "选择学校...",
+    carsiUsername: "学号/工号", carsiPassword: "密码",
+    carsiTesting: "认证中...", carsiSuccess: "认证成功", carsiFailed: "认证失败",
     dataStorage: "数据存储", dataDir: "配置与历史数据目录",
     openFolder: "打开文件夹", dataDirHint: "搜索历史、偏好设置、AI 配置均存储在此目录",
     resetConfirm: "确定要重置所有设置为默认值吗？", settingsSaved: "设置已保存",
@@ -1133,6 +1177,12 @@ const LANGS = {
     enableAnalysisAI: "Enable Analysis AI",
     analysisAIHint: "Recommended: deepseek-v4-flash / gpt-4o / claude-sonnet",
     networkProxy: "Network Proxy", httpProxy: "HTTP Proxy", httpsProxy: "HTTPS Proxy",
+    institutionalAccess: "Institutional Access", accessMode: "Access Mode",
+    accessModeNone: "Direct (No institutional proxy)",
+    ezproxyHost: "EZproxy Host", ezproxyHint: "Enter the EZproxy hostname from your library, e.g. ezproxy.lib.xxx.edu.cn",
+    carsiSchool: "Institution", selectSchool: "Select institution...",
+    carsiUsername: "Student/Staff ID", carsiPassword: "Password",
+    carsiTesting: "Authenticating...", carsiSuccess: "Authentication successful", carsiFailed: "Authentication failed",
     dataStorage: "Data Storage", dataDir: "Config & History Data Directory",
     openFolder: "Open Folder", dataDirHint: "Search history, preferences, AI config are stored here",
     resetConfirm: "Are you sure to reset all settings to default?", settingsSaved: "Settings saved",
@@ -2298,6 +2348,13 @@ async function loadSettings() {
     document.getElementById("cfgProxyHttp").value = px.http || "";
     document.getElementById("cfgProxyHttps").value = px.https || "";
 
+    // 加载校内访问配置
+    const ap = cfg.access_proxy || {};
+    document.getElementById("cfgAccessMode").value = ap.mode || "none";
+    document.getElementById("cfgEzproxyHost").value = ap.ezproxy_host || "";
+    toggleAccessMode();
+    loadCarsiInstitutions();
+
     // 加载导出路径
     document.getElementById("cfgExportPath").value = cfg.export_path || "";
 
@@ -2371,6 +2428,10 @@ async function saveSettings() {
     proxy: {
       http: document.getElementById("cfgProxyHttp").value.trim(),
       https: document.getElementById("cfgProxyHttps").value.trim(),
+    },
+    access_proxy: {
+      mode: document.getElementById("cfgAccessMode").value,
+      ezproxy_host: document.getElementById("cfgEzproxyHost").value.trim(),
     },
     scraperapi_key: document.getElementById("cfgScraperapiKey").value.trim(),
     export_path: document.getElementById("cfgExportPath").value.trim(),
@@ -2507,6 +2568,62 @@ async function installPlaywright() {
     statusEl.textContent = `${t("playwrightInstallFailed")}: ${e.message}`;
     statusEl.style.color = "var(--danger)";
     installBtn.disabled = false;
+  }
+}
+
+// ========== 校内访问（EZproxy / CARSI）==========
+
+function toggleAccessMode() {
+  const mode = document.getElementById("cfgAccessMode").value;
+  document.getElementById("ezproxySection").style.display = mode === "ezproxy" ? "block" : "none";
+  document.getElementById("carsiSection").style.display = mode === "carsi" ? "block" : "none";
+}
+
+async function loadCarsiInstitutions() {
+  try {
+    const r = await fetch(`${API}/api/carsi/institutions`);
+    const data = await r.json();
+    const sel = document.getElementById("cfgCarsiSchool");
+    if (!sel) return;
+    sel.innerHTML = `<option value="">${t("selectSchool")}</option>`;
+    (data.institutions || []).forEach(inst => {
+      const opt = document.createElement("option");
+      opt.value = inst.idp_url;
+      opt.textContent = inst.name;
+      sel.appendChild(opt);
+    });
+  } catch { /* 忽略 */ }
+}
+
+async function testCarsiAuth() {
+  const statusEl = document.getElementById("carsiStatus");
+  const idpUrl = document.getElementById("cfgCarsiSchool").value;
+  const username = document.getElementById("cfgCarsiUsername").value.trim();
+  const password = document.getElementById("cfgCarsiPassword").value;
+  if (!idpUrl || !username || !password) {
+    statusEl.textContent = t("carsiFailed");
+    statusEl.style.color = "var(--danger)";
+    return;
+  }
+  statusEl.textContent = t("carsiTesting");
+  statusEl.style.color = "var(--primary)";
+  try {
+    const r = await fetch(`${API}/api/carsi/authenticate`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({idp_url: idpUrl, username, password}),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.textContent = t("carsiSuccess");
+      statusEl.style.color = "var(--success)";
+    } else {
+      statusEl.textContent = `${t("carsiFailed")}: ${data.error || ""}`;
+      statusEl.style.color = "var(--danger)";
+    }
+  } catch (e) {
+    statusEl.textContent = `${t("carsiFailed")}: ${e.message}`;
+    statusEl.style.color = "var(--danger)";
   }
 }
 
