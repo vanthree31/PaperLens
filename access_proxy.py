@@ -321,6 +321,7 @@ def get_supported_institutions() -> list:
         {"id": "tongji", "name": "同济大学", "idp_url": "https://ids.tongji.edu.cn/"},
         {"id": "nankai", "name": "南开大学", "idp_url": "https://cas.nankai.edu.cn/"},
         {"id": "buaa", "name": "北京航空航天大学", "idp_url": "https://sso.buaa.edu.cn/"},
+        {"id": "ahmu", "name": "安徽医科大学", "idp_url": "https://idp.ahmu.edu.cn/idp/profile/SAML2/Redirect/SSO"},
     ]
 
     # 尝试从 CARSI Discovery Service 获取完整列表
