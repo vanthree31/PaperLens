@@ -677,6 +677,14 @@ class GoogleScholarSearch:
         try:
             from scholarly import scholarly as sch
             sch.set_timeout(30)
+            # 设置代理（scholarly 支持免费代理）
+            if self.proxy:
+                proxy_url = self.proxy.get("https") or self.proxy.get("http")
+                if proxy_url:
+                    try:
+                        sch.use_proxy(proxies={"http": proxy_url, "https": proxy_url})
+                    except Exception:
+                        pass  # scholarly 版本可能不支持 use_proxy
             results = []
             search_query = sch.search_pubs(query, year_low=year_from, year_high=year_to)
             for i, result in enumerate(search_query):
@@ -706,19 +714,31 @@ class PlaywrightBrowser:
     _instance = None
     _browser = None
     _playwright = None
+    _proxy = None
     _lock = threading.Lock()
 
     @classmethod
-    def get_instance(cls):
+    def get_instance(cls, proxy=None):
+        # 代理变化时，关闭旧浏览器，用新代理重建
+        if cls._instance is not None and proxy != cls._proxy:
+            with cls._lock:
+                if cls._browser:
+                    try:
+                        cls._browser.close()
+                    except Exception:
+                        pass
+                    cls._browser = None
+                cls._proxy = proxy
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = cls()
+                    cls._instance = cls(proxy)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, proxy=None):
         self._browser = None
         self._playwright = None
+        PlaywrightBrowser._proxy = proxy
 
     def get_browser(self):
         if self._browser is None or not self._browser.is_connected():
@@ -732,10 +752,19 @@ class PlaywrightBrowser:
             from playwright.sync_api import sync_playwright
             if self._playwright is None:
                 self._playwright = sync_playwright().start()
-            self._browser = self._playwright.chromium.launch(
-                headless=True,
-                args=['--disable-blink-features=AutomationControlled']
-            )
+            launch_args = {
+                "headless": True,
+                "args": ['--disable-blink-features=AutomationControlled'],
+            }
+            # 代理：Playwright launch 接受 server.proxy 格式
+            proxy = PlaywrightBrowser._proxy
+            if proxy:
+                # 优先用 https，其次 http
+                proxy_url = proxy.get("https") or proxy.get("http")
+                if proxy_url:
+                    launch_args["proxy"] = {"server": proxy_url}
+                    print(f"Playwright browser using proxy: {proxy_url}")
+            self._browser = self._playwright.chromium.launch(**launch_args)
             print("Playwright browser initialized")
         except Exception as e:
             print(f"Playwright init error: {e}")
@@ -1057,7 +1086,7 @@ class BingScholarSearch:
 
         page = None
         try:
-            pb = PlaywrightBrowser.get_instance()
+            pb = PlaywrightBrowser.get_instance(proxy=self.proxy)
             page = pb.new_page()
             if page is None:
                 print("Bing Academic: Playwright 不可用")
@@ -1138,11 +1167,13 @@ class SemanticScholarSearch:
 
     BASE = "https://api.semanticscholar.org/graph/v1"
 
-    def __init__(self, api_key=""):
+    def __init__(self, api_key="", proxy=None):
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "LitSearch/1.0"
         if api_key:
             self.session.headers["x-api-key"] = api_key
+        if proxy:
+            self.session.proxies = proxy
 
     def search(self, query: str, year_from=2020, year_to=0,
                max_results=20) -> list:
@@ -1295,7 +1326,8 @@ class SearchEngine:
         ) if bing_cfg.get("enabled", False) else None
 
         self.semantic_scholar = SemanticScholarSearch(
-            api_key=s2_cfg.get("api_key", "")
+            api_key=s2_cfg.get("api_key", ""),
+            proxy=proxy
         ) if s2_cfg.get("enabled", True) else None
 
     def search(self, query: str, year_from=2020, year_to=0,
