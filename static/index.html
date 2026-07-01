@@ -1844,6 +1844,10 @@ async function doSearch() {
       _sortReversed = false;
       renderResults();
       setStatus(`${t("totalPapers")} ${data.total} ${t("papers")}`);
+      // 显示数据源错误提示
+      if (data.errors && data.errors.length > 0) {
+        showToast(`${t("searchTips")}\n${data.errors.join("; ")}`, 8000);
+      }
     } else {
       showToast(te(data.error) || t("searchFailed"));
       if (allPapers.length === 0) setStatus(t("searchFailed"));
@@ -2024,6 +2028,10 @@ async function refilterWithAI() {
       _sortReversed = false;
       renderResults();
       setStatus(`${t("totalPapers")} ${data.total} ${t("papers")}`);
+      // 显示数据源错误提示
+      if (data.errors && data.errors.length > 0) {
+        showToast(`${t("searchTips")}\n${data.errors.join("; ")}`, 8000);
+      }
     } else {
       showToast(te(data.error) || t("searchFailed"));
       if (allPapers.length === 0) setStatus(t("searchFailed"));
@@ -2447,14 +2455,23 @@ async function checkPlaywrightStatus() {
   try {
     const r = await fetch(`${API}/api/playwright/status`);
     const data = await r.json();
-    if (data.installed) {
-      statusEl.textContent = t("playwrightInstalled");
+    if (data.installed && data.browser_ready) {
+      // 包和浏览器都就绪
+      statusEl.textContent = `${t("playwrightInstalled")} (v${data.version || "?"})`;
       statusEl.style.color = "var(--success)";
       installBtn.style.display = "none";
-    } else {
+    } else if (data.installed && !data.browser_ready) {
+      // 包已安装但浏览器未安装
       statusEl.textContent = t("playwrightNotInstalled");
       statusEl.style.color = "var(--text-secondary)";
       installBtn.style.display = "inline-block";
+      installBtn.textContent = t("installPlaywright");
+    } else {
+      // 包未安装
+      statusEl.textContent = t("playwrightNotInstalled");
+      statusEl.style.color = "var(--text-secondary)";
+      installBtn.style.display = "inline-block";
+      installBtn.textContent = t("installPlaywright");
     }
   } catch {
     statusEl.textContent = t("playwrightNotInstalled");
@@ -2480,12 +2497,14 @@ async function installPlaywright() {
       statusEl.style.color = "var(--success)";
       installBtn.style.display = "none";
     } else {
-      statusEl.textContent = t("playwrightInstallFailed");
+      const errMsg = data.error ? `${t("playwrightInstallFailed")}: ${data.error.substring(0, 200)}` : t("playwrightInstallFailed");
+      statusEl.textContent = errMsg;
       statusEl.style.color = "var(--danger)";
+      statusEl.title = data.error || "";
       installBtn.disabled = false;
     }
   } catch (e) {
-    statusEl.textContent = t("playwrightInstallFailed");
+    statusEl.textContent = `${t("playwrightInstallFailed")}: ${e.message}`;
     statusEl.style.color = "var(--danger)";
     installBtn.disabled = false;
   }
@@ -2691,12 +2710,12 @@ function setStatus(text, statusKey) {
 }
 
 let _toastTimer = null;
-function showToast(msg) {
+function showToast(msg, duration) {
   const el = document.getElementById("toast");
   clearTimeout(_toastTimer);
   el.textContent = msg;
   el.classList.add("show");
-  _toastTimer = setTimeout(() => el.classList.remove("show"), 2500);
+  _toastTimer = setTimeout(() => el.classList.remove("show"), duration || 2500);
 }
 
 // ========== 搜索历史（服务器端持久化） ==========

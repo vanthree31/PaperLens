@@ -1304,7 +1304,7 @@ class SearchEngine:
                use_google_scholar=False, use_cnki=False,
                use_wanfang=False, use_vip=False,
                use_bing_academic=False, use_semantic_scholar=True,
-               journal="", field="", mesh_term="", pub_type="") -> list:
+               journal="", field="", mesh_term="", pub_type="") -> tuple:
         """聚合检索
 
         Args:
@@ -1318,75 +1318,103 @@ class SearchEngine:
             use_wanfang: 启用万方（实验性）
             use_vip: 启用维普（实验性）
             use_bing_academic: 启用 Bing 学术（实验性）
+
+        Returns:
+            tuple: (papers, errors) — errors 为各数据源错误信息列表
         """
         # 动态获取当前年份
         if not year_to:
             year_to = datetime.now().year
 
         all_papers = []
+        errors = []
 
         # PubMed 检索
         if use_pubmed and self.pubmed:
-            pmids, exact_doi = self.pubmed.search(
-                query, year_from, year_to, sort, max_results,
-                journal=journal, field=field,
-                mesh_term=mesh_term, pub_type=pub_type,
-            )
-            if pmids:
-                papers = self.pubmed.fetch_details(pmids)
-                # DOI 精确搜索时，只保留 DOI 完全匹配的结果
-                if exact_doi:
-                    papers = [p for p in papers if p.doi and p.doi.lower() == exact_doi]
-                all_papers.extend(papers)
+            try:
+                pmids, exact_doi = self.pubmed.search(
+                    query, year_from, year_to, sort, max_results,
+                    journal=journal, field=field,
+                    mesh_term=mesh_term, pub_type=pub_type,
+                )
+                if pmids:
+                    papers = self.pubmed.fetch_details(pmids)
+                    # DOI 精确搜索时，只保留 DOI 完全匹配的结果
+                    if exact_doi:
+                        papers = [p for p in papers if p.doi and p.doi.lower() == exact_doi]
+                    all_papers.extend(papers)
+            except Exception as e:
+                errors.append(f"PubMed: {e}")
 
         # OpenAlex 检索
         if use_openalex and self.openalex:
-            oa_papers = self.openalex.search(
-                query, year_from, year_to, max_results, journal=journal
-            )
-            all_papers.extend(oa_papers)
+            try:
+                oa_papers = self.openalex.search(
+                    query, year_from, year_to, max_results, journal=journal
+                )
+                all_papers.extend(oa_papers)
+            except Exception as e:
+                errors.append(f"OpenAlex: {e}")
 
         # Google Scholar 检索（实验性）
         if use_google_scholar and self.google_scholar:
-            gs_papers = self.google_scholar.search(
-                query, year_from, year_to, max_results=min(max_results, 20)
-            )
-            all_papers.extend(gs_papers)
+            try:
+                gs_papers = self.google_scholar.search(
+                    query, year_from, year_to, max_results=min(max_results, 20)
+                )
+                all_papers.extend(gs_papers)
+            except Exception as e:
+                errors.append(f"Google Scholar: {e}")
 
         # CNKI 检索（实验性）
         if use_cnki and self.cnki:
-            cnki_papers = self.cnki.search(
-                query, year_from, year_to, max_results=min(max_results, 20)
-            )
-            all_papers.extend(cnki_papers)
+            try:
+                cnki_papers = self.cnki.search(
+                    query, year_from, year_to, max_results=min(max_results, 20)
+                )
+                all_papers.extend(cnki_papers)
+            except Exception as e:
+                errors.append(f"CNKI: {e}")
 
         # 万方检索（实验性）
         if use_wanfang and self.wanfang:
-            wf_papers = self.wanfang.search(
-                query, year_from, year_to, max_results=min(max_results, 20)
-            )
-            all_papers.extend(wf_papers)
+            try:
+                wf_papers = self.wanfang.search(
+                    query, year_from, year_to, max_results=min(max_results, 20)
+                )
+                all_papers.extend(wf_papers)
+            except Exception as e:
+                errors.append(f"万方: {e}")
 
         # 维普检索（实验性）
         if use_vip and self.vip:
-            vip_papers = self.vip.search(
-                query, year_from, year_to, max_results=min(max_results, 20)
-            )
-            all_papers.extend(vip_papers)
+            try:
+                vip_papers = self.vip.search(
+                    query, year_from, year_to, max_results=min(max_results, 20)
+                )
+                all_papers.extend(vip_papers)
+            except Exception as e:
+                errors.append(f"维普: {e}")
 
         # Bing 学术检索（实验性）
         if use_bing_academic and self.bing_academic:
-            bing_papers = self.bing_academic.search(
-                query, year_from, year_to, max_results=min(max_results, 20)
-            )
-            all_papers.extend(bing_papers)
+            try:
+                bing_papers = self.bing_academic.search(
+                    query, year_from, year_to, max_results=min(max_results, 20)
+                )
+                all_papers.extend(bing_papers)
+            except Exception as e:
+                errors.append(f"Bing Academic: {e}")
 
         # Semantic Scholar 检索
         if use_semantic_scholar and self.semantic_scholar:
-            s2_papers = self.semantic_scholar.search(
-                query, year_from, year_to, max_results=min(max_results, 50)
-            )
-            all_papers.extend(s2_papers)
+            try:
+                s2_papers = self.semantic_scholar.search(
+                    query, year_from, year_to, max_results=min(max_results, 50)
+                )
+                all_papers.extend(s2_papers)
+            except Exception as e:
+                errors.append(f"Semantic Scholar: {e}")
 
         # 去重
         seen_dois = set()
@@ -1423,7 +1451,7 @@ class SearchEngine:
         elif sort == "citations":
             unique.sort(key=lambda p: p.citation_count, reverse=True)
 
-        return unique
+        return unique, errors
 
     def search_by_doi(self, doi: str):
         """通过 DOI 精确查询"""

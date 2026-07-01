@@ -356,7 +356,7 @@ def create_app():
         except (ValueError, TypeError):
             max_results, year_from, year_to = 50, 2020, current_year
         try:
-            papers = engine.search(
+            papers, search_errors = engine.search(
                 query=query, year_from=year_from, year_to=year_to,
                 sort=data.get("sort", "relevance"), max_results=max_results,
                 use_pubmed=data.get("use_pubmed", True), use_openalex=data.get("use_openalex", True),
@@ -376,7 +376,10 @@ def create_app():
             cached_papers["papers"] = papers
             cached_papers["query"] = query
         results = [_escape_paper(p) for p in papers]
-        return jsonify({"total": len(results), "query": query, "papers": results})
+        resp = {"total": len(results), "query": query, "papers": results}
+        if search_errors:
+            resp["errors"] = search_errors
+        return jsonify(resp)
 
     @app.route("/api/ai-search", methods=["POST"])
     def ai_search():
@@ -426,7 +429,7 @@ def create_app():
                 use_vip = data.get("use_vip", False)
                 use_bing_academic = data.get("use_bing_academic", False)
 
-            papers = engine.search(
+            papers, search_errors = engine.search(
                 query=analysis.get("query", user_input),
                 year_from=year_from, year_to=year_to,
                 sort="relevance", max_results=max_results,
@@ -443,10 +446,13 @@ def create_app():
             cached_papers["papers"] = papers
             cached_papers["query"] = analysis.get("query", user_input)
         results = [_escape_paper(p) for p in papers]
-        return jsonify({
+        resp = {
             "total": len(results), "query": analysis.get("query", ""),
             "explanation": analysis.get("explanation", ""), "analysis": analysis, "papers": results,
-        })
+        }
+        if search_errors:
+            resp["errors"] = search_errors
+        return jsonify(resp)
 
     @app.route("/api/ai/analyze-papers", methods=["POST"])
     def ai_analyze_papers():
@@ -1025,7 +1031,7 @@ def create_app():
         if top_keywords:
             query = " OR ".join(top_keywords[:5])
             try:
-                papers = engine.search(
+                papers, _ = engine.search(
                     query=query,
                     year_from=datetime.now().year - 2,  # 最近2年
                     year_to=datetime.now().year,
@@ -1046,7 +1052,7 @@ def create_app():
             for journal in top_journals[:2]:
                 try:
                     journal_query = " OR ".join(top_keywords[:3]) if top_keywords else "research"
-                    papers = engine.search(
+                    papers, _ = engine.search(
                         query=journal_query,
                         year_from=datetime.now().year - 1,
                         year_to=datetime.now().year,
@@ -1418,18 +1424,30 @@ def create_app():
 
     @app.route("/api/playwright/status", methods=["GET"])
     def playwright_status():
-        """检查 Playwright 是否已安装"""
+        """检查 Playwright 是否已安装（通过 Python import 检测）"""
+        # 1. 检测 playwright Python 包是否可 import
         try:
-            import subprocess
-            result = subprocess.run(
-                ["playwright", "--version"],
-                capture_output=True, text=True, timeout=5
-            )
-            installed = result.returncode == 0
-            version = result.stdout.strip() if installed else ""
-            return jsonify({"installed": installed, "version": version})
+            import playwright as pw_pkg
+            version = getattr(pw_pkg, "__version__", "")
+        except ImportError:
+            return jsonify({"installed": False, "browser_ready": False, "version": ""})
+
+        # 2. 检测 chromium 浏览器是否已安装（检查缓存目录）
+        browser_ready = False
+        try:
+            import glob
+            # Playwright 浏览器缓存目录
+            if sys.platform == "win32":
+                cache_base = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
+            else:
+                cache_base = os.path.expanduser("~/.cache/ms-playwright")
+            # 查找 chromium-* 目录
+            chromium_dirs = glob.glob(os.path.join(cache_base, "chromium-*"))
+            browser_ready = len(chromium_dirs) > 0
         except Exception:
-            return jsonify({"installed": False, "version": ""})
+            browser_ready = False
+
+        return jsonify({"installed": True, "browser_ready": browser_ready, "version": version})
 
     @app.route("/api/playwright/install", methods=["POST"])
     def playwright_install():
@@ -1439,21 +1457,23 @@ def create_app():
             return jsonify({"error": "local_only"}), 403
         try:
             import subprocess
-            # 安装 Playwright 包
+            # 安装 Playwright 包（使用当前运行的 Python）
             result1 = subprocess.run(
-                ["pip", "install", "playwright"],
+                [sys.executable, "-m", "pip", "install", "playwright"],
                 capture_output=True, text=True, timeout=120
             )
             if result1.returncode != 0:
-                return jsonify({"ok": False, "error": result1.stderr}), 500
+                err = result1.stderr or result1.stdout or "pip install failed"
+                return jsonify({"ok": False, "error": err}), 500
 
-            # 安装 Chromium 浏览器
+            # 安装 Chromium 浏览器（使用当前运行的 Python）
             result2 = subprocess.run(
-                ["playwright", "install", "chromium"],
+                [sys.executable, "-m", "playwright", "install", "chromium"],
                 capture_output=True, text=True, timeout=300
             )
             if result2.returncode != 0:
-                return jsonify({"ok": False, "error": result2.stderr}), 500
+                err = result2.stderr or result2.stdout or "playwright install chromium failed"
+                return jsonify({"ok": False, "error": err}), 500
 
             return jsonify({"ok": True})
         except Exception as e:
