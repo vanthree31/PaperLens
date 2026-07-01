@@ -7,7 +7,7 @@
 
 import re
 import sys
-from urllib.parse import urlparse, urlunparse, quote_plus
+from urllib.parse import urlparse, urlunparse, quote, urljoin
 
 
 # 需要通过校内代理访问的付费数据库域名
@@ -19,15 +19,6 @@ PROXIED_DOMAINS = {
     "cqvip.com",
     "scholar.google.com",
     "scholar.google.com.hk",
-}
-
-# 免费 API，不走代理
-FREE_DOMAINS = {
-    "eutils.ncbi.nlm.nih.gov",
-    "api.openalex.org",
-    "api.semanticscholar.org",
-    "cn.bing.com",
-    "api.zotero.org",
 }
 
 
@@ -69,12 +60,11 @@ class EZproxyRewriter:
 
         if self.mode == "prefix":
             # 前缀模式：ezproxy_host/login?url=original_url
-            return f"https://{self.ezproxy_host}/login?url={quote_plus(url)}"
+            return f"https://{self.ezproxy_host}/login?url={quote(url, safe='')}"
         else:
             # 后缀模式（默认）：domain.ezproxy_host/path
+            # EZproxy 不使用端口号，丢弃原端口
             new_netloc = f"{domain}.{self.ezproxy_host}"
-            if parsed.port:
-                new_netloc = f"{new_netloc}:{parsed.port}"
             new_parsed = parsed._replace(netloc=new_netloc, scheme="https")
             return urlunparse(new_parsed)
 
@@ -82,12 +72,9 @@ class EZproxyRewriter:
         """判断域名是否需要通过代理访问"""
         if not domain:
             return False
-        # 精确匹配
-        if domain in PROXIED_DOMAINS:
-            return True
-        # 子域名匹配（如 kns.cnki.net 匹配 cnki.net）
+        domain_lower = domain.lower()
         for d in PROXIED_DOMAINS:
-            if domain.endswith("." + d) or domain == d:
+            if domain_lower == d or domain_lower.endswith("." + d):
                 return True
         return False
 
@@ -141,6 +128,7 @@ class CARSIAuth:
                           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         })
         self.cookies = {}
+        errors = []
 
         for sp_key in sp_domains:
             sp_url = self.SP_ENTRIES.get(sp_key)
@@ -148,22 +136,35 @@ class CARSIAuth:
                 continue
 
             try:
-                result = self._authenticate_sp(sp_url, idp_url, username, password)
+                # 每个 SP 独立的 cookie jar，避免跨域污染
+                sp_session = requests.Session()
+                sp_session.headers.update(self.session.headers)
+                sp_session.cookies.update(self.session.cookies)
+
+                result = self._authenticate_sp(sp_session, sp_url, idp_url, username, password)
                 if result.get("ok"):
                     domain = urlparse(sp_url).hostname
-                    self.cookies[domain] = dict(self.session.cookies)
+                    # 只保存该 SP 域名相关的 cookies
+                    sp_cookies = {c.name: c.value for c in sp_session.cookies
+                                  if domain and (c.domain == domain or c.domain.endswith("." + domain))}
+                    self.cookies[domain] = sp_cookies
+                    # 合并到主 session
+                    self.session.cookies.update(sp_session.cookies)
                 else:
-                    return {"ok": False, "cookies": {}, "error": result.get("error", f"CARSI auth failed for {sp_key}")}
+                    errors.append(f"{sp_key}: {result.get('error', 'unknown')}")
             except Exception as e:
-                return {"ok": False, "cookies": {}, "error": f"CARSI auth error ({sp_key}): {e}"}
+                errors.append(f"{sp_key}: {e}")
 
         self.authenticated = bool(self.cookies)
-        return {"ok": self.authenticated, "cookies": self.cookies, "error": "" if self.authenticated else "No cookies obtained"}
+        if self.authenticated:
+            return {"ok": True, "cookies": self.cookies, "error": ""}
+        return {"ok": False, "cookies": {}, "error": "; ".join(errors) if errors else "No cookies obtained"}
 
-    def _authenticate_sp(self, sp_url: str, idp_url: str, username: str, password: str) -> dict:
+    def _authenticate_sp(self, session, sp_url: str, idp_url: str, username: str, password: str) -> dict:
         """对单个 SP 执行 CARSI 认证
 
         Args:
+            session: requests.Session 实例
             sp_url: SP 入口 URL
             idp_url: 学校 IdP URL
             username: 校园账号
@@ -176,33 +177,26 @@ class CARSIAuth:
 
         # Step 1: 请求 SP 入口，跟踪重定向到 IdP
         try:
-            resp = self.session.get(sp_url, allow_redirects=True, timeout=30)
+            resp = session.get(sp_url, allow_redirects=True, timeout=30)
         except Exception as e:
             return {"ok": False, "error": f"Failed to reach SP: {e}"}
 
-        # Step 2: 检查是否已重定向到 IdP 登录页
-        if idp_url and not resp.url.startswith(idp_url.split("/idp")[0]):
-            # 如果没有自动重定向到 IdP，手动构造 IdP 请求
-            # 尝试从页面中提取 SAML AuthnRequest
-            pass
-
-        # Step 3: 在 IdP 登录页提交用户名密码
+        # Step 2: 解析登录表单
         login_url = resp.url
         try:
-            # 解析登录表单
             soup = BeautifulSoup(resp.text, "html.parser")
             form = soup.find("form")
             if not form:
-                # 可能已经是登录后的回调
-                if "SAMLResponse" in resp.text:
-                    return self._handle_saml_response(resp)
+                # 可能已经是登录后的回调（auto-login 或已认证）
+                if self._has_saml_response(soup):
+                    return self._handle_saml_response(session, resp)
                 return {"ok": False, "error": "No login form found on IdP page"}
 
             action = form.get("action", "")
             if action and not action.startswith("http"):
-                # 相对路径，构造完整 URL
-                from urllib.parse import urljoin
                 action = urljoin(login_url, action)
+            if not action:
+                action = login_url
 
             # 提取隐藏字段
             form_data = {}
@@ -213,48 +207,69 @@ class CARSIAuth:
                     form_data[name] = value
 
             # 填入用户名密码
-            # 常见字段名：j_username, username, userid, loginName
             username_fields = ["j_username", "username", "userid", "loginName", "user", "account"]
             password_fields = ["j_password", "password", "passwd", "pass", "pwd"]
 
+            username_filled = False
             for field in username_fields:
                 if field in form_data:
                     form_data[field] = username
+                    username_filled = True
                     break
 
+            password_filled = False
             for field in password_fields:
                 if field in form_data:
                     form_data[field] = password
+                    password_filled = True
                     break
 
-            # Step 4: 提交登录表单
-            resp = self.session.post(action or login_url, data=form_data, allow_redirects=True, timeout=30)
+            if not username_filled or not password_filled:
+                return {"ok": False, "error": "Login form fields not recognized (unsupported IdP layout)"}
+
+            # Step 3: 提交登录表单
+            resp = session.post(action, data=form_data, allow_redirects=True, timeout=30)
 
         except Exception as e:
             return {"ok": False, "error": f"Login form submission failed: {e}"}
 
-        # Step 5: 处理 SAML Response（如果有）
-        if "SAMLResponse" in resp.text:
-            return self._handle_saml_response(resp)
+        # Step 4: 处理 SAML Response（如果有）
+        soup = BeautifulSoup(resp.text, "html.parser")
+        if self._has_saml_response(soup):
+            return self._handle_saml_response(session, resp)
 
-        # 检查是否认证成功（重定向回 SP 且带 cookies）
-        if self.session.cookies:
+        # 检查是否认证成功（有 cookies 且不在登录页）
+        if session.cookies and "login" not in resp.url.lower():
             return {"ok": True, "error": ""}
 
         return {"ok": False, "error": "Authentication failed - no cookies obtained"}
 
-    def _handle_saml_response(self, resp) -> dict:
+    def _has_saml_response(self, soup) -> bool:
+        """检查页面是否包含 SAML Response 表单字段"""
+        inp = soup.find("input", {"name": "SAMLResponse"})
+        return inp is not None
+
+    def _handle_saml_response(self, session, resp) -> dict:
         """处理 SAML Response，提交到 SP 的 ACS URL"""
         from bs4 import BeautifulSoup
 
         try:
             soup = BeautifulSoup(resp.text, "html.parser")
-            # 找到 SAML Response 表单
-            form = soup.find("form")
+            # 找到包含 SAMLResponse 的表单
+            saml_input = soup.find("input", {"name": "SAMLResponse"})
+            if not saml_input:
+                return {"ok": False, "error": "SAMLResponse input not found"}
+
+            form = saml_input.find_parent("form")
             if not form:
-                return {"ok": False, "error": "No SAML response form found"}
+                return {"ok": False, "error": "SAMLResponse not inside a form"}
 
             action = form.get("action", "")
+            if action and not action.startswith("http"):
+                action = urljoin(resp.url, action)
+            if not action:
+                action = resp.url
+
             form_data = {}
             for inp in form.find_all("input"):
                 name = inp.get("name")
@@ -263,13 +278,15 @@ class CARSIAuth:
                     form_data[name] = value
 
             if "SAMLResponse" not in form_data:
-                return {"ok": False, "error": "SAMLResponse not found in form"}
+                return {"ok": False, "error": "SAMLResponse value missing from form"}
 
             # 提交到 ACS URL
-            if action:
-                resp = self.session.post(action, data=form_data, allow_redirects=True, timeout=30)
+            resp = session.post(action, data=form_data, allow_redirects=True, timeout=30)
 
-            return {"ok": True, "error": ""}
+            # 验证认证结果：检查是否获得 cookies
+            if session.cookies:
+                return {"ok": True, "error": ""}
+            return {"ok": False, "error": "SAML response submitted but no cookies obtained"}
         except Exception as e:
             return {"ok": False, "error": f"SAML response handling failed: {e}"}
 
@@ -287,8 +304,7 @@ def get_supported_institutions() -> list:
     Returns:
         list: [{"id": "xxx", "name": "XXX 大学", "idp_url": "https://..."}]
     """
-    # 常见高校列表（实际应从 CARSI Discovery Service 动态获取）
-    # 这里提供一个静态列表作为 fallback
+    # 常见高校列表（fallback，IdP URL 可能过期）
     institutions = [
         {"id": "tsinghua", "name": "清华大学", "idp_url": "https://id.tsinghua.edu.cn/idp/profile/SAML2/Redirect/SSO"},
         {"id": "pku", "name": "北京大学", "idp_url": "https://iaaa.pku.edu.cn/"},
@@ -311,9 +327,9 @@ def get_supported_institutions() -> list:
     try:
         import requests
         resp = requests.get("https://ds.carsi.edu.cn/ds/discotag", timeout=10)
-        if resp.ok:
+        if resp.ok and resp.headers.get("content-type", "").startswith("application/json"):
             data = resp.json()
-            if isinstance(data, list):
+            if isinstance(data, list) and data:
                 return data
     except Exception:
         pass
