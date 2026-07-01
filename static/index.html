@@ -935,18 +935,18 @@ const LANGS = {
     aiSearchModel: "AI 智能检索模型（解析自然语言 → 生成检索式，建议用快速模型）",
     enableSearchAI: "启用检索 AI", provider: "提供商", ollamaLocal: "Ollama (本地)", customProvider: "自定义",
     apiKey: "API Key", modelName: "模型名称", endpointURL: "端点 URL",
-    searchAIHint: "推荐：deepseek-chat / gpt-4o-mini",
+    searchAIHint: "推荐：deepseek-v4-flash / gpt-4o-mini",
     endpointHint: "留空使用默认端点",
-    cfgSearchAiModel: "如 deepseek-chat（快速模型）",
+    cfgSearchAiModel: "如 deepseek-v4-flash（快速模型）",
     cfgSearchAiUrl: "留空使用默认端点",
-    cfgAnalysisAiModel: "如 deepseek-reasoner（高质量模型）",
+    cfgAnalysisAiModel: "如 deepseek-v4-pro（高质量模型）",
     cfgAnalysisAiUrl: "留空使用默认端点",
     maxTokens: "最大输出 Tokens", maxTokensHint: "控制 AI 单次回复的最大长度，默认 16384。多篇论文分析建议 16384+",
     searchMaxTokensHint: "检索模型建议 4096（快速响应）",
     cfgExportPath: "留空则弹出浏览器下载",
     aiAnalysisModel: "AI 论文分析模型（总结/详析/对比，建议用高质量模型）",
     enableAnalysisAI: "启用分析 AI",
-    analysisAIHint: "推荐：deepseek-reasoner / gpt-4o / claude-sonnet",
+    analysisAIHint: "推荐：deepseek-v4-pro / gpt-4o / claude-sonnet",
     networkProxy: "网络代理", httpProxy: "HTTP 代理", httpsProxy: "HTTPS 代理",
     dataStorage: "数据存储", dataDir: "配置与历史数据目录",
     openFolder: "打开文件夹", dataDirHint: "搜索历史、偏好设置、AI 配置均存储在此目录",
@@ -1120,18 +1120,18 @@ const LANGS = {
     aiSearchModel: "AI Search Model (parses natural language → generates search queries, recommend fast model)",
     enableSearchAI: "Enable Search AI", provider: "Provider", ollamaLocal: "Ollama (Local)", customProvider: "Custom",
     apiKey: "API Key", modelName: "Model Name", endpointURL: "Endpoint URL",
-    searchAIHint: "Recommended: deepseek-chat / gpt-4o-mini",
+    searchAIHint: "Recommended: deepseek-v4-flash / gpt-4o-mini",
     endpointHint: "Leave empty to use default endpoint",
-    cfgSearchAiModel: "e.g. deepseek-chat (fast model)",
+    cfgSearchAiModel: "e.g. deepseek-v4-flash (fast model)",
     cfgSearchAiUrl: "Leave empty to use default endpoint",
-    cfgAnalysisAiModel: "e.g. deepseek-reasoner (high-quality)",
+    cfgAnalysisAiModel: "e.g. deepseek-v4-pro (high-quality)",
     cfgAnalysisAiUrl: "Leave empty to use default endpoint",
     maxTokens: "Max Output Tokens", maxTokensHint: "Max tokens per AI response, default 16384. Recommend 16384+ for multi-paper analysis",
     searchMaxTokensHint: "Recommended 4096 for search model (fast response)",
     cfgExportPath: "Leave empty to use browser's default download location",
     aiAnalysisModel: "AI Analysis Model (summary/detail/comparison, recommend high-quality model)",
     enableAnalysisAI: "Enable Analysis AI",
-    analysisAIHint: "Recommended: deepseek-reasoner / gpt-4o / claude-sonnet",
+    analysisAIHint: "Recommended: deepseek-v4-flash / gpt-4o / claude-sonnet",
     networkProxy: "Network Proxy", httpProxy: "HTTP Proxy", httpsProxy: "HTTPS Proxy",
     dataStorage: "Data Storage", dataDir: "Config & History Data Directory",
     openFolder: "Open Folder", dataDirHint: "Search history, preferences, AI config are stored here",
@@ -1299,15 +1299,20 @@ function applyLang() {
     else if (el.tagName === "INPUT") el.placeholder = t(key);
     else el.textContent = t(key);
   });
-  // data-i18n-placeholder 用于需要单独翻译 placeholder 的 INPUT
+  // data-i18n-placeholder 用于需要单独翻译 placeholder 的 INPUT/TEXTAREA
   document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
     const key = el.getAttribute("data-i18n-placeholder");
-    if (el.tagName === "INPUT") el.placeholder = t(key);
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") el.placeholder = t(key);
   });
   // data-i18n-tip 用于需要翻译 tooltip 的元素
   document.querySelectorAll("[data-i18n-tip]").forEach(el => {
     const key = el.getAttribute("data-i18n-tip");
     el.setAttribute("data-tip", t(key));
+  });
+  // data-i18n-title 用于需要翻译 title 属性的元素
+  document.querySelectorAll("[data-i18n-title]").forEach(el => {
+    const key = el.getAttribute("data-i18n-title");
+    el.title = t(key);
   });
 
   // 状态栏
