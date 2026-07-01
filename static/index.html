@@ -464,27 +464,27 @@ body {
 <div class="header">
   <h1>PaperLens</h1>
   <div class="header-actions">
-    <button class="btn-icon" onclick="toggleRecommend()" id="recommendBtn" title="推荐">📖</button>
-    <button class="btn-icon" onclick="toggleCollections()" id="collectionsBtn" title="Collections">★</button>
-    <button class="btn-icon" id="langBtn" onclick="setLang(currentLang==='zh'?'en':'zh')" title="Language">EN</button>
-    <button class="btn-icon" onclick="toggleAI()" id="aiBtn" title="AI 助手">AI</button>
-    <button class="btn-icon" onclick="toggleSettings()" id="settingsBtn" title="设置">⚙</button>
+    <button class="btn-icon" onclick="toggleRecommend()" id="recommendBtn" data-i18n-title="recommendations">📖</button>
+    <button class="btn-icon" onclick="toggleCollections()" id="collectionsBtn" data-i18n-title="collections">★</button>
+    <button class="btn-icon" id="langBtn" onclick="setLang(currentLang==='zh'?'en':'zh')" data-i18n-title="language">EN</button>
+    <button class="btn-icon" onclick="toggleAI()" id="aiBtn" data-i18n-title="aiAssistant">AI</button>
+    <button class="btn-icon" onclick="toggleSettings()" id="settingsBtn" data-i18n-title="settings">⚙</button>
   </div>
 </div>
 
 <div class="search-section">
   <div class="search-bar" style="position:relative">
-    <input type="text" id="searchInput" placeholder="输入检索词或自然语言描述，如：定量相位成像最新进展..." onkeydown="handleSearchKeydown(event)" oninput="updateSearchModeHint()" autocomplete="off">
-    <span id="searchModeHint" class="search-mode-hint" onclick="toggleSearchMode()" title="点击切换检索模式"></span>
-    <button class="btn btn-primary" id="searchBtn" onclick="doSmartSearch()">检索</button>
-    <button class="btn btn-outline" onclick="toggleHistory()" id="historyBtn" title="搜索历史" style="padding:10px 12px">⏱</button>
-    <button class="btn btn-outline" onclick="openDoiModal()" id="doiBtn2" title="批量 DOI 导入" style="padding:10px 12px">📋</button>
+    <input type="text" id="searchInput" data-i18n-placeholder="searchPlaceholder" onkeydown="handleSearchKeydown(event)" oninput="updateSearchModeHint()" autocomplete="off">
+    <span id="searchModeHint" class="search-mode-hint" onclick="toggleSearchMode()" data-i18n-title="clickToToggle"></span>
+    <button class="btn btn-primary" id="searchBtn" onclick="doSmartSearch()" data-i18n="search">检索</button>
+    <button class="btn btn-outline" onclick="toggleHistory()" id="historyBtn" data-i18n-title="searchHistory" style="padding:10px 12px">⏱</button>
+    <button class="btn btn-outline" onclick="openDoiModal()" id="doiBtn2" data-i18n-title="batchDOI" style="padding:10px 12px">📋</button>
     <div class="history-dropdown" id="historyDropdown"></div>
     <div class="history-dropdown" id="suggestDropdown"></div>
   </div>
   <div style="max-width:900px;margin:4px auto 0;font-size:12px;color:#94a3b8;display:flex;gap:16px;align-items:center">
     <span id="searchMode"></span>
-    <span style="margin-left:auto">输入中文或自然语言自动触发 AI 检索，输入英文关键词为普通检索</span>
+    <span id="searchHintText" style="margin-left:auto">输入中文或自然语言自动触发 AI 检索，输入英文关键词为普通检索</span>
   </div>
   <div id="suggestionBar" style="max-width:900px;margin:8px auto 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:24px">
     <span id="trySearchLabel" style="font-size:12px;color:var(--text-secondary);margin-right:4px">试试：</span>
@@ -497,8 +497,8 @@ body {
       <label><input type="checkbox" id="useGoogleScholar"> Google Scholar <span class="beta-badge" data-tip="反爬风险高，需 ScraperAPI" data-i18n-tip="betaScraping">β</span></label>
       <label><input type="checkbox" id="useBingAcademic"> Bing Academic <span class="beta-badge" data-tip="需要 Playwright，首次使用会自动安装浏览器" data-i18n-tip="betaScraping">β</span></label>
       <label><input type="checkbox" id="useCNKI"> CNKI <span class="beta-badge" data-tip="需 ScraperAPI 或机构网络" data-i18n-tip="betaAuth">β</span></label>
-      <label><input type="checkbox" id="useWanfang"> 万方 <span class="beta-badge" data-tip="需 Cookie 登录或 ScraperAPI" data-i18n-tip="betaAuth">β</span></label>
-      <label><input type="checkbox" id="useVIP"> 维普 <span class="beta-badge" data-tip="需 ScraperAPI 或机构网络" data-i18n-tip="betaAuth">β</span></label>
+      <label><input type="checkbox" id="useWanfang"> <span data-i18n="wanfang">万方</span> <span class="beta-badge" data-tip="需 Cookie 登录或 ScraperAPI" data-i18n-tip="betaAuth">β</span></label>
+      <label><input type="checkbox" id="useVIP"> <span data-i18n="vip">维普</span> <span class="beta-badge" data-tip="需 ScraperAPI 或机构网络" data-i18n-tip="betaAuth">β</span></label>
     </div>
     <div class="filter-group">
       <span data-i18n="journal">期刊</span>: <input type="text" id="filterJournal" placeholder="如 Nature Methods" style="width:140px">
@@ -545,13 +545,13 @@ body {
 <div class="main">
   <div class="ai-panel" id="aiPanel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <strong>AI 助手</strong>
+      <strong data-i18n="aiAssistant">AI 助手</strong>
       <div>
         <button class="btn btn-sm btn-outline" id="aiSummarizeAllBtn" onclick="aiSummarize()" data-i18n="summarizeAll">总结全部</button>
-        <button class="btn btn-sm btn-outline" onclick="closeAiPanel()" style="margin-left:4px">✕ 关闭</button>
+        <button class="btn btn-sm btn-outline" onclick="closeAiPanel()" style="margin-left:4px" data-i18n="closeWithPrefix">✕ 关闭</button>
       </div>
     </div>
-    <div class="ai-content" id="aiContent" style="line-height:1.8;font-size:14px" data-status="waiting">等待操作...</div>
+    <div class="ai-content" id="aiContent" style="line-height:1.8;font-size:14px" data-status="waiting" data-i18n="waitingForAction">等待操作...</div>
   </div>
 
   <div id="results">
@@ -597,7 +597,7 @@ body {
     </div>
     <div class="form-group">
       <label data-i18n="scraperapiKey">ScraperAPI Key</label>
-      <input type="text" id="cfgScraperapiKey" placeholder="可选，用于绕过反爬机制">
+      <input type="text" id="cfgScraperapiKey" placeholder="可选，用于绕过反爬机制" data-i18n-placeholder="scraperapiKeyPlaceholder">
       <div class="hint" data-i18n="scraperapiKeyHint">付费服务，可访问 CNKI/维普/Google Scholar 等反爬网站</div>
     </div>
   </div>
@@ -609,7 +609,7 @@ body {
     </div>
     <div class="form-group">
       <label data-i18n="wanfangCookie">万方 Cookie</label>
-      <textarea id="cfgWanfangCookie" rows="3" placeholder="从浏览器开发者工具中复制 Cookie" style="width:100%;font-size:12px;font-family:monospace"></textarea>
+      <textarea id="cfgWanfangCookie" rows="3" placeholder="从浏览器开发者工具中复制 Cookie" data-i18n-placeholder="wanfangCookiePlaceholder" style="width:100%;font-size:12px;font-family:monospace"></textarea>
       <div class="hint" data-i18n="wanfangCookieHint">登录万方后，从浏览器 F12 → Network → 复制 Cookie 值</div>
     </div>
   </div>
@@ -635,8 +635,8 @@ body {
     </div>
     <div class="form-group">
       <label data-i18n="modelName">模型名称</label>
-      <input type="text" id="cfgSearchAiModel" data-i18n-placeholder="cfgSearchAiModel" placeholder="如 deepseek-chat（快速模型）">
-      <div class="hint" data-i18n="searchAIHint">推荐：deepseek-chat / gpt-4o-mini</div>
+      <input type="text" id="cfgSearchAiModel" data-i18n-placeholder="cfgSearchAiModel" placeholder="如 deepseek-v4-flash（快速模型）">
+      <div class="hint" data-i18n="searchAIHint">推荐：deepseek-v4-flash / gpt-4o-mini</div>
     </div>
     <div class="form-group">
       <label data-i18n="endpointURL">端点 URL</label>
@@ -645,7 +645,7 @@ body {
     <div class="form-group">
       <label data-i18n="maxTokens">最大输出 Tokens</label>
       <input type="number" id="cfgSearchMaxTokens" min="1024" max="131072" step="1024" value="4096">
-      <div class="hint">检索模型建议 4096（快速响应）</div>
+      <div class="hint" data-i18n="searchMaxTokensHint">检索模型建议 4096（快速响应）</div>
     </div>
   </div>
   <div class="settings-section">
@@ -670,8 +670,8 @@ body {
     </div>
     <div class="form-group">
       <label data-i18n="modelName">模型名称</label>
-      <input type="text" id="cfgAnalysisAiModel" data-i18n-placeholder="cfgAnalysisAiModel" placeholder="如 deepseek-reasoner（高质量模型）">
-      <div class="hint" data-i18n="analysisAIHint">推荐：deepseek-reasoner / gpt-4o / claude-sonnet</div>
+      <input type="text" id="cfgAnalysisAiModel" data-i18n-placeholder="cfgAnalysisAiModel" placeholder="如 deepseek-v4-pro（高质量模型）">
+      <div class="hint" data-i18n="analysisAIHint">推荐：deepseek-v4-pro / gpt-4o / claude-sonnet</div>
     </div>
     <div class="form-group">
       <label data-i18n="endpointURL">端点 URL</label>
@@ -765,15 +765,15 @@ body {
   <h2>
     <span id="recommendTitle">📖 为你推荐</span>
     <span>
-      <button class="btn btn-sm btn-outline" onclick="loadRecommendations()" title="刷新推荐">🔄</button>
+      <button class="btn btn-sm btn-outline" onclick="loadRecommendations()" title="刷新推荐" data-i18n-title="refreshRecommend">🔄</button>
       <button class="btn btn-sm btn-outline" onclick="toggleRecommend()">✕</button>
     </span>
   </h2>
   <div class="collections-body" id="recommendBody">
     <div class="collections-empty">
       <div class="icon">🔍</div>
-      <p id="recommendEmptyText">基于你的阅读历史推荐论文</p>
-      <p style="font-size:12px;margin-top:8px;color:#94a3b8" id="recommendHintText">开始搜索和阅读论文后，这里会显示个性化推荐</p>
+      <p id="recommendEmptyText" data-i18n="recommendEmpty">基于你的阅读历史推荐论文</p>
+      <p style="font-size:12px;margin-top:8px;color:#94a3b8" id="recommendHintText" data-i18n="recommendHint">开始搜索和阅读论文后，这里会显示个性化推荐</p>
     </div>
   </div>
 </div>
@@ -806,7 +806,7 @@ body {
         <div><span class="dot" style="background:#10b981"></span> <span id="legendCiting">引用了此论文</span></div>
         <div><span class="dot" style="background:#f59e0b"></span> <span id="legendReferenced">此论文引用</span></div>
         <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px"><span id="graphZoomLevel">100%</span> · <span id="graphHintText">滚轮缩放 · 拖拽平移 · 点击节点展开引用</span> · <a href="#" onclick="resetGraphZoom();return false" style="color:#64748b" id="resetZoomLink">重置缩放</a></div>
-        <div style="margin-top:4px;color:#94a3b8;font-size:10px">数据来源：OpenAlex（引用数据可能不完整，仅供参考）</div>
+        <div style="margin-top:4px;color:#94a3b8;font-size:10px" data-i18n="graphDataSource">数据来源：OpenAlex（引用数据可能不完整，仅供参考）</div>
       </div>
     </div>
     <div id="graphAiPanel" style="display:none;padding:12px 16px;border-top:1px solid var(--border);background:#f0fdf4;overflow-y:auto">
@@ -903,6 +903,7 @@ const LANGS = {
     normalSearch: "● 普通检索模式", aiSearchMode: "● AI 智能检索模式",
     // 状态
     ready: "就绪", searching: "正在检索...", searchFailed: "检索失败",
+    waitingForAction: "等待操作...",
     analysisInProgress: "AI 分析进行中，请等待完成",
     networkErrorRetry: "网络错误 - 点击重试", noResultsFound: "未找到相关文献",
     dataSource: "数据源: PubMed + OpenAlex",
@@ -912,6 +913,9 @@ const LANGS = {
     batchDOI: "批量 DOI 导入", doiHint: "每行一个 DOI，支持带 \"doi:\" 前缀",
     enterDOI: "请输入 DOI", noValidDOI: "未识别到有效 DOI",
     queryingDOI: "正在查询", doiQuery: "个 DOI...",
+    doiInvalidLines: "无效行",
+    doiValidCount: "已识别 {count} 个有效 DOI，{invalid} 行格式无效已跳过",
+    doiMergeInfo: "（新增 {new} 篇，合并后共 {total} 篇）",
     foundPapers: "找到", doiNotFound: "个 DOI 未匹配到（已替换之前的结果）",
     doiReplaced: "（已替换之前的结果）", queryFailed: "查询失败",
     // PDF
@@ -938,6 +942,7 @@ const LANGS = {
     cfgAnalysisAiModel: "如 deepseek-reasoner（高质量模型）",
     cfgAnalysisAiUrl: "留空使用默认端点",
     maxTokens: "最大输出 Tokens", maxTokensHint: "控制 AI 单次回复的最大长度，默认 16384。多篇论文分析建议 16384+",
+    searchMaxTokensHint: "检索模型建议 4096（快速响应）",
     cfgExportPath: "留空则弹出浏览器下载",
     aiAnalysisModel: "AI 论文分析模型（总结/详析/对比，建议用高质量模型）",
     enableAnalysisAI: "启用分析 AI",
@@ -955,9 +960,13 @@ const LANGS = {
     playwrightHint: "Bing Academic 搜索需要 Playwright，首次安装约 100MB",
     playwrightInstalled: "已安装", playwrightNotInstalled: "未安装",
     playwrightInstalling: "安装中...", playwrightInstallSuccess: "安装成功", playwrightInstallFailed: "安装失败",
+    wanfang: "万方", vip: "维普",
+    checking: "检查中...",
     wanfangConfig: "万方数据配置", enableWanfang: "启用万方搜索",
     wanfangCookie: "万方 Cookie", wanfangCookieHint: "登录万方后，从浏览器 F12 → Network → 复制 Cookie 值",
+    wanfangCookiePlaceholder: "从浏览器开发者工具中复制 Cookie",
     scraperapiKey: "ScraperAPI Key", scraperapiKeyHint: "付费服务，可访问 CNKI/维普/Google Scholar 等反爬网站",
+    scraperapiKeyPlaceholder: "可选，用于绕过反爬机制",
     downloadSuccess: "下载成功", downloadFailed: "下载失败",
     // 引用图谱
     citationGraph: "引用关系图谱", legendCenter: "当前论文", legendCiting: "引用了此论文", legendReferenced: "此论文引用",
@@ -965,6 +974,7 @@ const LANGS = {
     openNewGraph: "在新图谱中打开", fullscreen: "全屏", exitFullscreen: "退出全屏", closeGraph: "关闭",
     graphAiSummary: "AI 总结", graphAiDetail: "AI 详析", graphAiNovelty: "创新点", newGraph: "新图谱",
     graphHint: "滚轮缩放 · 拖拽平移 · 点击节点展开引用", resetZoom: "重置缩放",
+    graphDataSource: "数据来源：OpenAlex（引用数据可能不完整，仅供参考）",
     aiAnalysis: "AI 分析", copy: "复制", aiAnalyzing: "AI 分析中...", aiFailed: "AI 分析失败",
     clickNodeFirst: "请先点击论文节点",
     fetchPaperFailed: "获取论文失败", noResult: "无结果",
@@ -983,7 +993,8 @@ const LANGS = {
     remove: "移除", operationFailed: "操作失败",
     defaultGroup: "默认收藏夹", newGroup: "+ 新建", deleteGroup: "删除收藏夹",
     enterGroupName: "输入收藏夹名称：", deleteGroupConfirm: "确定要删除收藏夹\"{name}\"吗？\n该收藏夹内的所有收藏也将被删除，此操作不可撤销。",
-    refreshCollections: "刷新",
+    refreshCollections: "刷新", refreshRecommend: "刷新推荐",
+    closeWithPrefix: "✕ 关闭",
     // 推荐
     recommendations: "为你推荐", recommendLoading: "正在加载推荐...", recommendEmpty: "暂无推荐",
     recommendHint: "开始搜索和阅读论文后，这里会显示个性化推荐",
@@ -1027,6 +1038,7 @@ const LANGS = {
     download_failed: "下载失败", link_verify_failed: "链接验证失败",
     unsupported_format: "不支持的格式",
     ai_not_enabled: "AI 功能未启用，请在设置中配置 API Key",
+    aiDisclaimer: "⚠️ 此分析由 AI 生成，基于论文摘要信息。可能存在不准确之处，请以原文为准。关键结论请查阅原文验证。",
     request_failed: "AI 请求失败",
   },
   en: {
@@ -1076,6 +1088,7 @@ const LANGS = {
     normalSearch: "● Normal Search", aiSearchMode: "● AI Smart Search",
     // Status
     ready: "Ready", searching: "Searching...", searchFailed: "Search failed",
+    waitingForAction: "Waiting...",
     analysisInProgress: "AI analysis in progress, please wait",
     networkErrorRetry: "Network error - click to retry", noResultsFound: "No papers found",
     dataSource: "Data Source: PubMed + OpenAlex",
@@ -1085,6 +1098,9 @@ const LANGS = {
     batchDOI: "Batch DOI Import", doiHint: "One DOI per line, supports \"doi:\" prefix",
     enterDOI: "Please enter DOI", noValidDOI: "No valid DOI recognized",
     queryingDOI: "Querying", doiQuery: " DOIs...",
+    doiInvalidLines: "invalid lines",
+    doiValidCount: "Identified {count} valid DOI(s), {invalid} line(s) skipped due to invalid format",
+    doiMergeInfo: "({new} new, {total} total after merge)",
     foundPapers: "Found", doiNotFound: " DOIs not matched (replaced previous results)",
     doiReplaced: " (replaced previous results)", queryFailed: "Query failed",
     // PDF
@@ -1111,6 +1127,7 @@ const LANGS = {
     cfgAnalysisAiModel: "e.g. deepseek-reasoner (high-quality)",
     cfgAnalysisAiUrl: "Leave empty to use default endpoint",
     maxTokens: "Max Output Tokens", maxTokensHint: "Max tokens per AI response, default 16384. Recommend 16384+ for multi-paper analysis",
+    searchMaxTokensHint: "Recommended 4096 for search model (fast response)",
     cfgExportPath: "Leave empty to use browser's default download location",
     aiAnalysisModel: "AI Analysis Model (summary/detail/comparison, recommend high-quality model)",
     enableAnalysisAI: "Enable Analysis AI",
@@ -1130,7 +1147,11 @@ const LANGS = {
     playwrightInstalling: "Installing...", playwrightInstallSuccess: "Installed successfully", playwrightInstallFailed: "Installation failed",
     wanfangConfig: "Wanfang Data Config", enableWanfang: "Enable Wanfang Search",
     wanfangCookie: "Wanfang Cookie", wanfangCookieHint: "After logging into Wanfang, copy Cookie from browser F12 → Network",
+    wanfangCookiePlaceholder: "Copy Cookie from browser developer tools",
+    wanfang: "Wanfang", vip: "CQVIP",
+    checking: "Checking...",
     scraperapiKey: "ScraperAPI Key", scraperapiKeyHint: "Paid service to bypass anti-scraping for CNKI/CQVIP/Google Scholar",
+    scraperapiKeyPlaceholder: "Optional, for bypassing anti-scraping",
     downloadSuccess: "Download success", downloadFailed: "Download failed",
     // Citation graph
     citationGraph: "Citation Graph", legendCenter: "Current Paper", legendCiting: "Citing This Paper", legendReferenced: "Referenced by This Paper",
@@ -1138,6 +1159,7 @@ const LANGS = {
     openNewGraph: "Open in New Graph", fullscreen: "Fullscreen", exitFullscreen: "Exit Fullscreen", closeGraph: "Close",
     graphAiSummary: "AI Summary", graphAiDetail: "AI Detail", graphAiNovelty: "Novelty", newGraph: "New Graph",
     graphHint: "Scroll to zoom · Drag to pan · Click node to expand citations", resetZoom: "Reset Zoom",
+    graphDataSource: "Data source: OpenAlex (citation data may be incomplete)",
     aiAnalysis: "AI Analysis", copy: "Copy", aiAnalyzing: "AI Analyzing...", aiFailed: "AI Analysis Failed",
     clickNodeFirst: "Please click a paper node first",
     fetchPaperFailed: "Failed to fetch paper", noResult: "No result",
@@ -1156,7 +1178,8 @@ const LANGS = {
     remove: "Remove", operationFailed: "Operation failed",
     defaultGroup: "Default Collection", newGroup: "+ New", deleteGroup: "Delete Collection",
     enterGroupName: "Enter collection name:", deleteGroupConfirm: "Are you sure you want to delete \"{name}\"?\nAll items in this collection will also be deleted. This action cannot be undone.",
-    refreshCollections: "Refresh",
+    refreshCollections: "Refresh", refreshRecommend: "Refresh",
+    closeWithPrefix: "✕ Close",
     // Recommendations
     recommendations: "For You", recommendLoading: "Loading recommendations...", recommendEmpty: "No recommendations yet",
     recommendHint: "Start searching and reading papers to get personalized recommendations",
@@ -1200,6 +1223,7 @@ const LANGS = {
     download_failed: "Download failed", link_verify_failed: "Link verification failed",
     unsupported_format: "Unsupported format",
     ai_not_enabled: "AI not enabled, please configure API Key in Settings",
+    aiDisclaimer: "⚠️ This analysis is generated by AI based on paper abstracts. There may be inaccuracies. Please refer to the original text for key conclusions.",
     request_failed: "AI request failed",
   }
 };
@@ -2626,7 +2650,7 @@ function renderAIResult(el, modeName, text, count, cached) {
     </div>
     <div style="line-height:1.8;font-size:14px">${formatAIText(translatedText)}</div>
     <div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);color:#94a3b8;font-size:11px">
-      ⚠️ 此分析由 AI 生成，基于论文摘要信息。可能存在不准确之处，请以原文为准。关键结论请查阅原文验证。
+      ${t("aiDisclaimer")}
     </div>`;
 }
 
@@ -3349,12 +3373,12 @@ async function batchDoiLookup() {
   if (!dois.length) {
     showToast(t("noValidDOI"));
     if (invalidLines.length > 0) {
-      document.getElementById("doiResult").textContent = `${t("noValidDOI")}，无效行：${invalidLines.slice(0, 3).join(", ")}${invalidLines.length > 3 ? "..." : ""}`;
+      document.getElementById("doiResult").textContent = `${t("noValidDOI")}，${t("doiInvalidLines")}：${invalidLines.slice(0, 3).join(", ")}${invalidLines.length > 3 ? "..." : ""}`;
     }
     return;
   }
   if (invalidLines.length > 0) {
-    document.getElementById("doiResult").textContent = `已识别 ${dois.length} 个有效 DOI，${invalidLines.length} 行格式无效已跳过`;
+    document.getElementById("doiResult").textContent = t("doiValidCount").replace("{count}", dois.length).replace("{invalid}", invalidLines.length);
   }
 
   const btn = document.getElementById("doiBtn");
@@ -3383,7 +3407,7 @@ async function batchDoiLookup() {
       currentPage = 1;
       renderResults();
       const mergeInfo = newPapers.length > 0 && allPapers.length > newPapers.length
-        ? `（新增 ${newPapers.length} 篇，合并后共 ${allPapers.length} 篇）` : "";
+        ? t("doiMergeInfo").replace("{new}", newPapers.length).replace("{total}", allPapers.length) : "";
       const msg = data.not_found > 0
         ? `${t("foundPapers")} ${data.total} ${t("papers")}, ${data.not_found} ${t("doiNotFound")}${mergeInfo}`
         : `${t("foundPapers")} ${data.total} ${t("papers")}${t("doiReplaced")}${mergeInfo}`;
