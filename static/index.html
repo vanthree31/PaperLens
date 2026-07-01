@@ -1004,6 +1004,7 @@ const LANGS = {
     playwrightHint: "Bing Academic 搜索需要 Playwright，首次安装约 100MB",
     playwrightInstalled: "已安装", playwrightNotInstalled: "未安装",
     playwrightInstalling: "安装中...", playwrightInstallSuccess: "安装成功", playwrightInstallFailed: "安装失败",
+    playwrightInstallConfirm: "将下载约 100MB 的 Chromium 浏览器，确认安装？",
     wanfang: "万方", vip: "维普",
     checking: "检查中...",
     wanfangConfig: "万方数据配置", enableWanfang: "启用万方搜索",
@@ -1195,6 +1196,7 @@ const LANGS = {
     playwrightHint: "Bing Academic search requires Playwright, ~100MB first install",
     playwrightInstalled: "Installed", playwrightNotInstalled: "Not installed",
     playwrightInstalling: "Installing...", playwrightInstallSuccess: "Installed successfully", playwrightInstallFailed: "Installation failed",
+    playwrightInstallConfirm: "Will download ~100MB Chromium browser. Confirm install?",
     wanfangConfig: "Wanfang Data Config", enableWanfang: "Enable Wanfang Search",
     wanfangCookie: "Wanfang Cookie", wanfangCookieHint: "After logging into Wanfang, copy Cookie from browser F12 → Network",
     wanfangCookiePlaceholder: "Copy Cookie from browser developer tools",
@@ -2352,8 +2354,13 @@ async function loadSettings() {
     const ap = cfg.access_proxy || {};
     document.getElementById("cfgAccessMode").value = ap.mode || "none";
     document.getElementById("cfgEzproxyHost").value = ap.ezproxy_host || "";
+    document.getElementById("cfgCarsiUsername").value = ap.carsi_username || "";
     toggleAccessMode();
-    loadCarsiInstitutions();
+    await loadCarsiInstitutions();
+    // 加载后设置学校选择（因为选项是异步加载的）
+    if (ap.carsi_school) {
+      document.getElementById("cfgCarsiSchool").value = ap.carsi_school;
+    }
 
     // 加载导出路径
     document.getElementById("cfgExportPath").value = cfg.export_path || "";
@@ -2432,6 +2439,8 @@ async function saveSettings() {
     access_proxy: {
       mode: document.getElementById("cfgAccessMode").value,
       ezproxy_host: document.getElementById("cfgEzproxyHost").value.trim(),
+      carsi_school: document.getElementById("cfgCarsiSchool").value,
+      carsi_username: document.getElementById("cfgCarsiUsername").value.trim(),
     },
     scraperapi_key: document.getElementById("cfgScraperapiKey").value.trim(),
     export_path: document.getElementById("cfgExportPath").value.trim(),
@@ -2467,10 +2476,13 @@ async function resetSettings() {
     sources: {
       pubmed: { enabled: true, email: "", api_key: "" },
       openalex: { enabled: true, email: "" },
+      wanfang: { enabled: false, cookie: "" },
     },
     ai_search: { enabled: false, provider: "deepseek", api_key: "", base_url: "", model: "" },
     ai_analysis: { enabled: false, provider: "deepseek", api_key: "", base_url: "", model: "" },
     proxy: { http: "", https: "" },
+    access_proxy: { mode: "none", ezproxy_host: "", carsi_school: "", carsi_username: "" },
+    scraperapi_key: "",
     export_path: "",
   };
   try {
@@ -2545,6 +2557,9 @@ async function installPlaywright() {
   const statusEl = document.getElementById("playwrightStatusText");
   const installBtn = document.getElementById("installPlaywrightBtn");
   if (!statusEl || !installBtn) return;
+
+  // 确认安装（约 100MB）
+  if (!confirm(t("playwrightInstallConfirm"))) return;
 
   statusEl.textContent = t("playwrightInstalling");
   statusEl.style.color = "var(--primary)";
