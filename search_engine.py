@@ -710,7 +710,7 @@ class GoogleScholarSearch:
 
 
 class PlaywrightBrowser:
-    """Playwright 浏览器管理器（用于需要 JavaScript 渲染的网站）"""
+    """Playwright 浏览器管理器（单例，用于需要 JavaScript 渲染的网站）"""
 
     _instance = None
     _browser = None
@@ -723,36 +723,43 @@ class PlaywrightBrowser:
         # 代理变化时，关闭旧浏览器，用新代理重建
         if cls._instance is not None and proxy != cls._proxy:
             with cls._lock:
-                if cls._browser:
-                    try:
-                        cls._browser.close()
-                    except Exception:
-                        pass
-                    cls._browser = None
+                cls._close_browser()
                 cls._proxy = proxy
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = cls(proxy)
+                    cls._instance = cls()
+                    cls._proxy = proxy
         return cls._instance
 
-    def __init__(self, proxy=None):
-        self._browser = None
-        self._playwright = None
-        PlaywrightBrowser._proxy = proxy
+    @classmethod
+    def _close_browser(cls):
+        """关闭浏览器和 Playwright（调用前需持有锁）"""
+        if cls._browser:
+            try:
+                cls._browser.close()
+            except Exception:
+                pass
+            cls._browser = None
+        if cls._playwright:
+            try:
+                cls._playwright.stop()
+            except Exception:
+                pass
+            cls._playwright = None
 
     def get_browser(self):
-        if self._browser is None or not self._browser.is_connected():
-            with self._lock:
-                if self._browser is None or not self._browser.is_connected():
+        if PlaywrightBrowser._browser is None or not PlaywrightBrowser._browser.is_connected():
+            with PlaywrightBrowser._lock:
+                if PlaywrightBrowser._browser is None or not PlaywrightBrowser._browser.is_connected():
                     self._init_browser()
-        return self._browser
+        return PlaywrightBrowser._browser
 
     def _init_browser(self):
         try:
             from playwright.sync_api import sync_playwright
-            if self._playwright is None:
-                self._playwright = sync_playwright().start()
+            if PlaywrightBrowser._playwright is None:
+                PlaywrightBrowser._playwright = sync_playwright().start()
             launch_args = {
                 "headless": True,
                 "args": ['--disable-blink-features=AutomationControlled'],
@@ -760,16 +767,15 @@ class PlaywrightBrowser:
             # 代理：Playwright launch 接受 server.proxy 格式
             proxy = PlaywrightBrowser._proxy
             if proxy:
-                # 优先用 https，其次 http
                 proxy_url = proxy.get("https") or proxy.get("http")
                 if proxy_url:
                     launch_args["proxy"] = {"server": proxy_url}
                     print(f"Playwright browser using proxy: {proxy_url}")
-            self._browser = self._playwright.chromium.launch(**launch_args)
+            PlaywrightBrowser._browser = PlaywrightBrowser._playwright.chromium.launch(**launch_args)
             print("Playwright browser initialized")
         except Exception as e:
             print(f"Playwright init error: {e}")
-            self._browser = None
+            PlaywrightBrowser._browser = None
 
     def new_page(self):
         browser = self.get_browser()
@@ -788,18 +794,8 @@ class PlaywrightBrowser:
             return None
 
     def close(self):
-        if self._browser:
-            try:
-                self._browser.close()
-            except Exception:
-                pass
-            self._browser = None
-        if self._playwright:
-            try:
-                self._playwright.stop()
-            except Exception:
-                pass
-            self._playwright = None
+        with PlaywrightBrowser._lock:
+            PlaywrightBrowser._close_browser()
 
 
 class CNKISearch:

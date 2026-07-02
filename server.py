@@ -630,7 +630,8 @@ def create_app():
         try:
             import requests as req
             # 通过 OpenAlex 获取论文引用关系
-            email = config.get("sources", {}).get("openalex", {}).get("email", "")
+            with cache_lock:
+                email = config.get("sources", {}).get("openalex", {}).get("email", "")
             params = {"mailto": email} if email else {}
 
             # 获取论文信息
@@ -694,7 +695,8 @@ def create_app():
         try:
             import requests as req
             from collections import Counter
-            email = config.get("sources", {}).get("openalex", {}).get("email", "")
+            with cache_lock:
+                email = config.get("sources", {}).get("openalex", {}).get("email", "")
             params = {"mailto": email} if email else {}
 
             # 获取论文信息
@@ -837,20 +839,30 @@ def create_app():
         if not url:
             return jsonify({"error": "no_download_link"}), 400
 
-        # SSRF 防护：校验协议和内网 IP（含重定向检查）
+        # SSRF 防护：校验协议和内网 IP（含 DNS 解析检查）
         def _check_url_safety(target_url):
-            """检查 URL 是否安全（非内网），跟随重定向时递归检查"""
+            """检查 URL 是否安全（非内网），包括 DNS 解析后的 IP 检查"""
             try:
                 parsed = urlparse(target_url)
                 if parsed.scheme not in ("http", "https"):
                     return False, "invalid_url_scheme"
                 hostname = parsed.hostname or ""
+                # 1. 直接检查裸 IP
                 try:
                     ip = ipaddress.ip_address(hostname)
                     if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_unspecified:
                         return False, "blocked_internal_url"
                 except ValueError:
-                    pass
+                    # 2. DNS 域名：解析后检查所有 IP
+                    import socket
+                    try:
+                        addrinfos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+                        for family, _, _, _, sockaddr in addrinfos:
+                            ip = ipaddress.ip_address(sockaddr[0])
+                            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_unspecified:
+                                return False, "blocked_internal_url"
+                    except (socket.gaierror, OSError):
+                        pass  # DNS 解析失败，让 requests 处理
                 return True, ""
             except Exception:
                 return False, "invalid_url"
@@ -892,7 +904,11 @@ def create_app():
 
             # 检查文件大小限制（100MB）
             content_length = resp.headers.get("Content-Length")
-            if content_length and int(content_length) > 100 * 1024 * 1024:
+            try:
+                if content_length and int(content_length) > 100 * 1024 * 1024:
+                    return jsonify({"error": "file_too_large"}), 400
+            except (ValueError, TypeError):
+                pass  # Content-Length 无效时忽略，继续下载
                 return jsonify({"error": "file_too_large"}), 400
 
             if save_to_disk:
@@ -1076,14 +1092,16 @@ def create_app():
             try:
                 collections_path = _get_user_data_path("collections.json")
                 if os.path.exists(collections_path):
-                    with open(collections_path, "r", encoding="utf-8") as f:
-                        collections = json.load(f)
+                    with collections_lock:
+                        with open(collections_path, "r", encoding="utf-8") as f:
+                            collections = json.load(f)
                     # 取收藏中最近的论文 DOI
                     collection_dois = [item.get("doi") for item in collections.get("items", []) if item.get("doi")][-3:]
                     for doi in collection_dois[:2]:
                         try:
                             import requests as req
-                            email = config.get("sources", {}).get("openalex", {}).get("email", "")
+                            with cache_lock:
+                                email = config.get("sources", {}).get("openalex", {}).get("email", "")
                             params = {"mailto": email} if email else {}
                             r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=10)
                             if r.status_code == 200:
@@ -1415,6 +1433,11 @@ def create_app():
                 real_export = os.path.realpath(export_dir)
                 if not real_path.startswith(real_export):
                     return jsonify({"error": "invalid_path"}), 400
+            else:
+                # 未配置导出路径时，只允许打开应用数据目录下的路径
+                app_data = os.path.realpath(_get_app_data_dir())
+                if not real_path.startswith(app_data):
+                    return jsonify({"error": "invalid_path"}), 400
             if not os.path.exists(path):
                 os.makedirs(path, exist_ok=True)
             os.startfile(path)
@@ -1454,7 +1477,7 @@ def create_app():
     def playwright_install():
         """安装 Playwright 浏览器（仅允许本地请求）"""
         # 安全检查：只允许本地请求
-        if request.remote_addr not in ("127.0.0.1", "::1", "localhost"):
+        if request.remote_addr not in ("127.0.0.1", "::1"):
             return jsonify({"error": "local_only"}), 403
         try:
             import subprocess
@@ -1729,7 +1752,7 @@ def create_app():
     @app.route("/api/carsi/authenticate", methods=["POST"])
     def carsi_authenticate():
         """执行 CARSI 认证"""
-        if request.remote_addr not in ("127.0.0.1", "::1", "localhost"):
+        if request.remote_addr not in ("127.0.0.1", "::1"):
             return jsonify({"error": "local_only"}), 403
         data = request.json or {}
         idp_url = data.get("idp_url", "").strip()
