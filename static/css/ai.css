@@ -1,0 +1,278 @@
+/* AI Panel — Elevated 层玻璃 */
+.ai-panel {
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  position: relative;
+  opacity: 0;
+  transform: scale(0.98) translateY(-4px);
+  transition: opacity 0.3s var(--ease-spring), transform 0.3s var(--ease-spring);
+  pointer-events: none;
+  max-height: 0;
+  max-width: 0;
+  border-width: 0;
+  margin-bottom: 0;
+}
+.ai-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+}
+.ai-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.ai-panel > * {
+  position: relative;
+  z-index: 2;
+}
+.ai-panel.show {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+  max-height: 80vh;
+  max-width: 100%;
+  border-width: 1px;
+  margin-bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* AI Panel Header — sticky at top, Base tier glass + purple accent */
+.ai-panel-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, rgba(175,82,222,0.1), rgba(88,86,214,0.06)), var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border-bottom: 1px solid var(--glass-e-border);
+  min-height: 40px;
+  z-index: 1;
+  position: sticky;
+  top: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.ai-panel-header .ai-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ai-panel-header .ai-badge {
+  background: linear-gradient(135deg, #AF52DE, #5856D6);
+  color: white;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ai-panel-header .ai-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* AI action buttons */
+.ai-action-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.ai-action-btn:hover {
+  opacity: 0.7;
+}
+.ai-action-btn:active {
+  transform: scale(0.92);
+}
+
+.ai-action-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+  transition: opacity 0.2s ease;
+}
+
+.ai-action-btn.copied {
+  color: var(--success);
+}
+
+.ai-action-btn.copied svg {
+  animation: checkPop 0.3s var(--ease-spring);
+}
+
+/* AI content area */
+.ai-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.ai-content h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: var(--space-5) 0 var(--space-3) 0;
+  color: var(--text);
+}
+.ai-content h3:first-child {
+  margin-top: 0;
+}
+
+.ai-content ul, .ai-content ol {
+  padding-left: 20px;
+  margin: var(--space-3) 0;
+}
+
+.ai-content li {
+  margin: var(--space-2) 0;
+}
+
+.ai-content code {
+  background: var(--color-code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: "SF Mono", Menlo, monospace;
+}
+
+.ai-content blockquote {
+  border-left: 3px solid var(--primary);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0;
+  background: var(--primary-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* AI thinking process */
+.ai-thinking {
+  background: var(--color-code-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-4);
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-left: 3px solid var(--primary);
+}
+
+.ai-thinking-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: var(--space-2);
+}
+
+/* AI loading state */
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.ai-loading-dots {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.ai-loading-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: ai-dot-bounce 1.2s infinite var(--ease-spring);
+  transform-origin: center;
+}
+
+.ai-loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.ai-loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* AI think block */
+.ai-think-block {
+  background: var(--color-code-bg);
+  border-left: 3px solid var(--border);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.ai-think-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ai-think-content {
+  line-height: 1.6;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ai-content {
+    padding: var(--space-3) var(--space-4);
+    font-size: 13px;
+  }
+  .ai-panel-header {
+    padding: var(--space-2) var(--space-3);
+  }
+}
+@media (max-width: 480px) {
+  .ai-content {
+    padding: var(--space-3);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .ai-panel-header .ai-title {
+    font-size: 12px;
+  }
+}

@@ -1,0 +1,322 @@
+/* Settings Overlay — Glass overlay */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--glass-overlay-bg);
+  backdrop-filter: var(--glass-overlay-blur);
+  -webkit-backdrop-filter: var(--glass-overlay-blur);
+  z-index: var(--z-panel);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s var(--ease-standard);
+}
+.settings-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Settings Panel — Elevated 层玻璃 */
+.settings-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  border-left: 1px solid var(--glass-e-border);
+  z-index: calc(var(--z-panel) + 1);
+  transform: translateX(100%);
+  transition: transform var(--transition-slow);
+  will-change: transform;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-7);
+}
+.settings-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+}
+.settings-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  pointer-events: none;
+  z-index: 1;
+}
+.settings-panel > * {
+  position: relative;
+  z-index: 2;
+}
+.settings-panel.show {
+  transform: translateX(0);
+}
+.settings-panel h2 {
+  font-size: 20px;
+  margin-bottom: var(--space-6);
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+/* Settings Section — Suppressed tier glass sub-card */
+.settings-section {
+  background: var(--glass-s-bg);
+  backdrop-filter: var(--glass-s-blur);
+  -webkit-backdrop-filter: var(--glass-s-blur);
+  border: 1px solid var(--glass-s-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--glass-s-shadow), var(--glass-inset-top);
+  position: relative;
+  overflow: hidden;
+}
+.settings-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+.settings-section > * {
+  position: relative;
+  z-index: 1;
+}
+.settings-section:last-child {
+  margin-bottom: 0;
+}
+.settings-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  /* Apple iOS 15+: no uppercase */
+  margin-bottom: 0;
+  padding: 0 var(--space-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+.settings-section h3 .arrow {
+  font-size: 12px;
+  transition: transform var(--transition-fast);
+  display: inline-block;
+}
+.settings-section.expanded h3 .arrow {
+  transform: rotate(90deg);
+}
+.settings-section h3 .section-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+/* Settings section fold/expand animation */
+.settings-section-content {
+  max-height: 0;
+  overflow: hidden;
+  margin-top: 0;
+  opacity: 0;
+  transition: max-height var(--transition-normal), margin-top var(--transition-normal), opacity var(--transition-normal);
+}
+.settings-section.expanded .settings-section-content {
+  max-height: 2000px;
+  margin-top: var(--space-4);
+  opacity: 1;
+}
+
+/* Form elements */
+.form-group {
+  margin-bottom: var(--space-5);
+}
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  color: var(--text);
+}
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.12);
+}
+.form-group .hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: var(--space-2);
+  line-height: 1.5;
+}
+
+/* Link button style for inline actions */
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 11px;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+.btn-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+/* Ollama guide */
+.ollama-guide {
+  background: var(--ollama-guide-bg);
+  border: 1px solid var(--ollama-guide-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  margin: var(--space-3) 0;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.ollama-guide .ollama-step {
+  color: var(--color-ollama);
+}
+.ollama-guide code {
+  background: var(--ollama-guide-code-bg);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+}
+.ollama-guide a {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+/* Toggle row */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+  background: var(--color-code-bg);
+  border-radius: var(--radius-sm);
+  gap: var(--space-4);
+}
+
+/* Toggle switch — iOS native size */
+.toggle-switch {
+  position: relative;
+  width: 51px;
+  height: 31px;
+  flex-shrink: 0;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(120, 120, 128, 0.16);
+  border-radius: 31px;
+  transition: background 0.25s var(--ease-standard);
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 27px;
+  width: 27px;
+  left: 2px;
+  bottom: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.25s var(--ease-spring);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15), 0 1px 1px rgba(0,0,0,0.06);
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--success);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Settings panel button row */
+.settings-panel .form-group > div[style*="display:flex"] {
+  flex-wrap: wrap;
+}
+.settings-panel .form-group > div[style*="display:flex"] .btn-sm {
+  min-width: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .settings-panel {
+    width: 100%;
+    padding: var(--space-5);
+  }
+}
+@media (max-width: 480px) {
+  .settings-panel {
+    padding: var(--space-4);
+  }
+  .settings-section {
+    padding: var(--space-4);
+  }
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 16px;
+  }
+  .settings-panel .form-group > div {
+    flex-wrap: wrap;
+  }
+  .settings-panel .form-group > div .btn-sm {
+    flex-shrink: 0;
+  }
+  /* 设置面板表单行自动换行 */
+  .settings-panel .form-group > div[style*="display:flex"] {
+    flex-wrap: wrap;
+  }
+  .settings-panel .form-group > div[style*="display:flex"] .btn-sm {
+    flex-shrink: 0;
+    min-width: 0;
+  }
+}

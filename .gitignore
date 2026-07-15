@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+
+# Runtime data (user-specific)
+data/
+
+# Claude Code local settings
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Common temporary files
+node_modules/
+*.log
+*.tmp
+*.swp

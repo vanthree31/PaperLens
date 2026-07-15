@@ -1,0 +1,648 @@
+/* Toast Notification */
+.toast {
+  position: fixed;
+  top: var(--header-height, 56px);
+  right: var(--space-6);
+  background: rgba(28, 28, 30, 0.80);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  color: white;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: var(--z-toast);
+  opacity: 0;
+  transform: scale(0.95) translateY(-8px);
+  transition: opacity 0.25s var(--ease-spring), transform 0.25s var(--ease-spring);
+  will-change: opacity, transform;
+  pointer-events: none;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.toast::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0) 40%
+  );
+  pointer-events: none;
+}
+.toast.show {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+#toastContainer .toast {
+  position: relative;
+  top: auto;
+  right: auto;
+}
+
+/* Modal Overlay — Glass overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--glass-overlay-bg);
+  backdrop-filter: var(--glass-overlay-blur);
+  -webkit-backdrop-filter: var(--glass-overlay-blur);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s var(--ease-standard);
+}
+.modal-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.modal-overlay.hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Modal — Elevated 层玻璃 */
+.modal {
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7);
+  width: min(500px, calc(100vw - var(--space-10)));
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  position: relative;
+  animation: modalAppear 0.35s var(--ease-spring);
+}
+.modal.hiding {
+  animation: modalDisappear 0.2s var(--ease-accelerate) forwards;
+}
+.modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+.modal::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.modal > * {
+  position: relative;
+  z-index: 1;
+}
+.modal h3 {
+  margin-bottom: var(--space-5);
+}
+.modal textarea {
+  width: 100%;
+  height: 200px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  font-size: 13px;
+  font-family: "SF Mono", Menlo, monospace;
+  resize: vertical;
+}
+.modal-btns {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  justify-content: flex-end;
+}
+
+/* History Dropdown — 液态玻璃 + 紧贴搜索框 + 最多 6-7 条 */
+.history-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(900px, calc(100% - 48px));
+  max-height: 272px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  z-index: var(--z-dropdown);
+  overflow-y: auto;
+  overflow-x: hidden;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-decelerate), visibility 0s 0.15s;
+}
+
+.history-dropdown.show {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.15s var(--ease-accelerate), visibility 0s 0s;
+}
+.history-dropdown::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+}
+.history-dropdown > * { position: relative; z-index: 2; }
+.history-dropdown.show {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.15s var(--ease-decelerate), visibility 0s 0s;
+}
+.history-dropdown::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+}
+.history-dropdown::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.history-item {
+  padding: var(--space-4) var(--space-5);
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--history-item-border);
+  display: flex;
+  justify-content: space-between;
+  color: var(--text);
+  position: relative;
+  z-index: 2;
+  transition: background 0.15s ease;
+}
+.history-item:hover {
+  background: rgba(0, 122, 255, 0.12);
+}
+.history-item:last-child {
+  border-bottom: none;
+}
+.history-item .hq {
+  flex: 1;
+  font-weight: 500;
+}
+.history-item .ht {
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  margin-left: var(--space-4);
+}
+.history-item .hd {
+  color: var(--danger);
+  cursor: pointer;
+  margin-left: var(--space-3);
+  font-size: 11px;
+  opacity: 0.7;
+}
+.history-item .hd:hover {
+  opacity: 1;
+}
+
+/* Reading Status Indicator */
+.reading-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+.reading-status:hover {
+  transform: scale(1.05);
+}
+.reading-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background var(--transition-fast);
+}
+.reading-status.unread .reading-status-dot {
+  background: var(--text-tertiary);
+}
+.reading-status.unread {
+  background: var(--color-code-bg);
+  color: var(--text-tertiary);
+}
+.reading-status.reading .reading-status-dot {
+  background: var(--warning);
+}
+.reading-status.reading {
+  background: rgba(255, 149, 0, 0.15);
+  color: var(--warning);
+}
+.reading-status.read .reading-status-dot {
+  background: var(--success);
+}
+.reading-status.read {
+  background: rgba(52, 199, 89, 0.15);
+  color: var(--success);
+}
+
+/* Batch Bar — Base 层玻璃 + 弹簧动画 */
+.batch-bar {
+  position: fixed;
+  bottom: calc(var(--status-bar-height, 36px) + var(--space-3));
+  left: 50%;
+  transform: translateX(-50%) translateY(20px) scale(0.95);
+  background: var(--glass-b-bg);
+  backdrop-filter: var(--glass-b-blur);
+  -webkit-backdrop-filter: var(--glass-b-blur);
+  border: none;
+  box-shadow: 0 0 0 1px var(--glass-b-border), var(--glass-b-shadow), var(--glass-inset-top);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  z-index: var(--z-batch-bar);
+  transition: transform 0.35s var(--ease-spring), opacity 0.25s ease-out;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.batch-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+}
+.batch-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  pointer-events: none;
+  z-index: 1;
+}
+.batch-bar > * {
+  position: relative;
+  z-index: 2;
+}
+.batch-bar.show {
+  transform: translateX(-50%) translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.batch-bar-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+.batch-bar-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.batch-bar-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+  margin-left: var(--space-3);
+}
+.batch-bar-close:hover {
+  background: rgba(118, 118, 128, 0.12);
+}
+
+/* Onboarding Overlay — Glass overlay */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--glass-overlay-bg);
+  backdrop-filter: var(--glass-overlay-blur);
+  -webkit-backdrop-filter: var(--glass-overlay-blur);
+  z-index: var(--z-onboarding);
+  display: none;
+}
+.onboarding-overlay.show {
+  display: block;
+}
+.onboarding-highlight {
+  position: absolute;
+  outline: 3px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 8px rgba(0, 122, 255, 0.15);
+  pointer-events: none;
+  transition: all 0.3s var(--ease-standard);
+  z-index: 1;
+  background: transparent;
+  overflow: hidden;
+}
+.onboarding-tooltip {
+  position: absolute;
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  max-width: 280px;
+  z-index: calc(var(--z-onboarding) + 1);
+  animation: slideUp 0.25s var(--ease-spring);
+  overflow: hidden;
+}
+.onboarding-tooltip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+.onboarding-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  pointer-events: none;
+  z-index: 0;
+}
+.onboarding-tooltip > * {
+  position: relative;
+  z-index: 1;
+}
+.onboarding-tooltip h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 var(--space-2) 0;
+  color: var(--text);
+}
+.onboarding-tooltip p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+  line-height: 1.5;
+}
+.onboarding-tooltip-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+.onboarding-progress {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-bottom: var(--space-4);
+}
+.onboarding-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background var(--transition-fast);
+}
+.onboarding-progress-dot.active {
+  background: var(--primary);
+}
+
+/* Citation Dropdown — Elevated 层玻璃 */
+.citation-dropdown {
+  position: relative;
+  display: inline-block;
+}
+.citation-dropdown-menu {
+  visibility: hidden;
+  opacity: 0;
+  position: fixed;
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  min-width: 140px;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: var(--z-dropdown);
+  transform: translateY(-6px) scale(0.97);
+  transform-origin: top right;
+  transition:
+    opacity 0.18s var(--ease-decelerate),
+    transform 0.22s var(--ease-spring),
+    visibility 0s 0.22s;
+}
+.citation-dropdown-menu::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+.citation-dropdown-menu > * {
+  position: relative;
+  z-index: 1;
+}
+.citation-dropdown-menu.show {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: none;
+  transition:
+    opacity 0.18s var(--ease-decelerate),
+    transform 0.22s var(--ease-spring),
+    visibility 0s 0s;
+}
+.citation-dropdown-item {
+  padding: var(--space-3) var(--space-5);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.citation-dropdown-item:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.citation-dropdown-item:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .history-dropdown {
+    width: calc(100% - var(--space-10));
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* Source Health Panel — Elevated 层玻璃 */
+.health-panel {
+  position: absolute;
+  top: 100%;
+  right: var(--space-4);
+  z-index: 100;
+  width: 380px;
+  max-height: 400px;
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl), var(--glass-e-shadow);
+  overflow: hidden;
+  animation: slideDown 0.2s var(--ease-spring);
+}
+.health-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.health-panel > * {
+  position: relative;
+  z-index: 1;
+}
+.health-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.health-panel-content {
+  padding: var(--space-3);
+  max-height: 300px;
+  overflow-y: auto;
+}
+.health-panel-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+.source-health-dot {
+  transition: background 0.2s;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .health-panel {
+    width: min(380px, calc(100vw - var(--space-10)));
+  }
+  .batch-bar {
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+    left: var(--space-3);
+    right: var(--space-3);
+    transform: translateY(20px) scale(0.95);
+  }
+  .batch-bar.show {
+    transform: translateY(0) scale(1);
+  }
+  .batch-bar-actions {
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  .citation-dropdown-menu {
+    bottom: 100%;
+    top: auto;
+    right: 0;
+  }
+}
+@media (max-width: 480px) {
+  .batch-bar {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    left: var(--space-2);
+    right: var(--space-2);
+    width: auto;
+  }
+  .batch-bar-actions {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    padding-bottom: var(--space-1);
+  }
+  .batch-bar-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .batch-bar-close {
+    position: absolute;
+    top: var(--space-2);
+    right: var(--space-2);
+  }
+  .history-item {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .history-item .ht {
+    white-space: normal;
+    margin-left: 0;
+    font-size: 10px;
+  }
+}
+
+/* 刷新按钮旋转动画 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.btn.spinning {
+  animation: spin 0.6s linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
+}

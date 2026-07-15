@@ -1,0 +1,439 @@
+/* Paper Cards — Suppressed 层玻璃 + contain 性能优化 */
+.paper-card {
+  background: var(--glass-s-bg);
+  backdrop-filter: var(--glass-s-blur);
+  -webkit-backdrop-filter: var(--glass-s-blur);
+  border: 1px solid var(--glass-s-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--glass-s-shadow), var(--glass-inset-top);
+  contain: layout style;
+  transition:
+    box-shadow 0.25s var(--ease-decelerate),
+    border-color 0.2s var(--ease-standard),
+    background 0.2s var(--ease-standard),
+    transform 0.25s var(--ease-spring);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  /* Stagger animation for search results */
+  opacity: 0;
+  transform: translateY(12px);
+  animation: cardStaggerIn 0.35s var(--ease-standard) forwards;
+  animation-delay: var(--stagger-delay, 0ms);
+}
+.paper-card:hover {
+  box-shadow: var(--glass-b-shadow), var(--glass-inset-top);
+  border-color: rgba(0, 122, 255, 0.2);
+  transform: translateY(-2px);
+}
+.paper-card:active {
+  transform: translateY(0) scale(0.99);
+  transition-duration: 0.08s;
+}
+.paper-card.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px rgba(0,122,255,0.15);
+}
+.paper-checkbox {
+  margin-top: var(--space-2);
+  accent-color: var(--primary);
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+.paper-content {
+  flex: 1;
+  min-width: 0;
+}
+.paper-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.4;
+  /* Apple HIG: 2-3 line title clamp */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.paper-title:hover {
+  color: var(--primary);
+}
+.paper-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.paper-meta .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.paper-meta .badge {
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+}
+.paper-meta .badge-green {
+  background: rgba(52,199,89,0.12);
+  color: var(--success);
+}
+.paper-abstract {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  /* Smooth expand/collapse */
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s var(--ease-standard), opacity 0.25s ease-out, margin-top 0.3s ease;
+}
+.paper-abstract.show {
+  max-height: 500px;
+  opacity: 1;
+  margin-top: var(--space-3);
+}
+.paper-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  flex-wrap: wrap;
+}
+.page-numbers {
+  display: flex;
+  gap: var(--space-2);
+}
+.page-num {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+.page-num:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.page-num.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.page-num.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.page-info {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-left: var(--space-3);
+}
+
+/* Status Bar — Base 层玻璃，底部元素仅上边框 */
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--glass-b-bg);
+  backdrop-filter: var(--glass-b-blur);
+  -webkit-backdrop-filter: var(--glass-b-blur);
+  border-top: 1px solid var(--glass-b-border);
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.06), var(--glass-inset-top);
+  padding: var(--space-3) var(--space-7);
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  z-index: var(--z-overlay);
+  contain: layout style;
+}
+.status-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  z-index: 1;
+}
+.status-bar > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px var(--space-6);
+  color: var(--text-secondary);
+}
+.empty-state .icon {
+  font-size: 48px;
+  margin-bottom: var(--space-4);
+}
+.empty-state p {
+  font-size: 14px;
+}
+
+/* Sort button */
+.sort-btn {
+  cursor: pointer;
+  user-select: none;
+}
+.sort-btn:hover {
+  color: var(--primary);
+}
+.sort-btn.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Suggestion chips */
+.suggest-chip {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.suggest-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+.suggest-chip:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Data source color bars (using tokens) */
+.paper-card[data-source="PubMed"] { border-left: 3px solid var(--color-pubmed); }
+.paper-card[data-source="OpenAlex"] { border-left: 3px solid var(--color-openalex); }
+.paper-card[data-source="Semantic Scholar"] { border-left: 3px solid var(--color-semantic); }
+.paper-card[data-source="CrossRef"] { border-left: 3px solid var(--color-crossref); }
+.paper-card[data-source="arXiv"] { border-left: 3px solid var(--color-arxiv); }
+.paper-card[data-source="ScienceDirect"] { border-left: 3px solid var(--color-science-direct); }
+.paper-card[data-source="Scopus"] { border-left: 3px solid var(--color-scopus); }
+.paper-card[data-source="JSTOR"] { border-left: 3px solid var(--color-jstor); }
+
+/* DOI link */
+.paper-meta .doi-link {
+  color: var(--primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.paper-meta .doi-link:hover {
+  text-decoration: underline;
+}
+
+/* Paper Checkbox */
+.paper-card .paper-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+/* Patent card styling */
+.paper-card[data-doctype="patent"] {
+  border-left: 3px solid #f59e0b;
+}
+.paper-card[data-doctype="patent"] .paper-title .badge-orange {
+  background-color: #f59e0b;
+  color: white;
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .status-bar {
+    padding: var(--space-2) var(--space-4);
+    font-size: 11px;
+  }
+  .status-bar #dataSourceText {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .paper-card {
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+  }
+  .paper-title {
+    font-size: 14px;
+    -webkit-line-clamp: 3;
+  }
+  .paper-actions {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .paper-meta {
+    font-size: 11px;
+    gap: var(--space-2) var(--space-3);
+  }
+  .paper-meta .doi-link {
+    word-break: break-all;
+  }
+}
+@media (max-width: 480px) {
+  .paper-card {
+    padding: var(--space-3);
+    gap: var(--space-2);
+    position: relative;
+  }
+  .paper-title {
+    font-size: 13px;
+  }
+  .paper-actions {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    flex-direction: row;
+  }
+  .paper-checkbox {
+    margin-right: calc(28px + var(--space-2));
+  }
+  /* 防止内容与绝对定位的操作按钮重叠 */
+  .paper-content {
+    padding-right: calc(28px + var(--space-4));
+  }
+  .status-bar {
+    padding: var(--space-2) var(--space-3);
+    font-size: 10px;
+    gap: var(--space-2);
+  }
+  .status-bar #dataSourceText {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .status-bar a {
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+  }
+}
+
+/* Skeleton Loading Cards */
+.skeleton-card {
+  background: var(--glass-s-bg);
+  border: 1px solid var(--glass-s-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-xs);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  opacity: 0;
+  animation: skeletonFadeIn 0.3s var(--ease-decelerate) forwards;
+  animation-delay: var(--stagger-delay, 0ms);
+}
+.skeleton-bone {
+  background: linear-gradient(
+    90deg,
+    var(--border) 0%,
+    var(--skeleton-shimmer) 40%,
+    var(--border) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite var(--ease-standard);
+  border-radius: var(--radius-sm);
+}
+.skeleton-checkbox {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: var(--space-2);
+}
+.skeleton-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.skeleton-title {
+  height: 18px;
+  width: 70%;
+  border-radius: 4px;
+}
+.skeleton-title-short {
+  height: 18px;
+  width: 45%;
+  border-radius: 4px;
+}
+.skeleton-meta {
+  height: 12px;
+  width: 55%;
+  border-radius: 4px;
+}
+.skeleton-meta-short {
+  height: 12px;
+  width: 35%;
+  border-radius: 4px;
+}
+.skeleton-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  align-self: center;
+}
+.skeleton-action {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 768px) {
+  .skeleton-card {
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+  }
+  .skeleton-actions {
+    flex-direction: column;
+  }
+}

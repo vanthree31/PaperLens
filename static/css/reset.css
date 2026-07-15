@@ -1,0 +1,552 @@
+/* === Apple Liquid Glass — 三层设计 Token 体系 === */
+/* Light theme (default) */
+:root,
+[data-theme="light"] {
+  /* === Color System === */
+  --primary: #007AFF;
+  --primary-hover: #0056CC;
+  --primary-light: rgba(0, 122, 255, 0.08);
+  --bg: #F2F2F7;
+  --bg-elevated: #FFFFFF;
+  --bg-gradient: radial-gradient(ellipse at 20% 20%, rgba(0,122,255,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 60%, rgba(175,82,222,0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 40% 80%, rgba(255,149,0,0.04) 0%, transparent 50%);
+  --border: rgba(60, 60, 67, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.18);
+  --text: #1C1C1E;
+  --text-secondary: #636366;
+  --text-tertiary: #8E8E93;
+  --separator: rgba(60, 60, 67, 0.12);
+  --success: #34C759;
+  --danger: #FF3B30;
+  --warning: #FF9500;
+
+  /* Source accent colors */
+  --color-pubmed: #007AFF;
+  --color-openalex: #34C759;
+  --color-semantic: #FF9500;
+  --color-crossref: #AF52DE;
+  --color-arxiv: #FF3B30;
+  --color-science-direct: #5856D6;
+  --color-scopus: #FF2D55;
+  --color-jstor: #64D2FF;
+  --color-ollama: #1B7A3D;
+  --color-code-bg: rgba(118, 118, 128, 0.08);
+
+  /* === Corner Radius — Apple 4-tier system === */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* === Spacing — 8pt grid system === */
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --space-7: 24px;
+  --space-8: 28px;
+  --space-10: 32px;
+  --space-12: 40px;
+
+  /* === Shadows — elevation system === */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 2px 8px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.08);
+
+  /* === Animation Curves — Apple standard + spring === */
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-fast: 0.15s var(--ease-standard);
+  --transition-normal: 0.25s var(--ease-standard);
+  --transition-slow: 0.35s var(--ease-standard);
+
+  /* === Liquid Glass — 3-tier hierarchy (Apple HIG 2025) === */
+  /* Tier 1: Elevated — modals, sheets, floating surfaces */
+  --glass-e-bg: rgba(255, 255, 255, 0.82);
+  --glass-e-blur: saturate(180%) blur(20px);
+  --glass-e-border: rgba(255, 255, 255, 0.25);
+  --glass-e-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+
+  /* Tier 2: Base — nav bars, search bars, toolbars */
+  --glass-b-bg: rgba(255, 255, 255, 0.75);
+  --glass-b-blur: saturate(160%) blur(16px);
+  --glass-b-border: rgba(255, 255, 255, 0.18);
+  --glass-b-shadow: var(--shadow-md);
+
+  /* Tier 3: Suppressed — list items, badges, tags */
+  --glass-s-bg: rgba(255, 255, 255, 0.65);
+  --glass-s-blur: saturate(140%) blur(12px);
+  --glass-s-border: rgba(255, 255, 255, 0.15);
+  --glass-s-shadow: var(--shadow-sm);
+
+  /* Glass overlay */
+  --glass-overlay-bg: rgba(0, 0, 0, 0.25);
+  --glass-overlay-blur: blur(8px) saturate(150%);
+
+  /* Glass overlay effects — Light mode: stronger highlight for visibility */
+  --glass-highlight: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.40) 0%,
+    rgba(255, 255, 255, 0.12) 25%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  --glass-shadow-overlay: linear-gradient(
+    325deg,
+    rgba(0, 0, 0, 0.06) 0%,
+    rgba(0, 0, 0, 0.02) 30%,
+    rgba(0, 0, 0, 0) 60%
+  );
+  --glass-refraction: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.30) 0%,
+    rgba(255, 255, 255, 0.08) 1%,
+    rgba(255, 255, 255, 0) 2.5%
+  );
+  --glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.50);
+
+  /* === Z-index layers === */
+  --z-overlay: 100;
+  --z-batch-bar: 150;
+  --z-dropdown: 200;
+  --z-panel: 250;
+  --z-modal: 300;
+  --z-toast: 400;
+  --z-onboarding: 1000;
+  --z-tag-manager: 1100;
+
+  /* === Layout heights === */
+  --header-height: 56px;
+  --status-bar-height: 36px;
+
+  /* === Graph body dark mode variables === */
+  --graph-body-bg-start: #f8f9fb;
+  --graph-body-bg-end: #f2f3f5;
+  --graph-header-bg: rgba(255, 255, 255, 0.28);
+  --graph-header-border: rgba(60, 60, 67, 0.08);
+  --graph-toolbar-bg: rgba(242, 242, 247, 0.32);
+  --graph-toolbar-border: rgba(60, 60, 67, 0.08);
+  --graph-toolbar-divider: rgba(60, 60, 67, 0.12);
+  --graph-legend-bg: rgba(255, 255, 255, 0.72);
+  --graph-legend-border: rgba(255, 255, 255, 0.20);
+  --graph-legend-title-border: rgba(60, 60, 67, 0.08);
+  --graph-legend-item-hover: rgba(0, 0, 0, 0.04);
+  --graph-ai-btn-color: #7c3aed;
+  --graph-dot-grid: rgba(0, 0, 0, 0.06);
+  --graph-ai-border: rgba(60, 60, 67, 0.08);
+  --history-item-border: rgba(255, 255, 255, 0.2);
+  --ollama-guide-bg: rgba(52, 199, 89, 0.08);
+  --ollama-guide-border: rgba(52, 199, 89, 0.2);
+  --ollama-guide-code-bg: rgba(52, 199, 89, 0.15);
+
+  /* === Skeleton shimmer === */
+  --skeleton-shimmer: rgba(60, 60, 67, 0.06);
+
+  /* === Primary opacity ladder === */
+  --primary-opacity-3:  rgba(0, 122, 255, 0.03);
+  --primary-opacity-8:  rgba(0, 122, 255, 0.08);
+  --primary-opacity-10: rgba(0, 122, 255, 0.10);
+  --primary-opacity-12: rgba(0, 122, 255, 0.12);
+  --primary-opacity-15: rgba(0, 122, 255, 0.15);
+  --primary-opacity-20: rgba(0, 122, 255, 0.20);
+  --primary-opacity-25: rgba(0, 122, 255, 0.25);
+  --primary-opacity-30: rgba(0, 122, 255, 0.30);
+  --primary-light: var(--primary-opacity-8);
+
+  /* === Suggestion type colors === */
+  --suggestion-doi-color:      #2563eb;
+  --suggestion-chinese-color:  #f59e0b;
+  --suggestion-simplify-color: #10b981;
+  --suggestion-author-color:   #8b5cf6;
+  --suggestion-typo-color:     #ef4444;
+
+  /* === Semantic glass tokens for graph components === */
+  --glass-header-blur: blur(8px) saturate(140%);
+  --glass-toolbar-blur: var(--glass-b-blur);
+  --glass-legend-blur: var(--glass-b-blur);
+  --glass-zoom-hud-blur: blur(12px) saturate(160%);
+  --graph-overlay-blur: blur(20px) saturate(180%);
+
+  /* === Form element variables (replaces !important) === */
+  --form-bg: var(--bg-elevated);
+  --form-color: var(--text);
+  --form-border: var(--border);
+  --form-placeholder: var(--text-tertiary);
+}
+
+/* === Dark Mode === */
+/* Auto mode: follows system preference */
+[data-theme="auto"] {
+  /* Applied via JS: toggles between light/dark based on prefers-color-scheme */
+}
+
+/* Explicit dark theme */
+[data-theme="dark"] {
+  --bg: #1C1C1E;
+  --bg-elevated: #2C2C2E;
+  --bg-gradient: radial-gradient(ellipse at 20% 20%, rgba(0,122,255,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(175,82,222,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(255,149,0,0.05) 0%, transparent 50%);
+  --border: rgba(255, 255, 255, 0.28);
+  --border-subtle: rgba(255, 255, 255, 0.18);
+  --text: #FFFFFF;
+  --text-secondary: #C8C8CC;
+  --text-tertiary: #B0B0B5;
+  --separator: rgba(255, 255, 255, 0.12);
+  --glass-e-bg: rgba(44, 44, 46, 0.82);
+  --glass-b-bg: rgba(44, 44, 46, 0.75);
+  --glass-s-bg: rgba(44, 44, 46, 0.65);
+  --glass-e-blur: saturate(180%) blur(20px);
+  --glass-b-blur: saturate(160%) blur(16px);
+  --glass-s-blur: saturate(140%) blur(12px);
+  --glass-e-border: rgba(255, 255, 255, 0.20);
+  --glass-b-border: rgba(255, 255, 255, 0.16);
+  --glass-s-border: rgba(255, 255, 255, 0.12);
+  --glass-e-shadow: 0 8px 32px rgba(0,0,0,0.32), 0 0 0 0.5px rgba(255,255,255,0.08);
+  --glass-b-shadow: 0 4px 16px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(255,255,255,0.06);
+  --glass-s-shadow: 0 1px 3px rgba(0,0,0,0.16), 0 0 0 0.5px rgba(255,255,255,0.04);
+  --glass-overlay-bg: rgba(0, 0, 0, 0.45);
+  --glass-overlay-blur: blur(8px) saturate(150%);
+  --glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --glass-highlight: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0) 50%
+  );
+  --glass-shadow-overlay: linear-gradient(
+    325deg,
+    rgba(0, 0, 0, 0.20) 0%,
+    rgba(0, 0, 0, 0.08) 30%,
+    rgba(0, 0, 0, 0) 60%
+  );
+  --glass-header-blur: blur(8px) saturate(140%);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.12);
+  --shadow: 0 2px 8px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.10);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.24), 0 1px 4px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.16);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.40), 0 4px 16px rgba(0,0,0,0.20);
+  --primary-light: rgba(0, 122, 255, 0.20);
+  --color-code-bg: rgba(118, 118, 128, 0.35);
+  --skeleton-shimmer: rgba(255, 255, 255, 0.06);
+  /* Graph dark mode */
+  --graph-body-bg-start: #2C2C2E;
+  --graph-body-bg-end: #1C1C1E;
+  --graph-header-bg: rgba(44, 44, 46, 0.55);
+  --graph-header-border: rgba(255, 255, 255, 0.08);
+  --graph-toolbar-bg: rgba(44, 44, 46, 0.55);
+  --graph-toolbar-border: rgba(255, 255, 255, 0.08);
+  --graph-toolbar-divider: rgba(255, 255, 255, 0.12);
+  --graph-legend-bg: rgba(44, 44, 46, 0.75);
+  --graph-legend-border: rgba(255, 255, 255, 0.12);
+  --graph-legend-title-border: rgba(255, 255, 255, 0.08);
+  --graph-legend-item-hover: rgba(255, 255, 255, 0.06);
+  --graph-ai-btn-color: #a78bfa;
+  --graph-dot-grid: rgba(255, 255, 255, 0.06);
+  --graph-ai-border: rgba(255, 255, 255, 0.08);
+  --history-item-border: rgba(255, 255, 255, 0.08);
+  --ollama-guide-bg: rgba(52, 199, 89, 0.12);
+  --ollama-guide-border: rgba(52, 199, 89, 0.25);
+  --ollama-guide-code-bg: rgba(52, 199, 89, 0.20);
+
+  /* === Skeleton shimmer dark === */
+  --skeleton-shimmer: rgba(255, 255, 255, 0.06);
+
+  /* === Primary opacity ladder dark === */
+  --primary-opacity-3:  rgba(0, 122, 255, 0.06);
+  --primary-opacity-8:  rgba(0, 122, 255, 0.15);
+  --primary-opacity-10: rgba(0, 122, 255, 0.18);
+  --primary-opacity-12: rgba(0, 122, 255, 0.20);
+  --primary-opacity-15: rgba(0, 122, 255, 0.22);
+  --primary-opacity-20: rgba(0, 122, 255, 0.28);
+  --primary-opacity-25: rgba(0, 122, 255, 0.32);
+  --primary-opacity-30: rgba(0, 122, 255, 0.36);
+  --primary-light: var(--primary-opacity-15);
+
+  /* === Suggestion type colors dark === */
+  --suggestion-doi-color:      #60a5fa;
+  --suggestion-chinese-color:  #fbbf24;
+  --suggestion-simplify-color: #34d399;
+  --suggestion-author-color:   #a78bfa;
+  --suggestion-typo-color:     #f87171;
+
+  /* === Form element variables dark === */
+  --form-bg: #3A3A3C;
+  --form-color: #FFFFFF;
+  --form-border: rgba(255, 255, 255, 0.28);
+  --form-placeholder: rgba(255, 255, 255, 0.4);
+}
+
+/* Auto mode dark variant (when system prefers dark) */
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] {
+    --bg: #1C1C1E;
+    --bg-elevated: #2C2C2E;
+    --bg-gradient: radial-gradient(ellipse at 20% 20%, rgba(0,122,255,0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse at 80% 50%, rgba(175,82,222,0.06) 0%, transparent 50%),
+                  radial-gradient(ellipse at 50% 80%, rgba(255,149,0,0.05) 0%, transparent 50%);
+    --border: rgba(255, 255, 255, 0.28);
+    --border-subtle: rgba(255, 255, 255, 0.18);
+    --text: #FFFFFF;
+    --text-secondary: #C8C8CC;
+    --text-tertiary: #B0B0B5;
+    --separator: rgba(255, 255, 255, 0.12);
+    --glass-e-bg: rgba(44, 44, 46, 0.82);
+    --glass-b-bg: rgba(44, 44, 46, 0.75);
+    --glass-s-bg: rgba(44, 44, 46, 0.65);
+    --glass-e-blur: saturate(180%) blur(20px);
+    --glass-b-blur: saturate(160%) blur(16px);
+    --glass-s-blur: saturate(140%) blur(12px);
+    --glass-e-border: rgba(255, 255, 255, 0.20);
+    --glass-b-border: rgba(255, 255, 255, 0.16);
+    --glass-s-border: rgba(255, 255, 255, 0.12);
+    --glass-e-shadow: 0 8px 32px rgba(0,0,0,0.32), 0 0 0 0.5px rgba(255,255,255,0.08);
+    --glass-b-shadow: 0 4px 16px rgba(0,0,0,0.20), 0 0 0 0.5px rgba(255,255,255,0.06);
+    --glass-s-shadow: 0 1px 3px rgba(0,0,0,0.16), 0 0 0 0.5px rgba(255,255,255,0.04);
+    --glass-overlay-bg: rgba(0, 0, 0, 0.45);
+    --glass-overlay-blur: blur(8px) saturate(150%);
+    --glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    --glass-highlight: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(255, 255, 255, 0.04) 25%,
+      rgba(255, 255, 255, 0) 50%
+    );
+    --glass-shadow-overlay: linear-gradient(
+      325deg,
+      rgba(0, 0, 0, 0.20) 0%,
+      rgba(0, 0, 0, 0.08) 30%,
+      rgba(0, 0, 0, 0) 60%
+    );
+    --glass-header-blur: blur(8px) saturate(140%);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.12);
+    --shadow: 0 2px 8px rgba(0,0,0,0.20), 0 1px 3px rgba(0,0,0,0.10);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.24), 0 1px 4px rgba(0,0,0,0.12);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.16);
+    --shadow-xl: 0 16px 48px rgba(0,0,0,0.40), 0 4px 16px rgba(0,0,0,0.20);
+    --primary-light: rgba(0, 122, 255, 0.15);
+    --color-code-bg: rgba(118, 118, 128, 0.35);
+    --skeleton-shimmer: rgba(255, 255, 255, 0.06);
+    /* Graph dark mode */
+    --graph-body-bg-start: #2C2C2E;
+    --graph-body-bg-end: #1C1C1E;
+    --graph-header-bg: rgba(44, 44, 46, 0.55);
+    --graph-header-border: rgba(255, 255, 255, 0.08);
+    --graph-toolbar-bg: rgba(44, 44, 46, 0.55);
+    --graph-toolbar-border: rgba(255, 255, 255, 0.08);
+    --graph-toolbar-divider: rgba(255, 255, 255, 0.12);
+    --graph-legend-bg: rgba(44, 44, 46, 0.75);
+    --graph-legend-border: rgba(255, 255, 255, 0.12);
+    --graph-legend-title-border: rgba(255, 255, 255, 0.08);
+    --graph-legend-item-hover: rgba(255, 255, 255, 0.06);
+    --graph-ai-btn-color: #a78bfa;
+    --graph-dot-grid: rgba(255, 255, 255, 0.06);
+    --graph-ai-border: rgba(255, 255, 255, 0.08);
+    --history-item-border: rgba(255, 255, 255, 0.08);
+    --ollama-guide-bg: rgba(52, 199, 89, 0.12);
+    --ollama-guide-border: rgba(52, 199, 89, 0.25);
+    --ollama-guide-code-bg: rgba(52, 199, 89, 0.20);
+    /* Primary opacity ladder */
+    --primary-opacity-3:  rgba(0, 122, 255, 0.06);
+    --primary-opacity-8:  rgba(0, 122, 255, 0.15);
+    --primary-opacity-10: rgba(0, 122, 255, 0.18);
+    --primary-opacity-12: rgba(0, 122, 255, 0.20);
+    --primary-opacity-15: rgba(0, 122, 255, 0.22);
+    --primary-opacity-20: rgba(0, 122, 255, 0.28);
+    --primary-opacity-25: rgba(0, 122, 255, 0.32);
+    --primary-opacity-30: rgba(0, 122, 255, 0.36);
+    /* Suggestion type colors dark */
+    --suggestion-doi-color:      #60a5fa;
+    --suggestion-chinese-color:  #fbbf24;
+    --suggestion-simplify-color: #34d399;
+    --suggestion-author-color:   #a78bfa;
+    --suggestion-typo-color:     #f87171;
+    /* Form element variables dark */
+    --form-bg: #3A3A3C;
+    --form-color: #FFFFFF;
+    --form-border: rgba(255, 255, 255, 0.28);
+    --form-placeholder: rgba(255, 255, 255, 0.4);
+  }
+}
+
+/* === Prefers Reduced Motion === */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .paper-card {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  .settings-panel, .collections-panel, .graph-overlay, .modal-overlay {
+    transition: none !important;
+  }
+  .graph-node:hover {
+    transform: none;
+  }
+}
+
+/* === Global Reset === */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Microsoft YaHei", sans-serif;
+  background: var(--bg-gradient), var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  line-height: 1.5;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* === Anchor offset — prevent sticky header occlusion === */
+:target {
+  scroll-margin-top: calc(var(--header-height, 56px) + var(--space-5, 16px));
+}
+
+/* === Responsive Breakpoint Documentation === */
+/*
+  Apple HIG breakpoint alignment:
+  --bp-sm: 480px   (iPhone landscape / small phone)
+  --bp-md: 768px   (iPad portrait / tablet)
+  --bp-lg: 1024px  (iPad landscape / compact desktop) — new
+  --bp-xl: 1200px  (Desktop) — default
+
+  CSS @media does not support var(), these are documentation only.
+  To adjust breakpoints, global search-and-replace the px values across all CSS files.
+*/
+
+/* === Global Focus-Visible === */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none;
+}
+
+/* === Shared Glass Utility (DRY) === */
+.glass-surface {
+  position: relative;
+  overflow: hidden;
+}
+.glass-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+}
+.glass-surface::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  pointer-events: none;
+  z-index: 1;
+}
+.glass-surface > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* === Shared Animations === */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes glassAppear {
+  from { opacity: 0; transform: scale(0.98) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes modalAppear {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cardStaggerIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes checkPop {
+  0% { transform: scale(0.6); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes ai-dot-pulse {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+@keyframes ai-dot-bounce {
+  0%, 100% { transform: translateY(0) scale(0.7); opacity: 0.4; }
+  40%  { transform: translateY(-6px) scale(1.1); opacity: 1; }
+  70%  { transform: translateY(0) scale(0.9); opacity: 0.7; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+@keyframes modalDisappear {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.92); }
+}
+@keyframes skeletonFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+/* Form controls — CSS variables replace !important (inline with theme system) */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+select,
+textarea,
+.tag-search,
+.tag-quick-create {
+  background: var(--form-bg);
+  color: var(--form-color);
+  border-color: var(--form-border);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--form-placeholder);
+}
+select option {
+  background: var(--bg-elevated);
+  color: var(--text);
+}

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PaperLens DOI Lookup</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 头部 -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon">🔬</span>
+        <h1>PaperLens</h1>
+      </div>
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-dot"></span>
+        <span class="status-text">检测中...</span>
+      </div>
+    </header>
+
+    <!-- DOI 列表 -->
+    <section class="dois-section" id="doisSection">
+      <h2>检测到的 DOI</h2>
+      <div class="dois-list" id="doisList">
+        <div class="loading">正在检测页面 DOI...</div>
+      </div>
+    </section>
+
+    <!-- 论文详情 -->
+    <section class="paper-section" id="paperSection" style="display: none;">
+      <div class="paper-header">
+        <h2 class="paper-title" id="paperTitle"></h2>
+        <div class="paper-meta">
+          <span class="paper-authors" id="paperAuthors"></span>
+          <span class="paper-journal" id="paperJournal"></span>
+          <span class="paper-year" id="paperYear"></span>
+        </div>
+      </div>
+
+      <div class="paper-stats">
+        <div class="stat">
+          <span class="stat-label">被引</span>
+          <span class="stat-value" id="paperCitations">-</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">DOI</span>
+          <span class="stat-value doi-value" id="paperDoi">-</span>
+        </div>
+      </div>
+
+      <div class="paper-abstract" id="paperAbstract"></div>
+
+      <div class="paper-actions">
+        <button class="btn btn-primary" id="btnCollect" disabled>
+          <span class="btn-icon">⭐</span>
+          <span class="btn-text">收藏到 PaperLens</span>
+        </button>
+        <button class="btn btn-outline" id="btnZotero" disabled>
+          <span class="btn-icon">📤</span>
+          <span class="btn-text">同步到 Zotero</span>
+        </button>
+        <a class="btn btn-outline" id="btnOpenOa" href="#" target="_blank" style="display: none;">
+          <span class="btn-icon">📄</span>
+          <span class="btn-text">获取全文</span>
+        </a>
+      </div>
+
+      <div class="paper-keywords" id="paperKeywords"></div>
+    </section>
+
+    <!-- 状态消息 -->
+    <div class="message" id="message" style="display: none;"></div>
+
+    <!-- 空状态 -->
+    <div class="empty-state" id="emptyState" style="display: none;">
+      <span class="empty-icon">📭</span>
+      <p>当前页面未检测到 DOI</p>
+      <p class="empty-hint">请访问学术论文页面（如 PubMed、Google Scholar）</p>
+    </div>
+
+    <!-- 错误状态 -->
+    <div class="error-state" id="errorState" style="display: none;">
+      <span class="error-icon">⚠️</span>
+      <p class="error-message" id="errorMessage"></p>
+      <button class="btn btn-outline" id="btnRetry">重试</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

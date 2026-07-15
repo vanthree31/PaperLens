@@ -1,0 +1,853 @@
+/* === Citation Graph — iOS Liquid Glass Style === */
+
+/* Graph Overlay — Glass overlay */
+.graph-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--glass-overlay-bg);
+  backdrop-filter: var(--glass-overlay-blur);
+  -webkit-backdrop-filter: var(--glass-overlay-blur);
+  z-index: var(--z-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.35s var(--ease-decelerate);
+}
+.graph-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.graph-overlay.hiding {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Graph Panel — Elevated 层玻璃 + 高光/折射 */
+.graph-panel {
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-lg);
+  width: 90vw;
+  height: 85vh;
+  max-width: 1200px;
+  display: flex;
+  animation: glassPanelAppear 0.4s var(--ease-spring) both;
+  flex-direction: column;
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  position: relative;
+  overflow: hidden;
+  contain: layout style paint;
+  transition:
+    width 0.3s var(--ease-standard),
+    height 0.3s var(--ease-standard),
+    max-width 0.3s var(--ease-standard),
+    border-radius 0.3s var(--ease-standard),
+    box-shadow 0.3s var(--ease-standard);
+}
+.graph-panel.hiding {
+  animation: glassPanelDisappear 0.25s var(--ease-accelerate) forwards;
+}
+/* 高光层 — 145° 渐变 */
+.graph-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+/* 折射边缘 — 顶部 1px 光线 */
+.graph-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.graph-panel > * {
+  position: relative;
+  z-index: 1;
+}
+.graph-panel.fullscreen {
+  width: 100vw !important;
+  height: calc(100vh - var(--status-bar-height, 36px)) !important;
+  max-width: 100vw !important;
+  border-radius: 0;
+}
+.graph-panel.fullscreen::before,
+.graph-panel.fullscreen::after {
+  border-radius: 0;
+}
+
+/* Graph Header — Base tier glass */
+.graph-header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--graph-header-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--graph-header-bg);
+  backdrop-filter: var(--glass-b-blur);
+  -webkit-backdrop-filter: var(--glass-b-blur);
+  flex-shrink: 0;
+}
+.graph-header h3 {
+  font-size: 15px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.graph-header .graph-header-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: var(--space-5);
+}
+/* Icon buttons in graph header */
+.graph-header .btn-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--glass-s-bg);
+  backdrop-filter: var(--glass-s-blur);
+  -webkit-backdrop-filter: var(--glass-s-blur);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s var(--ease-standard), color 0.15s var(--ease-standard), transform 0.1s var(--ease-standard);
+  flex-shrink: 0;
+}
+.graph-header .btn-icon:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.graph-header .btn-icon:active {
+  transform: scale(0.93);
+}
+.graph-header .btn-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+}
+
+/* Graph Body — 增强背景 + 节点/连线样式 */
+.graph-body {
+  flex: 1;
+  position: relative;
+  user-select: none;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(0, 122, 255, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 30% 70%, rgba(52, 199, 89, 0.025) 0%, transparent 50%),
+    linear-gradient(180deg, var(--graph-body-bg-start) 0%, var(--graph-body-bg-end) 100%);
+  overflow: hidden;
+}
+/* Dot grid background — Apple Freeform style */
+.graph-body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, var(--graph-dot-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+}
+/* Dark mode dot grid lighter */
+[data-theme="dark"] .graph-body::before {
+  opacity: 0.3;
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .graph-body::before {
+    opacity: 0.3;
+  }
+}
+/* Graph loading shimmer */
+.graph-body .graph-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+}
+.graph-body .graph-loading-shimmer {
+  width: 200px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-code-bg);
+  overflow: hidden;
+  position: relative;
+}
+.graph-body .graph-loading-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--primary-light) 40%,
+    transparent 60%
+  );
+  animation: shimmer 1.5s infinite;
+}
+.graph-body svg {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+}
+.graph-body svg text {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Microsoft YaHei", sans-serif;
+}
+
+/* SVG Node styles — iOS Liquid Glass */
+/* 注意：不能用 CSS transform，会与 D3 的 SVG transform attribute 冲突导致颤抖 */
+.graph-node {
+  cursor: grab;
+  transition: filter 0.25s var(--ease-standard);
+  will-change: filter;
+}
+.graph-node:active {
+  cursor: grabbing;
+}
+.graph-node:hover {
+  filter: brightness(1.1) drop-shadow(0 6px 20px rgba(0, 0, 0, 0.16));
+}
+.graph-node:hover circle {
+  stroke-width: 3;
+  stroke: rgba(255, 255, 255, 0.95);
+}
+/* 中心节点 — 主色增强 */
+.graph-node.node-center circle {
+  fill: var(--primary, #2563eb);
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3;
+}
+.graph-node.node-center:hover {
+  filter: brightness(1.15) drop-shadow(0 8px 28px rgba(0, 122, 255, 0.35));
+}
+/* Dark mode: node hover glow instead of dark shadow */
+[data-theme="dark"] .graph-node:hover {
+  filter: brightness(1.12) drop-shadow(0 0 16px rgba(255, 255, 255, 0.12));
+}
+[data-theme="dark"] .graph-node.node-center:hover {
+  filter: brightness(1.15) drop-shadow(0 0 24px rgba(0, 122, 255, 0.4));
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .graph-node:hover {
+    filter: brightness(1.12) drop-shadow(0 0 16px rgba(255, 255, 255, 0.12));
+  }
+  [data-theme="auto"] .graph-node.node-center:hover {
+    filter: brightness(1.15) drop-shadow(0 0 24px rgba(0, 122, 255, 0.4));
+  }
+}
+/* Dragging state — enlarge + glow */
+.graph-node.dragging circle {
+  filter: brightness(1.15) drop-shadow(0 8px 24px rgba(0, 122, 255, 0.35));
+  stroke-width: 3;
+  stroke: rgba(255, 255, 255, 0.95);
+  transition: filter 0.2s ease-out, stroke-width 0.2s ease-out;
+}
+/* Release bounce */
+.graph-node.released circle {
+  animation: nodeReleaseBounce 0.4s var(--ease-spring);
+}
+/* Node dim/highlight for hover邻接高亮 */
+.graph-node.dimmed circle {
+  opacity: 0.2;
+}
+.graph-node.dimmed text {
+  opacity: 0.15;
+}
+.graph-link.dimmed {
+  stroke-opacity: 0.08;
+}
+.graph-node.highlighted circle {
+  filter: brightness(1.12) drop-shadow(0 4px 12px rgba(0, 122, 255, 0.25));
+}
+
+/* Label text — paint-order stroke for readability */
+.graph-label-text {
+  paint-order: stroke fill;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 0.2s ease;
+}
+.graph-meta-text {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Links — 半透明渐变 */
+.graph-link {
+  stroke-opacity: 0.35;
+  stroke-linecap: round;
+  cursor: pointer;
+  transition:
+    stroke-opacity 0.2s ease,
+    stroke-width 0.2s ease,
+    filter 0.2s ease;
+}
+.graph-link:hover {
+  stroke-opacity: 0.65;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px rgba(0, 122, 255, 0.3));
+}
+/* Transparent hit area — 扩大连线 hover 响应区域 */
+.graph-link-hitarea {
+  stroke: transparent;
+  stroke-width: 12;
+  stroke-linecap: round;
+  fill: none;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+/* Dark mode: link hover glow */
+[data-theme="dark"] .graph-link:hover {
+  filter: drop-shadow(0 0 8px rgba(0, 122, 255, 0.45));
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .graph-link:hover {
+    filter: drop-shadow(0 0 8px rgba(0, 122, 255, 0.45));
+  }
+}
+
+/* Zoom HUD — iOS style top-left corner */
+.graph-zoom-hud {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: var(--space-2) var(--space-4);
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.25s var(--ease-decelerate), transform 0.25s var(--ease-decelerate);
+  z-index: 20;
+  box-shadow: var(--shadow-md), var(--glass-inset-top);
+}
+.graph-zoom-hud.visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Tooltip card — HTML glass tooltip with spring enter */
+.graph-tooltip {
+  position: absolute;
+  max-width: 320px;
+  min-width: 160px;
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  pointer-events: none;
+  z-index: 30;
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transition: opacity 0.18s var(--ease-decelerate), transform 0.18s var(--ease-spring);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  max-height: 280px;
+}
+.graph-tooltip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+.graph-tooltip > * {
+  position: relative;
+  z-index: 1;
+}
+.graph-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+.graph-tooltip-title {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--space-2);
+  font-size: 13px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.graph-tooltip-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.graph-tooltip-meta .graph-tooltip-citations {
+  color: var(--primary);
+  font-weight: 600;
+}
+.graph-tooltip-meta .graph-tooltip-year {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* Graph Legend — Elevated 层玻璃 + 交互式 */
+.graph-legend {
+  position: absolute;
+  bottom: var(--space-5);
+  left: var(--space-5);
+  background: var(--graph-legend-bg);
+  backdrop-filter: var(--glass-b-blur);
+  -webkit-backdrop-filter: var(--glass-b-blur);
+  border: 1px solid var(--graph-legend-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  font-size: 12px;
+  box-shadow: var(--shadow-md), var(--glass-inset-top);
+  z-index: 10;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+  max-width: calc(100vw - var(--space-10));
+}
+.graph-legend::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+.graph-legend > * {
+  position: relative;
+  z-index: 1;
+}
+.graph-legend div {
+  margin: var(--space-2) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.graph-legend .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+[data-theme="dark"] .graph-legend .dot {
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.graph-legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--graph-legend-title-border);
+}
+.graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin: 2px -6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, opacity 0.2s ease;
+}
+.graph-legend-item:hover {
+  background: var(--graph-legend-item-hover);
+}
+.graph-legend-item:active {
+  transform: scale(0.97);
+}
+.graph-legend-item .dot {
+  flex-shrink: 0;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+}
+.graph-legend-item.hidden .dot {
+  opacity: 0.3;
+  transform: scale(0.8);
+}
+.graph-legend-item.hidden span:last-child {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.graph-legend-footer {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--graph-legend-title-border);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.graph-legend-zoom {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Graph Toolbar — Base tier glass */
+#graphToolbar {
+  display: none;
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--graph-toolbar-border);
+  background: var(--graph-toolbar-bg);
+  backdrop-filter: var(--glass-b-blur);
+  -webkit-backdrop-filter: var(--glass-b-blur);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+  flex-shrink: 0;
+}
+#graphToolbar .btn-sm {
+  font-size: 12px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+#graphToolbar .btn-sm:active {
+  transform: scale(0.94);
+}
+#graphToolbar .graph-toolbar-group {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+#graphToolbar .graph-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--graph-toolbar-divider);
+  margin: 0 var(--space-2);
+  flex-shrink: 0;
+}
+#graphToolbar #graphPaperTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* AI button group — Apple Intelligence gradient */
+#graphToolbar .btn-ai {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(99, 102, 241, 0.12));
+  border-color: rgba(139, 92, 246, 0.25);
+  color: var(--graph-ai-btn-color);
+}
+#graphToolbar .btn-ai:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(99, 102, 241, 0.18));
+  border-color: rgba(139, 92, 246, 0.35);
+}
+/* Export button group */
+#graphToolbar .graph-export-group .btn-outline {
+  font-size: 11px;
+  padding: var(--space-2) var(--space-3);
+}
+
+/* Graph AI Panel (main) */
+#graphAiPanel {
+  display: none;
+  border-top: 1px solid var(--graph-ai-border);
+  background: var(--glass-s-bg);
+  backdrop-filter: var(--glass-s-blur);
+  -webkit-backdrop-filter: var(--glass-s-blur);
+  overflow-y: auto;
+  position: relative;
+  max-height: 280px;
+  transition: max-height 0.3s var(--ease-standard);
+}
+#graphAiPanel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+#graphAiPanel > * {
+  position: relative;
+  z-index: 1;
+}
+#graphAiPanel.fullscreen {
+  max-height: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+#graphAiPanel.fullscreen #graphAiContent {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+/* Float Graph — Elevated 层玻璃 */
+.graph-float {
+  position: fixed;
+  background: var(--glass-e-bg);
+  backdrop-filter: var(--glass-e-blur);
+  -webkit-backdrop-filter: var(--glass-e-blur);
+  border: 1px solid var(--glass-e-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-e-shadow), var(--glass-inset-top);
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  overflow: auto;
+  min-width: min(480px, 100vw);
+  min-height: 360px;
+  max-width: 100vw;
+  max-height: 100vh;
+  transition: box-shadow 0.2s ease;
+  animation: glassAppear 0.3s var(--ease-spring) both;
+}
+.graph-float:hover {
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.14),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    var(--glass-inset-top);
+}
+.graph-float::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+  border-radius: var(--radius-lg);
+}
+.graph-float::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  pointer-events: none;
+  z-index: 1;
+}
+.graph-float > * {
+  position: relative;
+  z-index: 2;
+}
+.graph-float .graph-header {
+  cursor: move;
+  user-select: none;
+  position: relative;
+  z-index: 2;
+}
+.graph-float .graph-header:active {
+  cursor: grabbing;
+}
+.graph-float .graph-body {
+  flex: 1;
+  position: relative;
+}
+.graph-float .graph-ai-panel {
+  display: none;
+  max-height: 250px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  background: var(--glass-s-bg);
+  backdrop-filter: var(--glass-s-blur);
+  -webkit-backdrop-filter: var(--glass-s-blur);
+  position: relative;
+}
+.graph-float .graph-ai-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 0;
+}
+.graph-float .graph-ai-panel > * {
+  position: relative;
+  z-index: 1;
+}
+.graph-float .graph-ai-panel.show {
+  display: block;
+}
+.graph-float .graph-ai-panel .ai-panel-header {
+  padding: var(--space-3) var(--space-4);
+  min-height: 36px;
+}
+.graph-float .graph-ai-panel .ai-title {
+  font-size: 12px;
+}
+.graph-float .graph-ai-panel .ai-badge {
+  padding: 2px var(--space-2);
+  font-size: 10px;
+}
+.graph-float .graph-ai-panel .ai-action-btn {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+.graph-float .graph-ai-panel .ai-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.graph-float .graph-ai-panel .ai-content {
+  padding: var(--space-3) var(--space-4);
+  font-size: 12px;
+  line-height: 1.7;
+}
+/* Float toolbar override */
+.graph-float #graphToolbar {
+  padding: var(--space-2) var(--space-4);
+  gap: var(--space-2);
+}
+
+/* === Responsive === */
+@media (max-width: 768px) {
+  .graph-panel {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+  }
+  .graph-header {
+    padding: var(--space-4) var(--space-5);
+  }
+  .graph-header h3 {
+    font-size: 14px;
+  }
+  #graphToolbar {
+    padding: var(--space-2) var(--space-4);
+    gap: var(--space-2);
+  }
+  #graphToolbar .btn-sm {
+    font-size: 11px;
+    padding: var(--space-2) var(--space-3);
+  }
+  .graph-legend {
+    bottom: var(--space-3);
+    left: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    font-size: 11px;
+    max-width: calc(100vw - var(--space-10));
+  }
+  .graph-float {
+    min-width: calc(100vw - var(--space-10));
+    min-height: 300px;
+  }
+}
+@media (max-width: 480px) {
+  .graph-header .graph-header-actions {
+    gap: var(--space-2);
+  }
+  #graphToolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  #graphToolbar .graph-toolbar-divider {
+    width: 100%;
+    height: 1px;
+    margin: var(--space-2) 0;
+  }
+}
+
+/* === Dark mode: label stroke for readability === */
+[data-theme="dark"] .graph-label-text {
+  stroke: rgba(30, 30, 30, 0.85);
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .graph-label-text {
+    stroke: rgba(30, 30, 30, 0.85);
+  }
+}
+
+/* === Keyframe Animations — iOS Liquid Glass === */
+
+/* 面板出现 — spring 动画 */
+@keyframes glassPanelAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 面板消失 — accelerate fade+shrink */
+@keyframes glassPanelDisappear {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.9) translateY(12px); }
+}
+
+/* 中心节点呼吸动画 */
+@keyframes nodeBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.graph-node.node-center.breathe circle {
+  animation: nodeBreathe 4s var(--ease-standard) infinite;
+  transform-origin: center;
+}
+
+/* 节点释放弹性回弹 */
+@keyframes nodeReleaseBounce {
+  0%   { transform: scale(1.12); }
+  60%  { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+/* Graph loading spinner */
+@keyframes graphSpin {
+  to { transform: rotate(360deg); }
+}

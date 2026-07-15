@@ -1,0 +1,103 @@
+/* Header — Base 层玻璃导航栏 */
+.header {
+  background: var(--glass-b-bg);
+  backdrop-filter: var(--glass-b-blur);
+  -webkit-backdrop-filter: var(--glass-b-blur);
+  color: var(--text);
+  padding: var(--space-4) var(--space-7);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--glass-b-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-overlay);
+  box-shadow: var(--glass-b-shadow), var(--glass-inset-top);
+}
+.header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--glass-highlight);
+  pointer-events: none;
+  z-index: 1;
+}
+.header::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--glass-refraction);
+  z-index: 1;
+}
+.header > * {
+  position: relative;
+  z-index: 2;
+}
+.header h1 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  position: relative;
+  z-index: 2;
+}
+.header-actions {
+  display: flex;
+  gap: var(--space-3);
+  position: relative;
+  z-index: 2;
+}
+.btn-icon {
+  background: var(--primary-light);
+  border: none;
+  color: var(--primary);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--transition-fast),
+    opacity var(--transition-fast),
+    transform 0.2s var(--ease-spring);
+}
+.btn-icon:hover {
+  background: rgba(0, 122, 255, 0.15);
+  opacity: 0.85;
+}
+.btn-icon:active {
+  transform: scale(0.92);
+  transition-duration: 0.06s;
+  transition-timing-function: var(--ease-accelerate);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .header {
+    padding: var(--space-3) var(--space-5);
+  }
+  .header h1 {
+    font-size: 16px;
+  }
+}
+@media (max-width: 480px) {
+  .header {
+    padding: var(--space-3) var(--space-4);
+  }
+  .header h1 {
+    font-size: 15px;
+  }
+  .header-actions {
+    gap: var(--space-2);
+  }
+  .btn-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+}

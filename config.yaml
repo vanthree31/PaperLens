@@ -1,0 +1,81 @@
+# 文献检索智能体 - 配置文件
+
+# 数据源
+sources:
+  pubmed:
+    enabled: true
+    email: ""
+    api_key: ""
+  openalex:
+    enabled: true
+    email: ""
+    api_key: ""
+  semantic_scholar:
+    enabled: true
+    api_key: ""
+  google_scholar:
+    enabled: false
+  cnki:
+    enabled: true
+  wanfang:
+    enabled: false
+  vip:
+    enabled: false
+  bing_academic:
+    enabled: false
+  # [新增] CORE - 开放获取论文聚合（3亿+记录）
+  # 免费 API key 注册：https://core.ac.uk/services/api
+  core:
+    enabled: true
+    api_key: ""
+  # [新增] Lens.org - 学术文献+专利（2.5亿+记录）
+  # 免费 API token 注册：https://www.lens.org
+  lens:
+    enabled: true
+    api_key: ""
+
+# AI 模型 - 智能检索（解析自然语言 → 生成检索式，建议用快速模型）
+ai_search:
+  enabled: false
+  provider: "deepseek"
+  api_key: ""
+  base_url: ""
+  model: ""
+  max_tokens: 16384
+
+# AI 模型 - 论文分析（总结/详析/对比，建议用高质量模型）
+ai_analysis:
+  enabled: false
+  provider: "deepseek"
+  api_key: ""
+  base_url: ""
+  model: ""
+  max_tokens: 16384
+
+# AI 模型 - 轻量级（用于简单分析和 moderate 查询，节省 token）
+# 优先使用本地 Ollama，未配置时回退到 ai_search 的模型
+ai_lightweight:
+  enabled: false
+  provider: "ollama"
+  api_key: ""
+  base_url: "http://localhost:11434"
+  model: "qwen3:8b"
+  max_tokens: 4096
+
+# 网络代理
+proxy:
+  http: ""
+  https: ""
+
+# 检索默认值
+defaults:
+  max_results: 50
+  sort: "relevance"
+  year_from: 2020
+  year_to: 2026
+
+# 翻译配置
+translation:
+  enabled: true  # 启用翻译功能
+  ai_enabled: false  # 启用AI翻译回退（需配置AI提供商）
+  synonym_expansion: true  # 启用同义词扩展（翻译后扩展核心词，提升召回率）
