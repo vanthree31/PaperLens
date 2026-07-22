@@ -41,6 +41,7 @@
   <div class="search-bar" style="position:relative">
     <input type="text" id="searchInput" data-i18n-placeholder="searchPlaceholder" onkeydown="handleSearchKeydown(event)" autocomplete="off">
     <button class="btn btn-primary" id="searchBtn" onclick="doSmartSearch()" data-i18n="search">检索</button>
+    <button class="btn btn-outline" id="refreshBtn" onclick="doSmartSearch(true)" title="跳过缓存，重新搜索" data-i18n="forceRefresh">🔄</button>
     <button class="btn btn-outline" id="cancelBtn" onclick="cancelAISearch()" style="display:none;color:var(--danger);border-color:var(--danger)" data-i18n="cancel">取消</button>
     <button class="btn btn-outline" onclick="toggleHistory()" id="historyBtn" data-i18n-title="searchHistory">⏱</button>
     <button class="btn btn-outline" onclick="openDoiModal()" id="doiBtn2" data-i18n-title="batchDOI">📋</button>
@@ -571,6 +572,9 @@
           <button class="btn btn-sm btn-outline" onclick="saveCarsiConfig()" data-i18n="save">保存</button>
           <button class="btn btn-sm btn-outline" onclick="testCarsiAuth()" data-i18n="testConnection">测试连接</button>
           <span id="carsiStatus" style="font-size:12px;color:var(--text-secondary)"></span>
+        </div>
+        <div class="hint" style="margin-top:8px;font-size:12px;color:var(--text-secondary)" data-i18n="carsiAuthHint">
+          提示：不同学校的认证系统实现存在差异，部分学校可能无法自动认证。如遇问题，请确认学校是否支持 CARSI 联盟认证。
         </div>
       </div>
     </div>

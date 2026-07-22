@@ -304,6 +304,47 @@ _ZH_EN_DICT = {
     "剂量": "dosage", "药物代谢": "drug metabolism",
     "药物递送": "drug delivery", "纳米药物": "nanomedicine",
     "缓释": "sustained release", "靶向递送": "targeted delivery",
+    # 中医药学
+    "中药": "traditional Chinese medicine", "中医": "traditional Chinese medicine",
+    "中草药": "Chinese herbal medicine", "草药": "herbal medicine",
+    "本草": "materia medica", "方剂": "formula",
+    "复方": "compound formula", "单味药": "single herb",
+    "针灸": "acupuncture", "艾灸": "moxibustion",
+    "推拿": "tuina", "拔罐": "cupping",
+    "刮痧": "guasha", "气功": "qigong",
+    "中药方剂": "Chinese medicine formula", "经方": "classical formula",
+    "验方": "empirical formula", "单体": "compound",
+    "有效成分": "active ingredient", "活性成分": "bioactive compound",
+    "提取物": "extract", "总黄酮": "total flavonoids",
+    "总皂苷": "total saponins", "总生物碱": "total alkaloids",
+    "多糖": "polysaccharide", "挥发油": "essential oil",
+    "萜类": "terpenoid", "黄酮": "flavonoid",
+    "皂苷": "saponin", "生物碱": "alkaloid",
+    "中药药理": "Chinese medicine pharmacology",
+    "药性": "drug property", "四气五味": "four properties and five tastes",
+    "归经": "meridian tropism", "升降浮沉": "ascending descending floating sinking",
+    "配伍": "compatibility", "君臣佐使": "monarch minister assistant guide",
+    "十八反": "eighteen incompatibilities", "十九畏": "nineteen mutual fears",
+    "炮制": "processing", "中药炮制": "Chinese medicine processing",
+    "辨证论治": "syndrome differentiation and treatment",
+    "证候": "syndrome", "治法": "treatment method",
+    "清热解毒": "clearing heat and detoxifying",
+    "活血化瘀": "activating blood and resolving stasis",
+    "补气": "supplementing qi", "补血": "nourishing blood",
+    "滋阴": "nourishing yin", "温阳": "warming yang",
+    "健脾": "strengthening spleen", "疏肝": "soothing liver",
+    "益肾": "benefiting kidney", "祛风": "dispersing wind",
+    "除湿": "eliminating dampness", "化痰": "resolving phlegm",
+    "六经辨证": "six meridian syndrome differentiation",
+    "卫气营血": "wei qi ying blood", "三焦辨证": "triple burner syndrome differentiation",
+    "藏象": "organ manifestation", "经络": "meridian",
+    "穴位": "acupoint", "经穴": "meridian point",
+    "中药现代化": "Chinese medicine modernization",
+    "网络药理学": "network pharmacology",
+    "中药代谢组学": "Chinese medicine metabolomics",
+    "中药质量控制": "Chinese medicine quality control",
+    "中药指纹图谱": "Chinese medicine fingerprint",
+    "中药血清药物化学": "Chinese medicine serum pharmacochemistry",
     # 临床医学
     "诊断": "diagnosis", "预后": "prognosis", "临床试验": "clinical trial",
     "随机对照试验": "randomized controlled trial",
@@ -2908,7 +2949,7 @@ class CNKISearch:
             context, page = None, None
             try:
                 context = self._create_context(browser)
-                deadline = time.monotonic() + 45
+                deadline = time.monotonic() + 120  # 增加总超时到120秒
                 page = context.new_page()
 
                 # 搜索入口
@@ -2936,16 +2977,19 @@ class CNKISearch:
                     print("CNKI: 所有搜索入口均加载失败")
                     return []
 
-                # 验证码检测 + 人工等待
+                # 验证码检测 + 人工等待（增加到90秒）
                 if self._check_captcha(page):
-                    print("CNKI: 检测到验证码，请在浏览器中完成人机验证（等待 60 秒）")
-                    for _ in range(60):
+                    print("CNKI: 检测到验证码，请在浏览器中完成人机验证（等待最多 90 秒）")
+                    for _ in range(90):
                         time.sleep(1)
+                        if time.monotonic() > deadline:
+                            print("CNKI: 总超时")
+                            return []
                         if not self._check_captcha(page):
                             print("CNKI: 验证完成")
                             break
                     else:
-                        print("CNKI: 验证超时")
+                        print("CNKI: 验证超时（90秒）")
                         return []
 
                 if time.monotonic() > deadline:
@@ -2971,6 +3015,21 @@ class CNKISearch:
                 except Exception:
                     page.wait_for_timeout(3000)
 
+                # 搜索提交后也检查验证码（新增）
+                if self._check_captcha(page):
+                    print("CNKI: 搜索后检测到验证码，请在浏览器中完成人机验证（等待最多 90 秒）")
+                    for _ in range(90):
+                        time.sleep(1)
+                        if time.monotonic() > deadline:
+                            print("CNKI: 总超时")
+                            return []
+                        if not self._check_captcha(page):
+                            print("CNKI: 验证完成")
+                            break
+                    else:
+                        print("CNKI: 验证超时（90秒）")
+                        return []
+
                 # 等待结果页加载（验证码/跳转检测）
                 max_wait = max(0, int(deadline - time.monotonic()))
                 waited = 0
@@ -2982,7 +3041,7 @@ class CNKISearch:
                         url = page.url
                         if "/verify/" in url or "verify" in url:
                             if not verification_prompted:
-                                print("CNKI: 需要验证码，请在浏览器中完成验证（等待最多 45 秒）")
+                                print("CNKI: 需要验证码，请在浏览器中完成验证（等待最多 90 秒）")
                                 verification_prompted = True
                             page.wait_for_timeout(5000); waited += 5; continue
                         captcha = page.evaluate("""() => {
@@ -2990,7 +3049,7 @@ class CNKISearch:
                         }""")
                         if captcha:
                             if not verification_prompted:
-                                print("CNKI: 需要验证码，请在浏览器中完成验证（等待最多 45 秒）")
+                                print("CNKI: 需要验证码，请在浏览器中完成验证（等待最多 90 秒）")
                                 verification_prompted = True
                             page.wait_for_timeout(5000); waited += 5; continue
                         if "search" in url or "result" in url or "kns" in url:
@@ -3650,13 +3709,17 @@ class SemanticScholarSearch:
             return []
 
 
-def _http_retry(session, url, params=None, timeout=15, retries=3, label=""):
-    """通用 HTTP GET 重试（429/5xx 退避）"""
+def _http_retry(session, url, params=None, timeout=15, retries=4, label=""):
+    """通用 HTTP GET 重试（429/5xx 指数退避 + 随机抖动）"""
+    import random
     for attempt in range(retries):
         r = session.get(url, params=params, timeout=timeout)
         if r.status_code in (429, 502, 503, 504):
-            wait = min(2 ** attempt * 1.5, 10)
-            if label: print(f"{label}: {r.status_code} 限流，等待 {wait:.0f}s ({attempt+1}/{retries})")
+            # 指数退避 + 随机抖动，避免雷鸣效应
+            base_wait = min(2 ** attempt * 1.5, 15)
+            jitter = random.uniform(0, base_wait * 0.3)
+            wait = base_wait + jitter
+            if label: print(f"{label}: {r.status_code} 限流，等待 {wait:.1f}s ({attempt+1}/{retries})")
             time.sleep(wait)
             continue
         return r
@@ -6348,7 +6411,7 @@ class WanfangSource(BaseSearchSource):
     """万方数据源适配器"""
     SOURCE_NAME = "wanfang"
     DISPLAY_NAME = "Wanfang"
-    DEFAULT_ENABLED = False
+    DEFAULT_ENABLED = True
     IS_CHINESE = True
     MAX_RESULTS = 20
 
@@ -6373,7 +6436,7 @@ class VIPSource(BaseSearchSource):
     """维普数据源适配器"""
     SOURCE_NAME = "vip"
     DISPLAY_NAME = "VIP"
-    DEFAULT_ENABLED = False
+    DEFAULT_ENABLED = True
     IS_CHINESE = True
     MAX_RESULTS = 20
 
@@ -8614,10 +8677,10 @@ class SearchEngine:
         _set_translator(self._translator)
 
         # 搜索结果缓存（LRU + TTL 30 分钟，最大 100 条）
-        self._search_cache = _SearchResultCache(maxsize=100, ttl=1800)
+        self._search_cache = _SearchResultCache(maxsize=100, ttl=300)  # 5分钟内存缓存
 
         # L2 持久化缓存（SQLite，7天过期，后台异步写入）
-        self._persistent_cache = SQLiteSearchCache(ttl_days=7)
+        self._persistent_cache = SQLiteSearchCache(ttl_days=1)  # 1天 SQLite 缓存
         self._search_cache.set_persistent_cache(self._persistent_cache)
 
         # BM25 相关性评分器
@@ -8933,7 +8996,7 @@ class SearchEngine:
                use_springer=True, use_wiley=True, use_ieee=True, use_muse=True,
                use_core=True, use_lens=True, use_lens_patents=False,
                journal="", field="", mesh_term="", pub_type="",
-               smart_routing=False) -> tuple:
+               smart_routing=False, force_refresh=False) -> tuple:
         """聚合检索（并发执行）
 
         Args:
@@ -9053,12 +9116,16 @@ class SearchEngine:
         # 缓存 key 追加 journal/field/pub_type 过滤参数，避免不同筛选共用缓存
         filter_seed = hashlib.md5(f"{journal}|{field}|{pub_type}".encode()).hexdigest()[:8]
         sources_hash = f"{sources_hash}_{filter_seed}"
-        cached = self._search_cache.get(query, year_from, year_to, sources_hash)
-        if cached is not None:
-            stats = self._search_cache.stats()
-            print(f"[CACHE HIT] query='{query[:50]}' | 命中率 {stats['hit_rate']} "
-                  f"({stats['hits']}hit/{stats['misses']}miss) 缓存 {stats['size']}/{stats['maxsize']}")
-            return cached, []
+        # force_refresh 时跳过缓存
+        if not force_refresh:
+            cached = self._search_cache.get(query, year_from, year_to, sources_hash)
+            if cached is not None:
+                stats = self._search_cache.stats()
+                print(f"[CACHE HIT] query='{query[:50]}' | 命中率 {stats['hit_rate']} "
+                      f"({stats['hits']}hit/{stats['misses']}miss) 缓存 {stats['size']}/{stats['maxsize']}")
+                return cached, []
+        else:
+            print(f"[CACHE SKIP] force_refresh=True, 跳过缓存")
 
         # [Fix] 中文查询处理：检测中文并翻译为英文
         # 中文数据库（CNKI/Wanfang/VIP）使用原始中文查询
@@ -9628,7 +9695,7 @@ class SearchEngine:
                       use_springer=True, use_wiley=True, use_ieee=True, use_muse=True,
                       use_core=True, use_lens=True, use_lens_patents=False,
                       journal="", field="", mesh_term="", pub_type="",
-                      smart_routing=False):
+                      smart_routing=False, force_refresh=False):
         """流式聚合检索（逐源推送结果）
 
         Args:

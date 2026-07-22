@@ -181,25 +181,24 @@ def get_recommendations():
         return jsonify({"papers": [], "keywords": []})
 
     # 构建推荐查询
-    # 策略1：基于高频关键词（深耕性推荐）
-    # 策略2：基于高频期刊
-    # 策略3：基于引用关系（探索性推荐）
-
     recommended_papers = []
     recommendation_types = set()  # 跟踪实际使用的推荐策略
 
     # 策略1：基于关键词推荐（深耕性：与已读内容相似）
+    # 使用更宽泛的查询，增加结果数量
     if top_keywords:
         query = " OR ".join(top_keywords[:5])
         try:
             papers, _ = state.engine.search(
                 query=query,
-                year_from=datetime.now().year - 2,  # 最近2年
+                year_from=datetime.now().year - 3,  # 扩大到最近3年
                 year_to=datetime.now().year,
-                sort="citations",
-                max_results=20,
+                sort="relevance",  # 改为相关度排序，更稳定
+                max_results=30,  # 增加搜索数量
                 use_pubmed=True,
                 use_openalex=True,
+                use_crossref=True,  # 增加 CrossRef 源
+                use_semantic_scholar=True,  # 增加 Semantic Scholar 源
             )
             # 过滤掉已经看过的论文
             for p in papers:
@@ -210,34 +209,34 @@ def get_recommendations():
         except Exception as e:
             print(f"Recommendation search error: {e}")
 
-    # 策略2：基于期刊推荐
-    if len(recommended_papers) < 10 and top_journals:
-        for journal in top_journals[:2]:
-            try:
-                journal_query = " OR ".join(top_keywords[:3]) if top_keywords else "research"
-                papers, _ = state.engine.search(
-                    query=journal_query,
-                    year_from=datetime.now().year - 1,
-                    year_to=datetime.now().year,
-                    sort="citations",
-                    max_results=10,
-                    use_pubmed=True,
-                    use_openalex=True,
-                    journal=journal,
-                )
-                for p in papers:
-                    if p.doi and p.doi.lower() not in recent_dois:
-                        if not any(r.doi == p.doi for r in recommended_papers):
-                            recommended_papers.append(p)
-                if recommended_papers:
-                    recommendation_types.add("journal")
-            except Exception:
-                continue
+    # 策略2：基于期刊推荐（合并到一次搜索）
+    if len(recommended_papers) < 15 and top_journals and top_keywords:
+        try:
+            journal_query = " OR ".join(top_keywords[:3])
+            journal_filter = ", ".join(top_journals[:2])
+            papers, _ = state.engine.search(
+                query=journal_query,
+                year_from=datetime.now().year - 2,
+                year_to=datetime.now().year,
+                sort="relevance",
+                max_results=20,
+                use_pubmed=True,
+                use_openalex=True,
+                journal=journal_filter,
+            )
+            for p in papers:
+                if p.doi and p.doi.lower() not in recent_dois:
+                    if not any(r.doi == p.doi for r in recommended_papers):
+                        recommended_papers.append(p)
+            if len(recommended_papers) > len(recommended_papers):
+                recommendation_types.add("journal")
+        except Exception:
+            pass
 
     # 策略3：基于引用关系（探索性推荐）
     # 从收藏的论文中找引用关系（始终执行，补充跨领域发现）
     s3_count_before = len(recommended_papers)
-    if len(recommended_papers) < 20:
+    if len(recommended_papers) < 25:
         try:
             collections_path = _get_user_data_path("collections.json")
             if os.path.exists(collections_path):
@@ -324,8 +323,8 @@ def get_recommendations():
     if lang == "en":
         recommended_papers = [p for p in recommended_papers if p.title and not has_chinese(p.title)]
 
-    # 限制推荐数量
-    recommended_papers = recommended_papers[:15]
+    # 限制推荐数量（增加到25篇）
+    recommended_papers = recommended_papers[:25]
 
     # 确定推荐类型标签
     if recommendation_types == {"citation"}:

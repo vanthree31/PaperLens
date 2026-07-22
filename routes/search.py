@@ -58,6 +58,7 @@ def search():
             journal=data.get("journal", "").strip(), field=data.get("field", "").strip(),
             mesh_term=data.get("mesh_term", "").strip(), pub_type=data.get("pub_type", "").strip(),
             smart_routing=data.get("smart_routing", False),
+            force_refresh=data.get("force_refresh", False),
         )
     except Exception as e:
         print(f"[ERROR] Search failed: {e}")
@@ -117,6 +118,7 @@ def search_stream():
                     mesh_term=data.get("mesh_term", "").strip(),
                     pub_type=data.get("pub_type", "").strip(),
                     smart_routing=data.get("smart_routing", False),
+                    force_refresh=data.get("force_refresh", False),
                 ):
                     event_queue.put(("event", event))
                 event_queue.put(("done", None))
@@ -266,6 +268,7 @@ def ai_search():
             journal=analysis.get("journal", "") or data.get("journal", ""),
             field=analysis.get("field", "") or data.get("field", ""),
             pub_type=analysis.get("pub_type", "") or data.get("pub_type", ""),
+            force_refresh=data.get("force_refresh", False),
         )
         return papers, search_errors
 
@@ -369,34 +372,20 @@ def ai_search():
                         resp["timing"] = state.engine._last_timing_info
                     with state.cache_lock:
                         state.last_ai_search_result["resp"] = resp
-                    # 分批发送论文（每批 20 篇），避免大 JSON 被 Werkzeug 缓冲区截断
-                    batch_size = 20
-                    total_batches = (len(results) + batch_size - 1) // batch_size
-                    for i in range(0, len(results), batch_size):
-                        batch = results[i:i + batch_size]
-                        batch_event = {
-                            "batch": i // batch_size,
-                            "total_batches": max(total_batches, 1),
-                            "papers": batch,
-                            "total": len(results),
-                        }
-                        batch_json = json.dumps(batch_event, ensure_ascii=False)
-                        batch_payload = "\n__RESULT_BATCH__" + batch_json
-                        print(f"[INFO] Yielding result batch {i // batch_size + 1}/{max(total_batches, 1)}: {len(batch)} papers, payload size: {len(batch_payload)} bytes")
-                        yield batch_payload
-                    # 最终结果（不含 papers，只含元数据）
-                    meta_event = {
+                    # 一次性返回所有论文（在 __SEARCH_RESULT__ 标记中）
+                    result_event = {
                         "total": len(results),
                         "query": analysis.get("query_en", analysis.get("query", "")),
                         "query_zh": analysis.get("query_zh", ""),
                         "explanation": analysis.get("explanation", ""),
                         "analysis": analysis,
+                        "papers": results,
                         "errors": search_errors,
                         "timing": resp.get("timing", {}),
                     }
-                    meta_json = json.dumps(meta_event, ensure_ascii=False)
-                    result_payload = "\n__SEARCH_RESULT__" + meta_json
-                    print(f"[INFO] Yielding search result meta: payload size: {len(result_payload)} bytes")
+                    result_json = json.dumps(result_event, ensure_ascii=False)
+                    result_payload = "\n__SEARCH_RESULT__" + result_json
+                    print(f"[INFO] Yielding search result: {len(results)} papers, payload size: {len(result_payload)} bytes")
                     yield result_payload
                     print(f"[INFO] Yield completed successfully")
                 except Exception as build_err:

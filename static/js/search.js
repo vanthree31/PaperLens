@@ -72,6 +72,7 @@ function buildSearchBody(overrides = {}) {
     journal: getJournalFilter(),
     field: document.getElementById("filterField").value,
     pub_type: document.getElementById("filterPubType").value,
+    force_refresh: window._forceRefresh || false,
     ...overrides,
   };
 }
@@ -688,7 +689,7 @@ function showSkeleton(count = 4) {
 }
 
 // 智能搜索
-async function doSmartSearch() {
+async function doSmartSearch(forceRefresh = false) {
   if (doSmartSearch._running) return;
   doSmartSearch._running = true;
   const input = document.getElementById("searchInput");
@@ -697,6 +698,8 @@ async function doSmartSearch() {
   safeSetDisabled("searchBtn", true);
   document.getElementById("results").classList.add("loading");
   showSkeleton();
+  // 保存 forceRefresh 状态供子函数使用
+  window._forceRefresh = forceRefresh;
   try {
     if (window.PaperLens._searchMode === "ai") await doAISearch();
     else await doSearch();
@@ -706,6 +709,7 @@ async function doSmartSearch() {
     if (btn) btn.textContent = t("search");
     document.getElementById("results").classList.remove("loading");
     doSmartSearch._running = false;
+    window._forceRefresh = false;
   }
 }
 
@@ -1039,6 +1043,7 @@ async function doAISearch() {
     use_core: document.getElementById("useCore")?.checked ?? true,
     use_lens: document.getElementById("useLens")?.checked ?? true,
     use_lens_patents: document.getElementById("useLensPatents")?.checked ?? false,
+    force_refresh: window._forceRefresh || false,
   };
 
   try {
@@ -1065,7 +1070,6 @@ async function doAISearch() {
     const decoder = new TextDecoder();
     let fullText = "";
     let searchData = null;
-    let accumulatedPapers = [];  // 累积 __RESULT_BATCH__ 分批发送的论文
     let thinkDone = false;
     let lastChunkTime = Date.now();
     const STREAM_TIMEOUT = 120000; // 120秒不活动超时
@@ -1104,41 +1108,14 @@ async function doAISearch() {
       const chunk = decoder.decode(value, {stream: true});
       fullText += chunk;
 
-      // 收集 __RESULT_BATCH__ 分批论文数据
-      let batchMarker = fullText.lastIndexOf("__RESULT_BATCH__");
-      while (batchMarker >= 0) {
-        const batchStart = batchMarker + "__RESULT_BATCH__".length;
-        // 找到下一个标记或行尾
-        const nextMarker = fullText.indexOf("__", batchStart);
-        if (nextMarker < 0) break; // JSON 不完整，等更多数据
-        const batchJson = fullText.substring(batchStart, nextMarker);
-        // 移除这个已处理的 batch
-        fullText = fullText.substring(0, batchMarker) + fullText.substring(nextMarker);
-        try {
-          const batchEvent = JSON.parse(batchJson);
-          if (batchEvent.papers && batchEvent.papers.length > 0) {
-            accumulatedPapers.push(...batchEvent.papers);
-            debugLog(`[AI-DEBUG] Batch ${batchEvent.batch + 1}/${batchEvent.total_batches}: ${batchEvent.papers.length} papers, accumulated: ${accumulatedPapers.length}`);
-          }
-        } catch (e) {
-          debugLog(`[AI-DEBUG] Batch JSON parse FAILED: ${e.message}, json last100: ${batchJson.slice(-100)}`);
-        }
-        batchMarker = fullText.lastIndexOf("__RESULT_BATCH__");
-      }
-
-      // 检查是否包含搜索结果标记
+      // 检查是否包含搜索结果标记（论文数据在 __SEARCH_RESULT__ 中一次性返回）
       const resultMarker = fullText.indexOf("__SEARCH_RESULT__");
       if (resultMarker >= 0) {
-        // 提取搜索结果 JSON（元数据，papers 已在 batches 中）
+        // 提取搜索结果 JSON（包含 papers）
         const jsonStr = fullText.substring(resultMarker + "__SEARCH_RESULT__".length);
         debugLog(`[AI-DEBUG] Found __SEARCH_RESULT__ at pos ${resultMarker}, jsonStr length: ${jsonStr.length}, first100: ${jsonStr.substring(0, 100)}`);
         try {
           searchData = JSON.parse(jsonStr);
-          // 合并累积的论文
-          if (accumulatedPapers.length > 0) {
-            searchData.papers = accumulatedPapers;
-            searchData.total = accumulatedPapers.length;
-          }
           debugLog(`[AI-DEBUG] JSON parsed OK, total: ${searchData.total}, papers: ${searchData.papers?.length}`);
         } catch (e) {
           debugLog(`[AI-DEBUG] JSON parse FAILED: ${e.message}, jsonStr last100: ${jsonStr.slice(-100)}`);
