@@ -48,7 +48,7 @@ class AppState:
 
             # 获取AI提供商实例
             # SearchAI 内部已经有 AIAssistant 实例
-            if hasattr(self.search_ai, 'assistant') and self.search_ai.assistant:
+            if hasattr(self.search_ai, "assistant") and self.search_ai.assistant:
                 self.engine.set_ai_provider(self.search_ai.assistant)
                 print("[INFO] 翻译器已连接到AI提供商")
         except Exception as e:

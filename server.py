@@ -1,7 +1,6 @@
 """Flask 后端 - API 路由入口"""
 
 import os
-import sys
 from flask import Flask, send_from_directory
 from core.state import AppState
 
@@ -13,6 +12,7 @@ def create_app():
     try:
         from schema_migrate import migrate_all
         from core.config import _get_app_data_dir
+
         migrate_all(_get_app_data_dir())
     except Exception as e:
         print(f"[WARN] Schema migration failed: {e}")
@@ -34,9 +34,19 @@ def create_app():
     from routes.wanfang import wanfang_bp
     from routes.tags import tags_bp
 
-    for bp in [search_bp, ai_bp, collections_bp, graph_bp,
-               history_bp, export_bp, system_bp, zotero_bp,
-               carsi_bp, wanfang_bp, tags_bp]:
+    for bp in [
+        search_bp,
+        ai_bp,
+        collections_bp,
+        graph_bp,
+        history_bp,
+        export_bp,
+        system_bp,
+        zotero_bp,
+        carsi_bp,
+        wanfang_bp,
+        tags_bp,
+    ]:
         app.register_blueprint(bp)
 
     # 安全响应头

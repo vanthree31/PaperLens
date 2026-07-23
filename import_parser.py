@@ -11,7 +11,11 @@ def detect_format(content: str) -> str:
     stripped = content.strip()
     if stripped.startswith("<?xml") or stripped.startswith("<xml"):
         # XML — 进一步区分 EndNote XML vs PubMed XML vs MODS
-        if "<PubmedArticle" in stripped[:500] or "<MedlineCitation" in stripped[:500] or "<PubMedArticle" in stripped[:500]:
+        if (
+            "<PubmedArticle" in stripped[:500]
+            or "<MedlineCitation" in stripped[:500]
+            or "<PubMedArticle" in stripped[:500]
+        ):
             return "pubmed_xml"
         if "<record>" in stripped[:500] or "<records>" in stripped[:500]:
             return "endnote_xml"
@@ -20,7 +24,11 @@ def detect_format(content: str) -> str:
         return "endnote_xml"
     if stripped.startswith("{") or stripped.startswith("["):
         return "json"
-    if stripped.startswith("@") or stripped.startswith("%") or stripped.startswith("  "):
+    if (
+        stripped.startswith("@")
+        or stripped.startswith("%")
+        or stripped.startswith("  ")
+    ):
         return "bibtex"
     # RIS: starts with TY  -  after optional BOM
     if "TY  - " in stripped[:500] or "TY   - " in stripped[:500]:
@@ -28,8 +36,15 @@ def detect_format(content: str) -> str:
     # CSV: header row with comma-separated field names
     first_line = stripped.split("\n")[0]
     if "," in first_line or "\t" in first_line:
-        csv_headers = [h.strip().lower().strip('"') for h in (first_line.split(",") if "," in first_line else first_line.split("\t"))]
-        if any(h in csv_headers for h in ("title", "authors", "doi", "year", "journal")):
+        csv_headers = [
+            h.strip().lower().strip('"')
+            for h in (
+                first_line.split(",") if "," in first_line else first_line.split("\t")
+            )
+        ]
+        if any(
+            h in csv_headers for h in ("title", "authors", "doi", "year", "journal")
+        ):
             return "csv"
     return "unknown"
 
@@ -51,13 +66,14 @@ def parse_file(content: str) -> List[dict]:
         return _parse_json(content)
     elif fmt == "unknown":
         # 最后尝试：提取 DOI（支持纯文本 DOI 列表）
-        dois = re.findall(r'10\.\d{4,}/[^\s\"\'<>]+', content)
+        dois = re.findall(r"10\.\d{4,}/[^\s\"\'<>]+", content)
         if dois:
             return [{"doi": d.strip(), "title": ""} for d in dois[:200]]
     return []
 
 
 # ============ EndNote XML ============
+
 
 def _parse_endnote_xml(content: str) -> List[dict]:
     """解析 EndNote XML 导出文件"""
@@ -128,6 +144,7 @@ def _parse_endnote_xml(content: str) -> List[dict]:
 
 # ============ RIS ============
 
+
 def _parse_ris(content: str) -> List[dict]:
     """解析 RIS 格式文件"""
     papers = []
@@ -138,7 +155,7 @@ def _parse_ris(content: str) -> List[dict]:
             continue
         tag = line[:2].strip()
         # RIS lines are "TY  - value" or "TY   - value"
-        if not (line[2:4] in ("  ", " -", "   ", "  -")):
+        if line[2:4] not in ("  ", " -", "   ", "  -"):
             # maybe new format without spaces
             if line[2] != " ":
                 tag = line[:2]
@@ -161,12 +178,16 @@ def _parse_ris(content: str) -> List[dict]:
         elif tag == "AU" or tag == "A1":
             current.setdefault("authors", []).append(value)
         elif tag == "AB" or tag == "N2":
-            current["abstract"] = (current.get("abstract", "") + " " + value).strip()[:5000]
+            current["abstract"] = (current.get("abstract", "") + " " + value).strip()[
+                :5000
+            ]
         elif tag == "DO" or tag == "M3":
             current["doi"] = value
         elif tag == "PY" or tag == "Y1":
-            try: current["year"] = int(value[:4])
-            except ValueError: pass
+            try:
+                current["year"] = int(value[:4])
+            except ValueError:
+                pass
         elif tag == "JO" or tag == "JF" or tag == "T2":
             current["journal"] = value
         elif tag == "VL":
@@ -189,24 +210,38 @@ def _parse_ris(content: str) -> List[dict]:
 
 # ============ BibTeX ============
 
+
 def _parse_bibtex(content: str) -> List[dict]:
     """解析 BibTeX 格式文件"""
     papers = []
-    content = re.sub(r'%.*$', '', content, flags=re.MULTILINE)  # remove comments
-    entries = re.findall(r'@\w+\s*\{[^@]*\}', content, re.DOTALL) if re.search(r'@\w+\s*\{', content) else [content]
+    content = re.sub(r"%.*$", "", content, flags=re.MULTILINE)  # remove comments
+    entries = (
+        re.findall(r"@\w+\s*\{[^@]*\}", content, re.DOTALL)
+        if re.search(r"@\w+\s*\{", content)
+        else [content]
+    )
     for entry_text in entries:
         p = {}
         # type
-        type_m = re.match(r'@(\w+)\s*\{', entry_text)
+        type_m = re.match(r"@(\w+)\s*\{", entry_text)
         if type_m and type_m.group(1).lower() == "article":
             p["article_type"] = "Journal Article"
         # cite key
-        key_m = re.match(r'@\w+\s*\{([^,]+),', entry_text)
+        key_m = re.match(r"@\w+\s*\{([^,]+),", entry_text)
         # fields
-        for fname, key in [("title", "title"), ("author", "authors"), ("abstract", "abstract"),
-                           ("doi", "doi"), ("journal", "journal"), ("year", "year"),
-                           ("volume", "volume"), ("number", "issue"), ("pages", "pages"),
-                           ("url", "url"), ("keywords", "keywords")]:
+        for fname, key in [
+            ("title", "title"),
+            ("author", "authors"),
+            ("abstract", "abstract"),
+            ("doi", "doi"),
+            ("journal", "journal"),
+            ("year", "year"),
+            ("volume", "volume"),
+            ("number", "issue"),
+            ("pages", "pages"),
+            ("url", "url"),
+            ("keywords", "keywords"),
+        ]:
             pat = rf'{fname}\s*=\s*[{{"]([^}}"]*?)[}}"]\s*[,}}]'
             m = re.search(pat, entry_text, re.IGNORECASE | re.DOTALL)
             if m:
@@ -214,14 +249,20 @@ def _parse_bibtex(content: str) -> List[dict]:
                 if key == "authors":
                     p[key] = [a.strip() for a in val.replace("\n", " ").split(" and ")]
                 elif key == "year":
-                    try: p[key] = int(val[:4])
-                    except ValueError: pass
+                    try:
+                        p[key] = int(val[:4])
+                    except ValueError:
+                        pass
                 elif key == "keywords":
                     p[key] = [k.strip() for k in val.split(",")]
                 else:
                     # unescape BibTeX special chars
-                    val = val.replace("\\{", "{").replace("\\}", "}").replace("\\_", "_")
-                    val = val.replace("{\\textendash}", "–").replace("{\\textemdash}", "—")
+                    val = (
+                        val.replace("\\{", "{").replace("\\}", "}").replace("\\_", "_")
+                    )
+                    val = val.replace("{\\textendash}", "–").replace(
+                        "{\\textemdash}", "—"
+                    )
                     p[key] = val
         if p.get("title"):
             papers.append(p)
@@ -230,10 +271,12 @@ def _parse_bibtex(content: str) -> List[dict]:
 
 # ============ CSV ============
 
+
 def _parse_csv(content: str) -> List[dict]:
     """解析 CSV/TSV 格式（PaperLens 导出格式或通用学术 CSV）"""
     import csv
     import io
+
     papers = []
     # 自动检测分隔符
     first_line = content.strip().split("\n")[0]
@@ -250,12 +293,16 @@ def _parse_csv(content: str) -> List[dict]:
             if col in ("title",):
                 p["title"] = val
             elif col in ("authors", "author"):
-                p["authors"] = [a.strip() for a in val.replace(";", ",").split(",") if a.strip()]
+                p["authors"] = [
+                    a.strip() for a in val.replace(";", ",").split(",") if a.strip()
+                ]
             elif col in ("doi",):
                 p["doi"] = val
             elif col in ("year", "publication_year", "date"):
-                try: p["year"] = int(val[:4])
-                except ValueError: pass
+                try:
+                    p["year"] = int(val[:4])
+                except ValueError:
+                    pass
             elif col in ("journal", "journal_name", "source", "publicationtitle"):
                 p["journal"] = val
             elif col in ("abstract", "abstractnote"):
@@ -270,7 +317,9 @@ def _parse_csv(content: str) -> List[dict]:
                 if not p.get("url"):
                     p["url"] = val
             elif col in ("keywords", "tags"):
-                p["keywords"] = [k.strip() for k in val.replace(";", ",").split(",") if k.strip()]
+                p["keywords"] = [
+                    k.strip() for k in val.replace(";", ",").split(",") if k.strip()
+                ]
             elif col in ("issn",):
                 p["issn"] = val
             elif col in ("article_type", "itemtype", "type"):
@@ -282,12 +331,17 @@ def _parse_csv(content: str) -> List[dict]:
 
 # ============ PubMed XML ============
 
+
 def _parse_pubmed_xml(content: str) -> List[dict]:
     """解析 PubMed XML / MEDLINE / MODS 格式"""
     papers = []
     try:
         root = ET.fromstring(content)
-        articles = root.findall(".//PubmedArticle") or root.findall(".//PubMedArticle") or [root]
+        articles = (
+            root.findall(".//PubmedArticle")
+            or root.findall(".//PubMedArticle")
+            or [root]
+        )
         for article in articles:
             p = {}
             cit = article.find(".//MedlineCitation") or article
@@ -327,15 +381,20 @@ def _parse_pubmed_xml(content: str) -> List[dict]:
             # 年份
             date_el = art.find(".//Journal/JournalIssue/PubDate/Year")
             if date_el is not None and date_el.text:
-                try: p["year"] = int(date_el.text.strip())
-                except ValueError: pass
+                try:
+                    p["year"] = int(date_el.text.strip())
+                except ValueError:
+                    pass
             # 卷/期/页
             vol_el = art.find(".//Journal/JournalIssue/Volume")
-            if vol_el is not None and vol_el.text: p["volume"] = vol_el.text.strip()
+            if vol_el is not None and vol_el.text:
+                p["volume"] = vol_el.text.strip()
             iss_el = art.find(".//Journal/JournalIssue/Issue")
-            if iss_el is not None and iss_el.text: p["issue"] = iss_el.text.strip()
+            if iss_el is not None and iss_el.text:
+                p["issue"] = iss_el.text.strip()
             pg_el = art.find(".//Pagination/MedlinePgn")
-            if pg_el is not None and pg_el.text: p["pages"] = pg_el.text.strip()
+            if pg_el is not None and pg_el.text:
+                p["pages"] = pg_el.text.strip()
 
             if p.get("title"):
                 papers.append(p)
@@ -346,6 +405,7 @@ def _parse_pubmed_xml(content: str) -> List[dict]:
 
 # ============ JSON ============
 
+
 def _parse_json(content: str) -> List[dict]:
     """解析 JSON 格式（CrossRef / OpenAlex / Zotero / PaperLens 导出）"""
     papers = []
@@ -355,18 +415,28 @@ def _parse_json(content: str) -> List[dict]:
         for item in items:
             p = {}
             # CrossRef API
-            if "DOI" in item or ("title" in item and isinstance(item.get("title"), list)):
+            if "DOI" in item or (
+                "title" in item and isinstance(item.get("title"), list)
+            ):
                 titles = item.get("title", [])
-                p["title"] = titles[0] if isinstance(titles, list) and titles else str(item.get("title", ""))
+                p["title"] = (
+                    titles[0]
+                    if isinstance(titles, list) and titles
+                    else str(item.get("title", ""))
+                )
                 p["doi"] = item.get("DOI", "")
                 p["abstract"] = (item.get("abstract", "") or "")[:5000]
                 containers = item.get("container-title", [])
                 p["journal"] = containers[0] if containers else ""
                 authors = item.get("author", [])
-                p["authors"] = [f"{a.get('given','')} {a.get('family','')}".strip() for a in authors]
+                p["authors"] = [
+                    f"{a.get('given', '')} {a.get('family', '')}".strip()
+                    for a in authors
+                ]
                 dp = item.get("published-print") or item.get("created") or {}
                 dates = dp.get("date-parts", [[0]])[0]
-                if dates[0]: p["year"] = dates[0]
+                if dates[0]:
+                    p["year"] = dates[0]
                 p["volume"] = str(item.get("volume") or "")
                 p["issue"] = str(item.get("issue") or "")
                 p["pages"] = str(item.get("page") or "")
@@ -383,9 +453,13 @@ def _parse_json(content: str) -> List[dict]:
                 p["title"] = item.get("title", "")
                 p["doi"] = item.get("doi", "") or item.get("DOI", "")
                 p["year"] = item.get("year", 0)
-                p["journal"] = item.get("journal", "") or item.get("publicationTitle", "")
+                p["journal"] = item.get("journal", "") or item.get(
+                    "publicationTitle", ""
+                )
                 p["authors"] = item.get("authors", []) or item.get("creators", [])
-                p["abstract"] = (item.get("abstract", "") or item.get("abstractNote", ""))[:5000]
+                p["abstract"] = (
+                    item.get("abstract", "") or item.get("abstractNote", "")
+                )[:5000]
                 p["volume"] = str(item.get("volume", "") or "")
                 p["issue"] = str(item.get("issue", "") or "")
                 p["pages"] = str(item.get("pages", "") or "")

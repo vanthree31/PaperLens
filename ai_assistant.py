@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # 轻量级模型工厂
 # ---------------------------------------------------------------------------
 
+
 def create_lightweight_assistant(config: dict):
     """创建轻量级 AI 助手实例（用于简单分析和 moderate 查询）
 
@@ -47,6 +48,7 @@ def create_lightweight_assistant(config: dict):
 # ---------------------------------------------------------------------------
 # 查询分析缓存（TTL 1小时，最大200条）
 # ---------------------------------------------------------------------------
+
 
 class _TTLCache:
     """带 TTL 的简易内存缓存"""
@@ -75,7 +77,7 @@ class _TTLCache:
         # 超出容量时淘汰最早的一半
         if len(self._store) >= self._max_size:
             sorted_keys = sorted(self._store, key=lambda k: self._store[k][1])
-            for k in sorted_keys[:len(sorted_keys) // 2 + 1]:
+            for k in sorted_keys[: len(sorted_keys) // 2 + 1]:
                 del self._store[k]
         self._store[key] = (value, now + self._ttl)
 
@@ -96,24 +98,44 @@ _query_analysis_cache = _TTLCache(ttl_seconds=3600, max_size=200)
 # DOI 模式
 _DOI_RE = re.compile(r'10\.\d{4,9}/[^\s,;)\]}"、。]+')
 # PMID 模式（纯数字或 PMID:前缀）
-_PMID_RE = re.compile(r'(?:PMID[:\s]*)?(\d{6,9})\b')
+_PMID_RE = re.compile(r"(?:PMID[:\s]*)?(\d{6,9})\b")
 # 简单关键词模式：2-4个英文单词，无布尔运算符，无时间约束
 _SIMPLE_KW_RE = re.compile(
-    r'^[a-zA-Z][a-zA-Z0-9\s\-]{0,80}$'  # 只含英文、数字、空格、连字符
+    r"^[a-zA-Z][a-zA-Z0-9\s\-]{0,80}$"  # 只含英文、数字、空格、连字符
 )
 # 复杂度指示词
 _COMPLEXITY_MARKERS = [
     # 布尔运算
-    r'\b(?:AND|OR|NOT)\b', r'且', r'或', r'非',
+    r"\b(?:AND|OR|NOT)\b",
+    r"且",
+    r"或",
+    r"非",
     # 比较/综述
-    r'对比', r'比较', r'区别', r'差异', r'综述', r'全面',
-    r'compare', r'versus', r'difference', r'review',
+    r"对比",
+    r"比较",
+    r"区别",
+    r"差异",
+    r"综述",
+    r"全面",
+    r"compare",
+    r"versus",
+    r"difference",
+    r"review",
     # 时间约束（支持阿拉伯数字和中文数字）
-    r'近[一二三四五六七八九十\d]+年', r'最近', r'since\s+\d{4}', r'last\s+\d+\s+year',
+    r"近[一二三四五六七八九十\d]+年",
+    r"最近",
+    r"since\s+\d{4}",
+    r"last\s+\d+\s+year",
     # 作者+主题复合查询
-    r'作者', r'发表', r'author',
+    r"作者",
+    r"发表",
+    r"author",
     # 多条件
-    r'以及', r'同时', r'并且', r'中的', r'关于',
+    r"以及",
+    r"同时",
+    r"并且",
+    r"中的",
+    r"关于",
 ]
 
 
@@ -140,11 +162,11 @@ def _classify_query_complexity(user_input: str) -> str:
     words = q.split()
     if len(words) <= 3 and _SIMPLE_KW_RE.match(q):
         # 排除含中文的情况（中文短查询可能是自然语言）
-        if not re.search(r'[一-鿿]', q):
+        if not re.search(r"[一-鿿]", q):
             return "simple"
 
     # simple: 单个中文词（无空格，<=4字）→ 纯关键词
-    if not re.search(r'\s', q) and len(q) <= 4 and re.search(r'[一-鿿]', q):
+    if not re.search(r"\s", q) and len(q) <= 4 and re.search(r"[一-鿿]", q):
         return "simple"
 
     # complex: 包含复杂度指示词
@@ -153,7 +175,7 @@ def _classify_query_complexity(user_input: str) -> str:
             return "complex"
 
     # complex: 中文自然语言查询（通常包含隐含条件）
-    if re.search(r'[一-鿿]', q) and len(q) > 15:
+    if re.search(r"[一-鿿]", q) and len(q) > 15:
         return "complex"
 
     # moderate: 其他情况（多关键词组合、中等长度查询）
@@ -165,23 +187,27 @@ class WebSearcher:
     def search(query: str, max_results: int = 5) -> list:
         try:
             url = "https://html.duckduckgo.com/html/"
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }
             r = requests.post(url, data={"q": query}, headers=headers, timeout=10)
             r.raise_for_status()
             results = []
             blocks = re.findall(
                 r'<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)</a>.*?'
                 r'<a[^>]+class="result__snippet"[^>]*>(.*?)</a>',
-                r.text, re.DOTALL
+                r.text,
+                re.DOTALL,
             )
             if not blocks:
                 blocks = re.findall(
                     r'<a[^>]+href="(https?://[^"]*)"[^>]*>(.*?)</a>.*?<span[^>]*>(.*?)</span>',
-                    r.text, re.DOTALL
+                    r.text,
+                    re.DOTALL,
                 )
             for href, title, snippet in blocks[:max_results]:
-                title = re.sub(r'<[^>]+>', '', title).strip()
-                snippet = re.sub(r'<[^>]+>', '', snippet).strip()
+                title = re.sub(r"<[^>]+>", "", title).strip()
+                snippet = re.sub(r"<[^>]+>", "", snippet).strip()
                 if title and href.startswith("http"):
                     results.append({"title": title, "snippet": snippet, "url": href})
             return results
@@ -191,10 +217,22 @@ class WebSearcher:
 
 
 PROVIDERS = {
-    "openai": {"base_url": "https://api.openai.com/v1", "models": ["gpt-4o", "gpt-4o-mini"]},
-    "deepseek": {"base_url": "https://api.deepseek.com/v1", "models": ["deepseek-chat", "deepseek-reasoner"]},
-    "anthropic": {"base_url": "https://api.anthropic.com/v1", "models": ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"]},
-    "ollama": {"base_url": "http://localhost:11434/v1", "models": ["llama3", "qwen2", "deepseek-r1"]},
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "models": ["gpt-4o", "gpt-4o-mini"],
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "models": ["deepseek-chat", "deepseek-reasoner"],
+    },
+    "anthropic": {
+        "base_url": "https://api.anthropic.com/v1",
+        "models": ["claude-sonnet-4-20250514", "claude-haiku-4-5-20251001"],
+    },
+    "ollama": {
+        "base_url": "http://localhost:11434/v1",
+        "models": ["llama3", "qwen2", "deepseek-r1"],
+    },
 }
 
 
@@ -225,7 +263,7 @@ class AIAssistant:
 
     def close(self):
         """关闭 HTTP Session"""
-        if hasattr(self, 'session') and self.session:
+        if hasattr(self, "session") and self.session:
             try:
                 self.session.close()
             except Exception:
@@ -241,10 +279,17 @@ class AIAssistant:
 
     def _build_headers(self) -> dict:
         if self.provider == "anthropic":
-            return {"x-api-key": self.api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+            return {
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            }
         if self.provider == "ollama":
             return {"Content-Type": "application/json"}
-        return {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
 
     def _build_payload(self, messages: list, stream: bool = False) -> dict:
         if self.provider == "anthropic":
@@ -255,11 +300,22 @@ class AIAssistant:
                     system_msg = m["content"]
                 else:
                     user_messages.append(m)
-            payload = {"model": self.model, "max_tokens": self.max_tokens, "messages": user_messages, "stream": stream}
+            payload = {
+                "model": self.model,
+                "max_tokens": self.max_tokens,
+                "messages": user_messages,
+                "stream": stream,
+            }
             if system_msg:
                 payload["system"] = system_msg
             return payload
-        return {"model": self.model, "messages": messages, "temperature": 0.7, "max_tokens": self.max_tokens, "stream": stream}
+        return {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": self.max_tokens,
+            "stream": stream,
+        }
 
     def _get_endpoint(self) -> str:
         url = self.base_url.rstrip("/")
@@ -300,18 +356,29 @@ class AIAssistant:
         messages.append({"role": "user", "content": message})
 
         import time
+
         last_error = None
 
         for attempt in range(max_retries + 1):
             try:
                 print(f"[INFO] AI request attempt {attempt + 1}/{max_retries + 1}")
-                r = self.session.post(self._get_endpoint(), headers=self._build_headers(),
-                                  json=self._build_payload(messages, stream=False), timeout=180)
+                r = self.session.post(
+                    self._get_endpoint(),
+                    headers=self._build_headers(),
+                    json=self._build_payload(messages, stream=False),
+                    timeout=180,
+                )
                 r.raise_for_status()
                 return self._extract_content(r.json())
-            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
+            except (
+                requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+            ) as e:
                 last_error = e
-                print(f"[WARN] AI request network error (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                print(
+                    f"[WARN] AI request network error (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                )
                 if attempt < max_retries:
                     wait_time = 2 * (attempt + 1)  # 指数退避：2秒、4秒
                     print(f"[INFO] Retrying in {wait_time} seconds...")
@@ -319,11 +386,15 @@ class AIAssistant:
                 continue
             except Exception as e:
                 last_error = e
-                print(f"[ERROR] AI request failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                print(
+                    f"[ERROR] AI request failed (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                )
                 # 非网络错误，不重试
                 return "AI_ERROR:request_failed"
 
-        print(f"[ERROR] AI request failed after {max_retries + 1} attempts: {last_error}")
+        print(
+            f"[ERROR] AI request failed after {max_retries + 1} attempts: {last_error}"
+        )
         return "AI_ERROR:request_failed"
 
     def chat_stream(self, message: str, context: str = "", max_retries: int = 2):
@@ -338,6 +409,7 @@ class AIAssistant:
         messages.append({"role": "user", "content": message})
 
         import time
+
         last_error = None
 
         for attempt in range(max_retries + 1):
@@ -345,10 +417,16 @@ class AIAssistant:
             finish_reason = None
             content_started = False  # 标记是否已经开始输出内容
             try:
-                print(f"[INFO] AI stream request attempt {attempt + 1}/{max_retries + 1}")
-                r = self.session.post(self._get_endpoint(), headers=self._build_headers(),
-                                  json=self._build_payload(messages, stream=True),
-                                  timeout=180, stream=True)
+                print(
+                    f"[INFO] AI stream request attempt {attempt + 1}/{max_retries + 1}"
+                )
+                r = self.session.post(
+                    self._get_endpoint(),
+                    headers=self._build_headers(),
+                    json=self._build_payload(messages, stream=True),
+                    timeout=180,
+                    stream=True,
+                )
                 r.raise_for_status()
 
                 for line in r.iter_lines():
@@ -410,9 +488,15 @@ class AIAssistant:
                 # 请求成功，退出重试循环
                 return
 
-            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
+            except (
+                requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+            ) as e:
                 last_error = e
-                print(f"[WARN] AI stream network error (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                print(
+                    f"[WARN] AI stream network error (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                )
 
                 # 确保关闭 think 标签
                 if in_think:
@@ -420,7 +504,9 @@ class AIAssistant:
 
                 # 如果已经开始输出内容，无法重试，直接返回错误
                 if content_started:
-                    print("[ERROR] AI stream failed after content started, cannot retry")
+                    print(
+                        "[ERROR] AI stream failed after content started, cannot retry"
+                    )
                     yield "\nAI_ERROR:network_interrupted"
                     return
 
@@ -434,7 +520,9 @@ class AIAssistant:
 
             except Exception as e:
                 last_error = e
-                print(f"[ERROR] AI stream failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                print(
+                    f"[ERROR] AI stream failed (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                )
 
                 # 确保关闭 think 标签
                 if in_think:
@@ -450,7 +538,9 @@ class AIAssistant:
                 return
 
         # 所有重试都失败
-        print(f"[ERROR] AI stream failed after {max_retries + 1} attempts: {last_error}")
+        print(
+            f"[ERROR] AI stream failed after {max_retries + 1} attempts: {last_error}"
+        )
         yield "\nAI_ERROR:request_failed"
 
 
@@ -469,14 +559,17 @@ class SearchAI:
         """关闭底层 HTTP Session"""
         if self.assistant:
             self.assistant.close()
-        if self.lightweight_assistant and self.lightweight_assistant is not self.assistant:
+        if (
+            self.lightweight_assistant
+            and self.lightweight_assistant is not self.assistant
+        ):
             self.lightweight_assistant.close()
 
     def is_available(self) -> bool:
         return self.assistant is not None and self.assistant.is_available()
 
     @staticmethod
-    def _build_simple_query_params(user_input: str, lang: str = 'zh') -> dict:
+    def _build_simple_query_params(user_input: str, lang: str = "zh") -> dict:
         """规则引擎直接构建简单查询的搜索参数（跳过 AI）
 
         适用于 DOI/PMID 查找和简单关键词查询。
@@ -499,7 +592,9 @@ class SearchAI:
                 "journal": "",
                 "pub_type": "",
                 "field": "",
-                "explanation": f"DOI 精确查找: {doi}" if lang == 'en' else f"DOI 精确查找: {doi}",
+                "explanation": f"DOI 精确查找: {doi}"
+                if lang == "en"
+                else f"DOI 精确查找: {doi}",
                 "suggested_keywords": [],
             }
 
@@ -516,7 +611,9 @@ class SearchAI:
                 "journal": "",
                 "pub_type": "",
                 "field": "",
-                "explanation": f"PMID 精确查找: {pmid}" if lang == 'en' else f"PMID 精确查找: {pmid}",
+                "explanation": f"PMID 精确查找: {pmid}"
+                if lang == "en"
+                else f"PMID 精确查找: {pmid}",
                 "suggested_keywords": [],
             }
 
@@ -537,19 +634,26 @@ class SearchAI:
             "journal": "",
             "pub_type": "",
             "field": "",
-            "explanation": f"简单关键词直接检索: {q}" if lang == 'en' else f"简单关键词直接检索: {q}",
+            "explanation": f"简单关键词直接检索: {q}"
+            if lang == "en"
+            else f"简单关键词直接检索: {q}",
             "suggested_keywords": [query_en] if query_en else [],
         }
 
-    def _get_web_context(self, user_input: str, lang: str = 'zh') -> str:
+    def _get_web_context(self, user_input: str, lang: str = "zh") -> str:
         """获取联网搜索上下文"""
         web_context = ""
         try:
             current_year = datetime.now().year
-            web_results = WebSearcher.search(f"{user_input} latest research {current_year-1} {current_year}", max_results=5)
+            web_results = WebSearcher.search(
+                f"{user_input} latest research {current_year - 1} {current_year}",
+                max_results=5,
+            )
             if web_results:
-                if lang == 'en':
-                    web_context = "\n\nHere are related web search results for reference:\n"
+                if lang == "en":
+                    web_context = (
+                        "\n\nHere are related web search results for reference:\n"
+                    )
                 else:
                     web_context = "\n\n以下是联网搜索到的相关信息，供你参考：\n"
                 for i, r in enumerate(web_results, 1):
@@ -558,14 +662,14 @@ class SearchAI:
             pass
         return web_context
 
-    def _get_system_prompt(self, stream: bool = False, lang: str = 'zh') -> str:
+    def _get_system_prompt(self, stream: bool = False, lang: str = "zh") -> str:
         """获取系统提示词"""
         current_year = datetime.now().year
         base_prompt = f"""You are a literature search expert. Users describe papers in natural language (Chinese or English), and you generate optimal search parameters.
 
 Current year: {current_year}. Calculate accurate years from user's time description.
-Chinese examples: "近两年" → year_from={current_year-1}; "最近三年" → year_from={current_year-2}
-English examples: "last 2 years" → year_from={current_year-1}; "recent 3 years" → year_from={current_year-2}; "since 2023" → year_from=2023
+Chinese examples: "近两年" → year_from={current_year - 1}; "最近三年" → year_from={current_year - 2}
+English examples: "last 2 years" → year_from={current_year - 1}; "recent 3 years" → year_from={current_year - 2}; "since 2023" → year_from=2023
 
 CRITICAL RULE - JOURNAL EXTRACTION (HIGHEST PRIORITY):
 If user mentions ANY journal names, you MUST include them in the journal field!
@@ -633,7 +737,7 @@ field rules (search field):
 REMINDER: Always check for journal names in user input! This is the most important extraction task."""
 
         # 语言指令
-        if lang == 'en':
+        if lang == "en":
             lang_instruction = "\nYou MUST respond in English. All analysis text, explanation, and search_reasoning fields must be in English."
         else:
             lang_instruction = "\n你必须用中文回答。所有分析文本、explanation 和 search_reasoning 字段都必须使用中文。"
@@ -641,7 +745,10 @@ REMINDER: Always check for journal names in user input! This is the most importa
         if stream:
             # 流式模式：先输出简短分析，最后输出JSON
             # 注意：DeepSeek max_tokens=8192，分析文本必须简洁，确保 JSON 完整输出
-            return base_prompt + lang_instruction + """
+            return (
+                base_prompt
+                + lang_instruction
+                + """
 
 Output format (STRICT - follow exactly):
 1. Brief analysis (2-3 sentences ONLY, do NOT exceed!)
@@ -659,9 +766,13 @@ CRITICAL RULES:
 - If user writes in English, query_en and query_zh can be the same
 - If user says "近两年": year_from=2025, year_to=2026 (current year is 2026)
 - If user says "最近三年": year_from=2024, year_to=2026"""
+            )
 
         # 非流式模式：直接返回 JSON
-        return base_prompt + lang_instruction + """
+        return (
+            base_prompt
+            + lang_instruction
+            + """
 
 Return strictly in the following JSON format, no other content:
 {{
@@ -677,39 +788,40 @@ Return strictly in the following JSON format, no other content:
   "suggested_keywords": ["3-5 professional English keywords"],
   "search_reasoning": "brief reasoning for the search strategy"
 }}"""
+        )
 
     # 期刊名称映射表（用于从用户输入中提取期刊）
     # 格式: (关键词列表, 期刊名称)
     JOURNAL_KEYWORDS = [
         # 期刊系列（优先匹配，避免被单个期刊名覆盖）
-        (['nature series', 'nature及子刊', 'nature系列', 'nature子刊'], 'nature'),
-        (['cell series', 'cell及子刊', 'cell系列', 'cell子刊'], 'cell'),
-        (['science series', 'science及子刊', 'science系列', 'science子刊'], 'science'),
+        (["nature series", "nature及子刊", "nature系列", "nature子刊"], "nature"),
+        (["cell series", "cell及子刊", "cell系列", "cell子刊"], "cell"),
+        (["science series", "science及子刊", "science系列", "science子刊"], "science"),
         # 具体期刊名
-        (['nature reviews'], 'nature reviews'),
-        (['nature methods'], 'nature methods'),
-        (['nature medicine'], 'nature medicine'),
-        (['nature physics'], 'nature physics'),
-        (['nature chemistry'], 'nature chemistry'),
-        (['nature biotechnology'], 'nature biotechnology'),
-        (['nature communications'], 'nature communications'),
-        (['cell reports'], 'cell reports'),
-        (['cell metabolism'], 'cell metabolism'),
-        (['cell stem cell'], 'cell stem cell'),
+        (["nature reviews"], "nature reviews"),
+        (["nature methods"], "nature methods"),
+        (["nature medicine"], "nature medicine"),
+        (["nature physics"], "nature physics"),
+        (["nature chemistry"], "nature chemistry"),
+        (["nature biotechnology"], "nature biotechnology"),
+        (["nature communications"], "nature communications"),
+        (["cell reports"], "cell reports"),
+        (["cell metabolism"], "cell metabolism"),
+        (["cell stem cell"], "cell stem cell"),
         # 顶级期刊（单独出现时匹配）
-        (['nature'], 'nature'),
-        (['cell'], 'cell'),
-        (['science'], 'science'),
-        (['lancet'], 'lancet'),
-        (['柳叶刀'], 'lancet'),
-        (['nejm', 'new england journal'], 'nejm'),
-        (['新英格兰'], 'nejm'),
-        (['jama'], 'jama'),
-        (['pnas'], 'pnas'),
+        (["nature"], "nature"),
+        (["cell"], "cell"),
+        (["science"], "science"),
+        (["lancet"], "lancet"),
+        (["柳叶刀"], "lancet"),
+        (["nejm", "new england journal"], "nejm"),
+        (["新英格兰"], "nejm"),
+        (["jama"], "jama"),
+        (["pnas"], "pnas"),
         # 中文期刊名
-        (['自然'], 'nature'),
-        (['细胞'], 'cell'),
-        (['科学'], 'science'),
+        (["自然"], "nature"),
+        (["细胞"], "cell"),
+        (["科学"], "science"),
     ]
 
     def _extract_journals_from_input(self, user_input: str) -> str:
@@ -718,7 +830,7 @@ Return strictly in the following JSON format, no other content:
         journals = set()
 
         # 单字期刊关键词需要更精确的匹配（避免"单细胞"误匹配"cell"）
-        single_word_journals = {'nature', 'cell', 'science'}
+        single_word_journals = {"nature", "cell", "science"}
 
         for keywords, journal in self.JOURNAL_KEYWORDS:
             for keyword in keywords:
@@ -727,7 +839,12 @@ Return strictly in the following JSON format, no other content:
                     if keyword in single_word_journals and len(keyword) <= 7:
                         # [Fix] 扩展分隔符集合，支持中文连接词（和、及、与）
                         import re
-                        pattern = r'(?:^|[\s,，、和及与])' + re.escape(keyword) + r'(?:$|[\s,，、和及与])'
+
+                        pattern = (
+                            r"(?:^|[\s,，、和及与])"
+                            + re.escape(keyword)
+                            + r"(?:$|[\s,，、和及与])"
+                        )
                         if re.search(pattern, input_lower):
                             journals.add(journal)
                             break
@@ -735,46 +852,49 @@ Return strictly in the following JSON format, no other content:
                         journals.add(journal)
                         break
 
-        return ','.join(sorted(journals)) if journals else ''
+        return ",".join(sorted(journals)) if journals else ""
 
-    def _parse_result(self, result: str, fallback_query: str, lang: str = 'zh') -> dict:
+    def _parse_result(self, result: str, fallback_query: str, lang: str = "zh") -> dict:
         """解析 AI 返回的 JSON 结果"""
         try:
             # AI 搜索不需要显示思考过程，剥离 think 标签避免干扰 JSON 解析
-            result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL).strip()
+            result = re.sub(r"<think>.*?</think>", "", result, flags=re.DOTALL).strip()
             # 尝试从结果中提取 JSON（支持嵌套）
-            start = result.find('{')
+            start = result.find("{")
             if start >= 0:
                 decoder = json.JSONDecoder()
                 obj, _ = decoder.raw_decode(result[start:])
                 # [Fix] 处理双语言查询字段
                 # 如果 AI 返回了 query_en 和 query_zh，直接使用
                 # 如果只返回了 query（旧格式），则进行兼容处理
-                if 'query_en' not in obj and 'query_zh' not in obj:
+                if "query_en" not in obj and "query_zh" not in obj:
                     # 兼容旧格式：只有一个 query 字段
-                    old_query = obj.get('query', fallback_query)
+                    old_query = obj.get("query", fallback_query)
                     from search_engine import _contains_chinese, _translate_zh_to_en
+
                     if _contains_chinese(old_query):
                         # 中文查询：query_zh=原始中文，query_en=翻译英文
-                        obj['query_zh'] = old_query
-                        obj['query_en'] = _translate_zh_to_en(old_query)
+                        obj["query_zh"] = old_query
+                        obj["query_en"] = _translate_zh_to_en(old_query)
                     else:
                         # 英文查询：query_en=英文，query_zh=原始（可能也是英文）
-                        obj['query_en'] = old_query
-                        obj['query_zh'] = old_query
-                    logger.info(f"兼容旧格式: query_en={obj['query_en']}, query_zh={obj['query_zh']}")
+                        obj["query_en"] = old_query
+                        obj["query_zh"] = old_query
+                    logger.info(
+                        f"兼容旧格式: query_en={obj['query_en']}, query_zh={obj['query_zh']}"
+                    )
                 else:
                     # 新格式：确保两个字段都有值
-                    if not obj.get('query_en'):
-                        obj['query_en'] = obj.get('query_zh', fallback_query)
-                    if not obj.get('query_zh'):
-                        obj['query_zh'] = obj.get('query_en', fallback_query)
+                    if not obj.get("query_en"):
+                        obj["query_en"] = obj.get("query_zh", fallback_query)
+                    if not obj.get("query_zh"):
+                        obj["query_zh"] = obj.get("query_en", fallback_query)
 
                 # 后备机制：如果 AI 未返回 journal，从用户输入中提取
-                if not obj.get('journal'):
+                if not obj.get("journal"):
                     extracted = self._extract_journals_from_input(fallback_query)
                     if extracted:
-                        obj['journal'] = extracted
+                        obj["journal"] = extracted
                         logger.info(f"AI 未返回 journal，从用户输入提取: {extracted}")
                 return obj
         except Exception:
@@ -785,6 +905,7 @@ Return strictly in the following JSON format, no other content:
 
         # [Fix] 解析失败时也要处理双语言查询
         from search_engine import _contains_chinese, _translate_zh_to_en
+
         if _contains_chinese(fallback_query):
             query_en = _translate_zh_to_en(fallback_query)
             query_zh = fallback_query
@@ -796,16 +917,19 @@ Return strictly in the following JSON format, no other content:
             "query_en": query_en,
             "query_zh": query_zh,
             "query": fallback_query,  # 保持兼容性
-            "year_from": 2020, "year_to": datetime.now().year,
+            "year_from": 2020,
+            "year_to": datetime.now().year,
             "data_sources": [],
             "journal": extracted_journal,
             "pub_type": "",
             "field": "",
-            "explanation": f"AI parsing failed, using original input: {fallback_query}" if lang == 'en' else f"AI 解析失败，使用原始输入: {fallback_query}",
+            "explanation": f"AI parsing failed, using original input: {fallback_query}"
+            if lang == "en"
+            else f"AI 解析失败，使用原始输入: {fallback_query}",
             "suggested_keywords": [],
         }
 
-    def analyze_query(self, user_input: str, lang: str = 'zh') -> dict:
+    def analyze_query(self, user_input: str, lang: str = "zh") -> dict:
         """非流式分析查询（支持分级路由）
 
         simple  → 跳过 AI，规则引擎直接构建
@@ -830,7 +954,11 @@ Return strictly in the following JSON format, no other content:
             return result
 
         # 选择模型
-        if complexity == "moderate" and self.lightweight_assistant and self.lightweight_assistant.is_available():
+        if (
+            complexity == "moderate"
+            and self.lightweight_assistant
+            and self.lightweight_assistant.is_available()
+        ):
             assistant = self.lightweight_assistant
         else:
             assistant = self.assistant
@@ -866,7 +994,9 @@ Return strictly in the following JSON format, no other content:
         # 处理截断情况：标记不完整但后面跟着 JSON
         # 例如 "__SEARCH" 后面直接跟 "{"
         # 查找可能的截断标记后跟 JSON 对象
-        truncated_match = re.search(r'(__SEARCH(?:_JSON(?:__)?)?|SEARCH_JSON(?:__)?|SEARCHJSON)\s*(\{)', text)
+        truncated_match = re.search(
+            r"(__SEARCH(?:_JSON(?:__)?)?|SEARCH_JSON(?:__)?|SEARCHJSON)\s*(\{)", text
+        )
         if truncated_match:
             # 只返回标记部分的长度，不包含 {
             marker_text = truncated_match.group(1)
@@ -877,15 +1007,15 @@ Return strictly in the following JSON format, no other content:
         if last_search >= 0:
             # 检查这个位置之后是否有 JSON 对象
             after_search = text[last_search:]
-            json_match = re.search(r'__SEARCH[_A-Z]*\s*(\{)', after_search)
+            json_match = re.search(r"__SEARCH[_A-Z]*\s*(\{)", after_search)
             if json_match:
                 # 返回标记文本的长度（到 { 之前）
-                marker_text = json_match.group(0).rstrip('{').rstrip()
+                marker_text = json_match.group(0).rstrip("{").rstrip()
                 return last_search, len(marker_text)
 
         return -1, 0
 
-    def analyze_query_stream(self, user_input: str, lang: str = 'zh'):
+    def analyze_query_stream(self, user_input: str, lang: str = "zh"):
         """流式分析查询，yield 每个 chunk，最后 yield 完整的分析结果 dict
 
         支持分级路由：
@@ -899,7 +1029,7 @@ Return strictly in the following JSON format, no other content:
         if cached is not None:
             print(f"[CACHE HIT] AI search analysis (stream): '{user_input[:50]}'")
             # 缓存命中：yield 简短提示 + 结果 dict
-            if lang == 'en':
+            if lang == "en":
                 yield "(Using cached analysis)\n"
             else:
                 yield "（使用缓存分析结果）\n"
@@ -914,7 +1044,7 @@ Return strictly in the following JSON format, no other content:
         if complexity == "simple":
             result = self._build_simple_query_params(user_input, lang=lang)
             _query_analysis_cache.put(cache_key, result)
-            if lang == 'en':
+            if lang == "en":
                 yield f"Direct search for: {user_input}\n"
             else:
                 yield f"直接检索: {user_input}\n"
@@ -922,7 +1052,11 @@ Return strictly in the following JSON format, no other content:
             return
 
         # 选择模型
-        if complexity == "moderate" and self.lightweight_assistant and self.lightweight_assistant.is_available():
+        if (
+            complexity == "moderate"
+            and self.lightweight_assistant
+            and self.lightweight_assistant.is_available()
+        ):
             assistant = self.lightweight_assistant
         else:
             assistant = self.assistant
@@ -969,8 +1103,10 @@ Return strictly in the following JSON format, no other content:
         marker_pos, marker_len = self._find_json_marker(result)
         if marker_pos >= 0:
             explanation = result[:marker_pos]
-            explanation = re.sub(r'<think>.*?</think>', '', explanation, flags=re.DOTALL).strip()
-            json_str = result[marker_pos + marker_len:]
+            explanation = re.sub(
+                r"<think>.*?</think>", "", explanation, flags=re.DOTALL
+            ).strip()
+            json_str = result[marker_pos + marker_len :]
             try:
                 decoder = json.JSONDecoder()
                 search_json, _ = decoder.raw_decode(json_str.strip())
@@ -979,11 +1115,13 @@ Return strictly in the following JSON format, no other content:
 
         # 如果标记方式失败，尝试直接解析 JSON（非思考模型）
         if not search_json:
-            result_cleaned = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL).strip()
+            result_cleaned = re.sub(
+                r"<think>.*?</think>", "", result, flags=re.DOTALL
+            ).strip()
             # 逐个尝试前向查找 { 位置，使用 raw_decode 验证
             search_start = 0
             while search_start < len(result_cleaned):
-                brace_pos = result_cleaned.find('{', search_start)
+                brace_pos = result_cleaned.find("{", search_start)
                 if brace_pos < 0:
                     break
                 try:
@@ -999,11 +1137,13 @@ Return strictly in the following JSON format, no other content:
             search_json["explanation"] = explanation
             search_json["search_reasoning"] = explanation
             # 后备机制：如果AI未返回journal，从用户输入中提取
-            if not search_json.get('journal'):
+            if not search_json.get("journal"):
                 extracted = self._extract_journals_from_input(user_input)
                 if extracted:
-                    search_json['journal'] = extracted
-                    logger.info(f"流式搜索：AI未返回journal，从用户输入提取: {extracted}")
+                    search_json["journal"] = extracted
+                    logger.info(
+                        f"流式搜索：AI未返回journal，从用户输入提取: {extracted}"
+                    )
             _query_analysis_cache.put(cache_key, search_json)
             yield search_json
         else:
@@ -1030,7 +1170,10 @@ class AnalysisAI:
         """关闭底层 HTTP Session"""
         if self.assistant:
             self.assistant.close()
-        if self.lightweight_assistant and self.lightweight_assistant is not self.assistant:
+        if (
+            self.lightweight_assistant
+            and self.lightweight_assistant is not self.assistant
+        ):
             self.lightweight_assistant.close()
 
     def is_available(self) -> bool:
@@ -1042,9 +1185,11 @@ class AnalysisAI:
         summary → 轻量模型（省 token，够用）
         detail/compare/novelty → 主模型（需要深度推理）
         """
-        if (mode in self._LIGHTWEIGHT_MODES
-                and self.lightweight_assistant
-                and self.lightweight_assistant.is_available()):
+        if (
+            mode in self._LIGHTWEIGHT_MODES
+            and self.lightweight_assistant
+            and self.lightweight_assistant.is_available()
+        ):
             return self.lightweight_assistant
         return self.assistant
 
@@ -1061,9 +1206,9 @@ class AnalysisAI:
             return
         yield from assistant.chat_stream(message, context)
 
-    def summarize(self, papers: list, lang: str = 'zh') -> str:
+    def summarize(self, papers: list, lang: str = "zh") -> str:
         """总结文献（使用轻量模型）"""
-        if lang == 'en':
+        if lang == "en":
             context = "You are an academic literature analysis assistant. Please summarize the main findings and trends of the following literature in English."
             prompt = "Please summarize the main research directions and key findings of the following papers:\n\n"
         else:
@@ -1072,14 +1217,18 @@ class AnalysisAI:
 
         # 估算 token 数，动态调整论文数量和摘要长度
         # 粗略估算：1 个 token ≈ 4 个字符（英文）或 2 个字符（中文）
-        max_tokens = 8000 if (self.assistant and self.assistant.provider == "deepseek") else 12000
+        max_tokens = (
+            8000
+            if (self.assistant and self.assistant.provider == "deepseek")
+            else 12000
+        )
         abstract_limit = 300
         selected_papers = []
 
         for p in papers[:10]:
             # 估算每篇论文的 token
-            title = getattr(p, 'title', '') or ''
-            abstract = getattr(p, 'abstract', '') or ''
+            title = getattr(p, "title", "") or ""
+            abstract = getattr(p, "abstract", "") or ""
             # 简单估算：(标题 + 摘要) / 3 ≈ token 数
             paper_tokens = (len(title) + len(abstract)) // 3
             # 加上固定开销（作者、期刊等）
@@ -1093,11 +1242,13 @@ class AnalysisAI:
 
             selected_papers.append(p)
 
-        paper_text = "\n\n".join([
-            f"{'Title' if lang == 'en' else '标题'}: {getattr(p, 'title', 'Unknown')}\n"
-            f"{'Authors' if lang == 'en' else '作者'}: {', '.join((getattr(p, 'authors', None) or [])[:3])}\n"
-            f"{'Journal' if lang == 'en' else '期刊'}: {getattr(p, 'journal', '')} ({getattr(p, 'year', '')})\n"
-            f"{'Abstract' if lang == 'en' else '摘要'}: {(getattr(p, 'abstract', '') or '')[:abstract_limit]}"
-            for p in selected_papers
-        ])
+        paper_text = "\n\n".join(
+            [
+                f"{'Title' if lang == 'en' else '标题'}: {getattr(p, 'title', 'Unknown')}\n"
+                f"{'Authors' if lang == 'en' else '作者'}: {', '.join((getattr(p, 'authors', None) or [])[:3])}\n"
+                f"{'Journal' if lang == 'en' else '期刊'}: {getattr(p, 'journal', '')} ({getattr(p, 'year', '')})\n"
+                f"{'Abstract' if lang == 'en' else '摘要'}: {(getattr(p, 'abstract', '') or '')[:abstract_limit]}"
+                for p in selected_papers
+            ]
+        )
         return self.chat(f"{prompt}{paper_text}", context, mode="summary")

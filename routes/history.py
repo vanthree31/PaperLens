@@ -6,11 +6,10 @@ import re
 from datetime import datetime
 from collections import Counter
 from flask import Blueprint, request, jsonify, current_app
-from core.config import load_config
 from core.utils import _get_user_data_path, _escape_paper
 from search_engine import Paper
 
-history_bp = Blueprint('history', __name__)
+history_bp = Blueprint("history", __name__)
 
 
 def _state():
@@ -144,7 +143,7 @@ def get_recommendations():
 
     # 判断是否包含中文字符
     def has_chinese(text):
-        return any('一' <= c <= '鿿' for c in text)
+        return any("一" <= c <= "鿿" for c in text)
 
     # 分析阅读历史，提取关键词和主题
     keyword_counter = Counter()
@@ -175,7 +174,9 @@ def get_recommendations():
     if lang == "en":
         top_keywords = [kw for kw in top_keywords if not has_chinese(kw)]
     elif lang == "zh":
-        top_keywords = [kw for kw in top_keywords if has_chinese(kw) or not kw.isascii()]
+        top_keywords = [
+            kw for kw in top_keywords if has_chinese(kw) or not kw.isascii()
+        ]
 
     if not top_keywords and not top_journals:
         return jsonify({"papers": [], "keywords": []})
@@ -244,64 +245,132 @@ def get_recommendations():
                     with open(collections_path, "r", encoding="utf-8") as f:
                         collections = json.load(f)
                 # 取收藏中最近的论文 DOI
-                collection_dois = [item.get("doi") for item in collections.get("items", []) if item.get("doi")][-5:]
+                collection_dois = [
+                    item.get("doi")
+                    for item in collections.get("items", [])
+                    if item.get("doi")
+                ][-5:]
                 for doi in collection_dois[:3]:
                     try:
                         import requests as req
+
                         with state.cache_lock:
-                            email = state.config.get("sources", {}).get("openalex", {}).get("email", "")
-                            api_key = state.config.get("sources", {}).get("openalex", {}).get("api_key", "")
+                            email = (
+                                state.config.get("sources", {})
+                                .get("openalex", {})
+                                .get("email", "")
+                            )
+                            api_key = (
+                                state.config.get("sources", {})
+                                .get("openalex", {})
+                                .get("api_key", "")
+                            )
                         params = {}
                         if email:
                             params["mailto"] = email
                         if api_key:
                             params["api_key"] = api_key
-                        r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=10)
+                        r = req.get(
+                            f"https://api.openalex.org/works/doi:{doi}",
+                            params=params,
+                            timeout=10,
+                        )
                         if r.status_code == 200:
                             work = r.json()
                             refs = work.get("referenced_works", [])
                             if refs:
                                 # 取引用文献的前5个
-                                ref_ids = ",".join([rid.split("/")[-1] for rid in refs[:5]])
-                                ref_params = {**params, "filter": f"openalex:{ref_ids}", "per_page": 5}
-                                r_refs = req.get("https://api.openalex.org/works", params=ref_params, timeout=10)
+                                ref_ids = ",".join(
+                                    [rid.split("/")[-1] for rid in refs[:5]]
+                                )
+                                ref_params = {
+                                    **params,
+                                    "filter": f"openalex:{ref_ids}",
+                                    "per_page": 5,
+                                }
+                                r_refs = req.get(
+                                    "https://api.openalex.org/works",
+                                    params=ref_params,
+                                    timeout=10,
+                                )
                                 if r_refs.status_code == 200:
                                     for w in r_refs.json().get("results", []):
-                                        oa_doi = (w.get("doi", "") or "").replace("https://doi.org/", "")
+                                        oa_doi = (w.get("doi", "") or "").replace(
+                                            "https://doi.org/", ""
+                                        )
                                         if oa_doi and oa_doi.lower() not in recent_dois:
-                                            if not any(r.doi == oa_doi for r in recommended_papers):
+                                            if not any(
+                                                r.doi == oa_doi
+                                                for r in recommended_papers
+                                            ):
                                                 p = Paper(source="openalex")
-                                                p.title = re.sub(r'<[^>]+>', '', w.get("title", "") or "")
+                                                p.title = re.sub(
+                                                    r"<[^>]+>",
+                                                    "",
+                                                    w.get("title", "") or "",
+                                                )
                                                 p.doi = oa_doi
                                                 p.year = w.get("publication_year", 0)
-                                                p.citation_count = w.get("cited_by_count", 0)
+                                                p.citation_count = w.get(
+                                                    "cited_by_count", 0
+                                                )
                                                 loc = w.get("primary_location") or {}
                                                 src = loc.get("source") or {}
-                                                p.journal = src.get("display_name", "") or ""
+                                                p.journal = (
+                                                    src.get("display_name", "") or ""
+                                                )
                                                 # 补全学术字段
                                                 biblio = w.get("biblio") or {}
-                                                p.volume = str(biblio.get("volume", "") or "")
-                                                p.issue = str(biblio.get("issue", "") or "")
-                                                fp = str(biblio.get("first_page", "") or "")
-                                                lp = str(biblio.get("last_page", "") or "")
+                                                p.volume = str(
+                                                    biblio.get("volume", "") or ""
+                                                )
+                                                p.issue = str(
+                                                    biblio.get("issue", "") or ""
+                                                )
+                                                fp = str(
+                                                    biblio.get("first_page", "") or ""
+                                                )
+                                                lp = str(
+                                                    biblio.get("last_page", "") or ""
+                                                )
                                                 if fp:
-                                                    p.pages = fp if not lp or fp == lp else f"{fp}-{lp}"
+                                                    p.pages = (
+                                                        fp
+                                                        if not lp or fp == lp
+                                                        else f"{fp}-{lp}"
+                                                    )
                                                 issn_raw = src.get("issn", "") or ""
-                                                p.issn = issn_raw[0] if isinstance(issn_raw, list) and issn_raw else str(issn_raw)
+                                                p.issn = (
+                                                    issn_raw[0]
+                                                    if isinstance(issn_raw, list)
+                                                    and issn_raw
+                                                    else str(issn_raw)
+                                                )
                                                 # 摘要（OpenAlex 反转索引格式）
-                                                abstract_inv = w.get("abstract_inverted_index")
+                                                abstract_inv = w.get(
+                                                    "abstract_inverted_index"
+                                                )
                                                 if abstract_inv:
                                                     try:
                                                         positions = []
-                                                        for word, pos_list in abstract_inv.items():
+                                                        for (
+                                                            word,
+                                                            pos_list,
+                                                        ) in abstract_inv.items():
                                                             for pos in pos_list:
-                                                                positions.append((pos, word))
+                                                                positions.append(
+                                                                    (pos, word)
+                                                                )
                                                         positions.sort()
-                                                        p.abstract = " ".join(w for _, w in positions)
+                                                        p.abstract = " ".join(
+                                                            w for _, w in positions
+                                                        )
                                                     except Exception:
                                                         pass
                                                 for author in w.get("authorships", []):
-                                                    name = author.get("author", {}).get("display_name", "")
+                                                    name = author.get("author", {}).get(
+                                                        "display_name", ""
+                                                    )
                                                     if name:
                                                         p.authors.append(name)
                                                 for kw in w.get("keywords", []):
@@ -321,7 +390,9 @@ def get_recommendations():
 
     # 英文模式下过滤掉中文标题的论文
     if lang == "en":
-        recommended_papers = [p for p in recommended_papers if p.title and not has_chinese(p.title)]
+        recommended_papers = [
+            p for p in recommended_papers if p.title and not has_chinese(p.title)
+        ]
 
     # 限制推荐数量（增加到25篇）
     recommended_papers = recommended_papers[:25]
@@ -339,13 +410,15 @@ def get_recommendations():
     # 转换为前端格式
     results = [_escape_paper(p) for p in recommended_papers]
 
-    return jsonify({
-        "papers": results,
-        "keywords": top_keywords,
-        "journals": top_journals,
-        "total": len(results),
-        "recommendation_type": rec_type,
-    })
+    return jsonify(
+        {
+            "papers": results,
+            "keywords": top_keywords,
+            "journals": top_journals,
+            "total": len(results),
+            "recommendation_type": rec_type,
+        }
+    )
 
 
 @history_bp.route("/api/reading-history", methods=["GET"])
@@ -374,8 +447,10 @@ def get_reading_history():
         if journal:
             journal_counter[journal] += 1
 
-    return jsonify({
-        "total": len(history),
-        "keywords": [kw for kw, _ in keyword_counter.most_common(20)],
-        "journals": [j for j, _ in journal_counter.most_common(10)],
-    })
+    return jsonify(
+        {
+            "total": len(history),
+            "keywords": [kw for kw, _ in keyword_counter.most_common(20)],
+            "journals": [j for j, _ in journal_counter.most_common(10)],
+        }
+    )

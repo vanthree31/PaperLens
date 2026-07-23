@@ -21,10 +21,14 @@ def _get_default_data_dir() -> str:
                 os.makedirs(data_dir, exist_ok=True)
     else:
         # 非 Windows 或 APPDATA 未设置时回退到 exe 同目录
-        if getattr(sys, 'frozen', False):
-            data_dir = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "data")
+        if getattr(sys, "frozen", False):
+            data_dir = os.path.join(
+                os.path.dirname(os.path.abspath(sys.executable)), "data"
+            )
         else:
-            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+            data_dir = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "..", "data"
+            )
     if not os.path.exists(data_dir):
         os.makedirs(data_dir, exist_ok=True)
     return data_dir
@@ -64,8 +68,8 @@ def load_config():
         except Exception as e:
             print(f"[ERROR] Failed to load config from {user_path}: {e}")
     # 打包模式：从内置默认加载
-    if getattr(sys, 'frozen', False):
-        bundled = os.path.join(getattr(sys, '_MEIPASS', ''), "config.yaml")
+    if getattr(sys, "frozen", False):
+        bundled = os.path.join(getattr(sys, "_MEIPASS", ""), "config.yaml")
         if os.path.exists(bundled):
             try:
                 with open(bundled, "r", encoding="utf-8") as f:
@@ -77,8 +81,17 @@ def load_config():
 
 def _sanitize_config_for_save(config):
     """保存前清理配置，防止保存脱敏值"""
-    SENSITIVE_KEYS = {"api_key", "apikey", "api_secret", "secret", "password",
-                      "access_token", "secret_key", "token", "carsi_password"}
+    SENSITIVE_KEYS = {
+        "api_key",
+        "apikey",
+        "api_secret",
+        "secret",
+        "password",
+        "access_token",
+        "secret_key",
+        "token",
+        "carsi_password",
+    }
 
     def _clean_dict(d):
         if not isinstance(d, dict):
@@ -88,7 +101,15 @@ def _sanitize_config_for_save(config):
             k_lower = k.lower()
             # 检查是否是敏感字段
             is_sensitive = k_lower in SENSITIVE_KEYS or any(
-                sub in k_lower for sub in ["api_key", "api_secret", "password", "access_token", "secret_key", "cookie"]
+                sub in k_lower
+                for sub in [
+                    "api_key",
+                    "api_secret",
+                    "password",
+                    "access_token",
+                    "secret_key",
+                    "cookie",
+                ]
             )
             if is_sensitive and isinstance(v, str) and "****" in v:
                 # 跳过脱敏值，不保存到配置文件
@@ -119,15 +140,33 @@ def save_config(config):
 
 def _mask_keys(obj):
     """递归隐藏敏感字段"""
-    SENSITIVE_EXACT = {"api_key", "apikey", "api_secret", "secret", "password", "access_token", "secret_key", "token"}
+    SENSITIVE_EXACT = {
+        "api_key",
+        "apikey",
+        "api_secret",
+        "secret",
+        "password",
+        "access_token",
+        "secret_key",
+        "token",
+    }
     # 包含这些子串的 key 也需要脱敏（覆盖 carsi_password 等变体）
-    SENSITIVE_SUBSTR = {"api_key", "api_secret", "password", "access_token", "secret_key", "cookie"}
+    SENSITIVE_SUBSTR = {
+        "api_key",
+        "api_secret",
+        "password",
+        "access_token",
+        "secret_key",
+        "cookie",
+    }
 
     if isinstance(obj, dict):
         result = {}
         for k, v in obj.items():
             k_lower = k.lower()
-            is_sensitive = k_lower in SENSITIVE_EXACT or any(sub in k_lower for sub in SENSITIVE_SUBSTR)
+            is_sensitive = k_lower in SENSITIVE_EXACT or any(
+                sub in k_lower for sub in SENSITIVE_SUBSTR
+            )
             if is_sensitive:
                 if isinstance(v, dict):
                     # 嵌套字典（如 cookies {domain: {name: value}}）递归脱敏叶子节点

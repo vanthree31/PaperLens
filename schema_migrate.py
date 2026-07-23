@@ -17,6 +17,7 @@ from datetime import datetime
 
 # ============ collections.json 迁移函数 ============
 
+
 def _migrate_collections_v0_to_v1(data: dict) -> dict:
     """collections.json v0 -> v1: 新增阅读状态、标签、笔记、学术元数据、分组"""
     data.setdefault("groups", [{"id": "default", "name": "默认收藏夹"}])
@@ -53,7 +54,11 @@ def _migrate_collections_v2_to_v3(data: dict) -> dict:
 
 # 每个文件对应一个迁移函数列表，索引 i 对应 v(i) -> v(i+1) 的迁移
 _MIGRATIONS = {
-    "collections.json": [_migrate_collections_v0_to_v1, _migrate_collections_v1_to_v2, _migrate_collections_v2_to_v3],
+    "collections.json": [
+        _migrate_collections_v0_to_v1,
+        _migrate_collections_v1_to_v2,
+        _migrate_collections_v2_to_v3,
+    ],
     "reading_history.json": [],
     "preferences.json": [],
     "history.json": [],
@@ -108,7 +113,9 @@ def migrate_file(filepath: str, filename: str, dry_run: bool = False) -> bool:
         backup_path = filepath + f".bak.{datetime.now().strftime('%Y%m%d%H%M%S')}"
         try:
             shutil.copy2(filepath, backup_path)
-            print(f"[INFO] schema_migrate: 备份 {filename} -> {os.path.basename(backup_path)}")
+            print(
+                f"[INFO] schema_migrate: 备份 {filename} -> {os.path.basename(backup_path)}"
+            )
         except IOError as e:
             print(f"[WARN] schema_migrate: 备份失败 {filename}: {e}")
 
@@ -118,7 +125,9 @@ def migrate_file(filepath: str, filename: str, dry_run: bool = False) -> bool:
             try:
                 data = migrations[i](data)
             except Exception as e:
-                print(f"[ERROR] schema_migrate: {filename} v{i}->v{i+1} 迁移失败: {e}")
+                print(
+                    f"[ERROR] schema_migrate: {filename} v{i}->v{i + 1} 迁移失败: {e}"
+                )
                 return False
 
     data["_schema_version"] = target_ver
@@ -127,7 +136,9 @@ def migrate_file(filepath: str, filename: str, dry_run: bool = False) -> bool:
         try:
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"[INFO] schema_migrate: {filename} v{current_ver} -> v{target_ver} 完成")
+            print(
+                f"[INFO] schema_migrate: {filename} v{current_ver} -> v{target_ver} 完成"
+            )
         except IOError as e:
             print(f"[ERROR] schema_migrate: 写入 {filename} 失败: {e}")
             return False

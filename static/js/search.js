@@ -69,6 +69,8 @@ function buildSearchBody(overrides = {}) {
     use_zenodo: document.getElementById("useZenodo")?.checked ?? true,
     use_datacite: document.getElementById("useDatacite")?.checked ?? true,
     smart_routing: document.getElementById("smartRouting")?.checked ?? false,
+    oa_only: document.getElementById("oaOnly")?.checked ?? false,
+    affiliation: document.getElementById("filterAffiliation")?.value?.trim() || "",
     journal: getJournalFilter(),
     field: document.getElementById("filterField").value,
     pub_type: document.getElementById("filterPubType").value,
@@ -193,6 +195,8 @@ function savePreferences() {
       filterJournal: JSON.stringify(getSelectedJournals()),
       filterField: document.getElementById("filterField").value,
       filterPubType: document.getElementById("filterPubType").value,
+      oaOnly: document.getElementById("oaOnly")?.checked ?? false,
+      filterAffiliation: document.getElementById("filterAffiliation")?.value || "",
       lang: currentLang,
       dataSources: sources,
     };
@@ -585,12 +589,54 @@ function generateSearchSuggestions(query) {
     });
   }
 
-  // 4. 检测作者名模式（大写字母开头的多个词）
-  const authorPattern = /^[A-Z][a-z]+\s+[A-Z][a-z]+$/;
-  if (authorPattern.test(q)) {
+  // 4. 检测作者名模式
+  // 支持格式：
+  // - 英文名：John Smith, J. Smith, J Smith, John Michael Smith
+  // - 中文名：周金华, 张伟
+  // - 混合：Jinhua Zhou, Zhou Jinhua
+  const isAuthorName = (input) => {
+    const trimmed = input.trim();
+
+    // 中文名检测：2-4个汉字，无空格
+    if (/^[一-鿿]{2,4}$/.test(trimmed)) {
+      return true;
+    }
+
+    // 英文名检测
+    const parts = trimmed.split(/\s+/);
+
+    // 至少 2 个词，最多 4 个词
+    if (parts.length < 2 || parts.length > 4) {
+      return false;
+    }
+
+    // 每个词应该是：
+    // - 首字母大写的单词（如 John, Smith）
+    // - 缩写（如 J., J）
+    // - 小写的姓氏前缀（如 van, von, de, der）
+    const namePattern = /^[A-Z][a-z]+$|^[A-Z]\.?$|^[a-z]{1,3}$/;
+    const validParts = parts.filter(p => namePattern.test(p));
+
+    // 至少 70% 的部分应该匹配名称模式
+    if (validParts.length >= parts.length * 0.7) {
+      // 排除明显的非作者名（如常见短语）
+      const nonAuthorWords = ['the', 'and', 'for', 'with', 'from', 'this', 'that', 'are', 'was', 'were', 'been', 'have', 'has', 'had', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'shall'];
+      const lowerParts = parts.map(p => p.toLowerCase());
+      const hasNonAuthor = nonAuthorWords.some(w => lowerParts.includes(w));
+      if (!hasNonAuthor) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  if (isAuthorName(q)) {
     suggestions.push({
       type: 'author',
       message: t('suggestAuthorMsg'),
+      action: `document.getElementById('filterField').value='au'; window.doSmartSearch();`,
+      actionLabel: t('searchByAuthor'),
     });
   }
 
@@ -1018,6 +1064,8 @@ async function doAISearch() {
     journal: getJournalFilter(),
     field: document.getElementById("filterField").value,
     pub_type: document.getElementById("filterPubType").value,
+    oa_only: document.getElementById("oaOnly")?.checked ?? false,
+    affiliation: document.getElementById("filterAffiliation")?.value?.trim() || "",
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
     use_semantic_scholar: document.getElementById("useSemanticScholar")?.checked || false,
@@ -1185,6 +1233,21 @@ async function doAISearch() {
         streamEl.innerHTML = window.formatAIText(teAI(displayText));
         aiPanel.scrollTop = aiPanel.scrollHeight;
       }
+
+      // 3. 提取数据源状态消息（✓ / ✗ 开头的行）— 不受 thinkDone 限制
+      {
+        const allLines = fullText.split('\n');
+        let lastStatusLine = '';
+        for (const line of allLines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('✓ ') || trimmed.startsWith('✗ ')) {
+            lastStatusLine = trimmed;
+          }
+        }
+        if (lastStatusLine) {
+          window.setStatus(lastStatusLine);
+        }
+      }
     }
 
     // 尝试从文本中提取 JSON 对象
@@ -1285,15 +1348,40 @@ async function doAISearch() {
           document.getElementById("useCore").checked = sources.includes("core");
           document.getElementById("useLens").checked = sources.includes("lens");
         } else {
-          // 默认全部勾选
-          document.getElementById("usePubmed").checked = true;
-          document.getElementById("useOpenalex").checked = true;
-          document.getElementById("useGoogleScholar").checked = true;
-          document.getElementById("useBingAcademic").checked = true;
-          document.getElementById("useCNKI").checked = true;
-          document.getElementById("useWanfang").checked = true;
-          document.getElementById("useVIP").checked = true;
-          document.getElementById("useSemanticScholar").checked = true;
+          // AI 未指定数据源 → 用 timing 信息恢复实际使用的源
+          const usedSources = searchData.timing ? Object.keys(searchData.timing) : [];
+          if (usedSources.length > 0) {
+            // 只勾选实际搜索了的源
+            document.getElementById("usePubmed").checked = usedSources.includes("pubmed");
+            document.getElementById("useOpenalex").checked = usedSources.includes("openalex");
+            document.getElementById("useGoogleScholar").checked = usedSources.includes("google_scholar");
+            document.getElementById("useBingAcademic").checked = usedSources.includes("bing_academic");
+            document.getElementById("useCNKI").checked = usedSources.includes("cnki");
+            document.getElementById("useWanfang").checked = usedSources.includes("wanfang");
+            document.getElementById("useVIP").checked = usedSources.includes("vip");
+            document.getElementById("useSemanticScholar").checked = usedSources.includes("semantic_scholar");
+            document.getElementById("useCrossref").checked = usedSources.includes("crossref");
+            document.getElementById("useArxiv").checked = usedSources.includes("arxiv");
+            document.getElementById("useSciencedirect").checked = usedSources.includes("sciencedirect");
+            document.getElementById("useScopus").checked = usedSources.includes("scopus");
+            document.getElementById("useJstor").checked = usedSources.includes("jstor");
+            document.getElementById("useDblp").checked = usedSources.includes("dblp");
+            document.getElementById("useBiorxiv").checked = usedSources.includes("biorxiv");
+            document.getElementById("useAgris").checked = usedSources.includes("agris");
+            document.getElementById("useAcs").checked = usedSources.includes("acs");
+            document.getElementById("useOptica").checked = usedSources.includes("optica");
+            document.getElementById("useIop").checked = usedSources.includes("iop");
+            document.getElementById("useAip").checked = usedSources.includes("aip");
+            document.getElementById("useRsc").checked = usedSources.includes("rsc");
+            document.getElementById("useEuropepmc").checked = usedSources.includes("europepmc");
+            document.getElementById("useSpringer").checked = usedSources.includes("springer");
+            document.getElementById("useWiley").checked = usedSources.includes("wiley");
+            document.getElementById("useIeee").checked = usedSources.includes("ieee");
+            document.getElementById("useMuse").checked = usedSources.includes("muse");
+            document.getElementById("useCore").checked = usedSources.includes("core");
+            document.getElementById("useLens").checked = usedSources.includes("lens");
+          }
+          // 没有 timing 信息时保持当前勾选状态不变
           document.getElementById("useCrossref").checked = true;
           document.getElementById("useArxiv").checked = true;
           document.getElementById("useSciencedirect").checked = true;

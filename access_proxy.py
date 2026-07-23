@@ -5,10 +5,9 @@
 2. CARSI：Shibboleth/SAML 联邦认证，通过学校统一身份认证访问数据库
 """
 
-import re
 import sys
 import os
-from urllib.parse import urlparse, urlunparse, quote, urljoin
+from urllib.parse import urlparse, urlunparse, quote
 from core.config import load_config
 
 
@@ -25,7 +24,10 @@ def _find_chromium_executable(cache_dir):
         str: 可执行文件路径，找不到返回 None
     """
     import glob as _glob
-    chromium_dirs = sorted(_glob.glob(os.path.join(cache_dir, "chromium-*")), reverse=True)
+
+    chromium_dirs = sorted(
+        _glob.glob(os.path.join(cache_dir, "chromium-*")), reverse=True
+    )
     if not chromium_dirs:
         return None
 
@@ -192,9 +194,15 @@ class CARSIAuth:
         self.cookies = {}  # {domain: cookies_dict}
         self.authenticated = False
 
-    def authenticate(self, idp_url: str, username: str, password: str,
-                     sp_domains: list = None, custom_urls: dict = None,
-                     existing_cookies: dict = None) -> dict:
+    def authenticate(
+        self,
+        idp_url: str,
+        username: str,
+        password: str,
+        sp_domains: list = None,
+        custom_urls: dict = None,
+        existing_cookies: dict = None,
+    ) -> dict:
         """执行 CARSI 认证
 
         Args:
@@ -209,7 +217,6 @@ class CARSIAuth:
             dict: {"ok": bool, "cookies": {domain: {...}}, "error": str}
         """
         import requests
-        from bs4 import BeautifulSoup
 
         # 合并自定义 URL
         sp_entries = dict(self.SP_ENTRIES)
@@ -220,10 +227,12 @@ class CARSIAuth:
             sp_domains = list(sp_entries.keys())
 
         self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            }
+        )
         # 保留已有的 cookies（re-auth 时不丢失之前有效的 SP cookies）
         self.cookies = dict(existing_cookies) if existing_cookies else {}
         errors = []
@@ -240,12 +249,22 @@ class CARSIAuth:
                 sp_session.headers.update(self.session.headers)
                 sp_session.cookies.update(self.session.cookies)
 
-                result = self._authenticate_sp(sp_session, sp_url, idp_url, username, password)
+                result = self._authenticate_sp(
+                    sp_session, sp_url, idp_url, username, password
+                )
                 if result.get("ok"):
                     domain = urlparse(sp_url).hostname
                     # 只保存该 SP 域名相关的 cookies（处理前导点号）
-                    sp_cookies = {c.name: c.value for c in sp_session.cookies
-                                  if domain and (c.domain == domain or c.domain == "." + domain or c.domain.endswith("." + domain))}
+                    sp_cookies = {
+                        c.name: c.value
+                        for c in sp_session.cookies
+                        if domain
+                        and (
+                            c.domain == domain
+                            or c.domain == "." + domain
+                            or c.domain.endswith("." + domain)
+                        )
+                    }
                     # 合并新 cookies 到已有 cookies，保留之前有效的 cookies
                     if domain in self.cookies:
                         self.cookies[domain].update(sp_cookies)
@@ -262,9 +281,15 @@ class CARSIAuth:
         self.authenticated = any_success
         if any_success:
             return {"ok": True, "cookies": self.cookies, "error": ""}
-        return {"ok": False, "cookies": self.cookies, "error": "; ".join(errors) if errors else "No cookies obtained"}
+        return {
+            "ok": False,
+            "cookies": self.cookies,
+            "error": "; ".join(errors) if errors else "No cookies obtained",
+        }
 
-    def _authenticate_sp(self, session, sp_url: str, idp_url: str, username: str, password: str) -> dict:
+    def _authenticate_sp(
+        self, session, sp_url: str, idp_url: str, username: str, password: str
+    ) -> dict:
         """对单个 SP 执行 CARSI/Shibboleth 认证（使用 Playwright 处理 JS 渲染和验证码）
 
         Args:
@@ -285,10 +310,14 @@ class CARSIAuth:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
-            return {"ok": False, "error": "Playwright 未安装，请在设置中安装 Playwright"}
+            return {
+                "ok": False,
+                "error": "Playwright 未安装，请在设置中安装 Playwright",
+            }
 
         # 自动检测 Playwright 浏览器路径
         import os
+
         _setup_playwright_browsers_path()
 
         try:
@@ -306,12 +335,14 @@ class CARSIAuth:
                     for domain, domain_cookies in self.cookies.items():
                         if isinstance(domain_cookies, dict):
                             for name, value in domain_cookies.items():
-                                pw_cookies.append({
-                                    "name": name,
-                                    "value": value,
-                                    "domain": domain,
-                                    "path": "/",
-                                })
+                                pw_cookies.append(
+                                    {
+                                        "name": name,
+                                        "value": value,
+                                        "domain": domain,
+                                        "path": "/",
+                                    }
+                                )
                     if pw_cookies:
                         context.add_cookies(pw_cookies)
 
@@ -329,7 +360,9 @@ class CARSIAuth:
                         # 提取 cookies 并返回
                         cookies = context.cookies()
                         for c in cookies:
-                            session.cookies.set(c["name"], c["value"], domain=c.get("domain", ""))
+                            session.cookies.set(
+                                c["name"], c["value"], domain=c.get("domain", "")
+                            )
                         browser.close()
                         return {"ok": True, "error": ""}
 
@@ -337,24 +370,28 @@ class CARSIAuth:
                     saml_input = page.query_selector('input[name="SAMLResponse"]')
                     if saml_input:
                         # 提取表单数据并提交
-                        form_data = page.evaluate('''() => {
+                        form_data = page.evaluate("""() => {
                             const form = document.querySelector('form');
                             if (!form) return null;
                             const data = {};
                             new FormData(form).forEach((v, k) => data[k] = v);
                             return {action: form.action, data: data};
-                        }''')
+                        }""")
                         if form_data:
-                            page.evaluate(f'''() => {{
+                            page.evaluate("""() => {
                                 const form = document.querySelector('form');
                                 if (form) form.submit();
-                            }}''')
+                            }""")
                             page.wait_for_load_state("networkidle", timeout=15000)
                             # 检查是否跳转回 SP
                             if sp_domain and sp_domain in page.url:
                                 cookies = context.cookies()
                                 for c in cookies:
-                                    session.cookies.set(c["name"], c["value"], domain=c.get("domain", ""))
+                                    session.cookies.set(
+                                        c["name"],
+                                        c["value"],
+                                        domain=c.get("domain", ""),
+                                    )
                                 browser.close()
                                 return {"ok": True, "error": ""}
 
@@ -400,13 +437,13 @@ class CARSIAuth:
                             'input[name="memberNo"], input[name="member_no"], '
                             'input[name="cardNum"], input[name="cardnum"], '
                             # --- 中文拼音缩写字段名（中国高校自研 CAS 常见） ---
-                            'input[name="xh"], '   # 学号
-                            'input[name="gh"], '   # 工号
+                            'input[name="xh"], '  # 学号
+                            'input[name="gh"], '  # 工号
                             'input[name="yhm"], '  # 用户名
-                            'input[name="sfzh"], ' # 身份证号
-                            'input[name="zjhm"], ' # 证件号码
-                            'input[name="sjhm"], ' # 手机号码
-                            'input[name="kh"], '   # 卡号
+                            'input[name="sfzh"], '  # 身份证号
+                            'input[name="zjhm"], '  # 证件号码
+                            'input[name="sjhm"], '  # 手机号码
+                            'input[name="kh"], '  # 卡号
                             # --- 子串匹配：覆盖未列出的字段名变体 ---
                             'input[name*="login" i], input[name*="user" i], '
                             'input[name*="account" i], '
@@ -431,7 +468,7 @@ class CARSIAuth:
                         )
                         # 回退：label[for] 关联匹配（中文高校 CAS 表单常见）
                         if not username_input:
-                            username_input = page.evaluate('''() => {
+                            username_input = page.evaluate("""() => {
                                 const labels = document.querySelectorAll('label');
                                 const keywords = ['用户', '账号', '学号', '工号', '卡号', '登录',
                                     'username', 'user name', 'account', 'login', 'netid',
@@ -449,10 +486,11 @@ class CARSIAuth:
                                     if (inner) return inner;
                                 }
                                 return null;
-                            }''')
+                            }""")
                         # 回退：已知选择器未命中时，遍历 DOM 查找密码字段之前的文本输入框
                         if not username_input:
-                            username_input = page.evaluate('''(pwdEl) => {
+                            username_input = page.evaluate(
+                                """(pwdEl) => {
                                 const pwd = pwdEl;
                                 if (!pwd) return null;
                                 const isValid = (el) => el && el.tagName === 'INPUT'
@@ -475,31 +513,47 @@ class CARSIAuth:
                                     }
                                 }
                                 return null;
-                            }''', pwd_field)
+                            }""",
+                                pwd_field,
+                            )
                         if not username_input:
                             # 无法识别用户名输入框，无法自动填写
                             browser.close()
-                            return {"ok": False, "error": "无法识别用户名输入框，请在浏览器中手动完成 CARSI 认证"}
+                            return {
+                                "ok": False,
+                                "error": "无法识别用户名输入框，请在浏览器中手动完成 CARSI 认证",
+                            }
                         username_input.fill(username)
                         pwd_field.fill(password)
 
                         # 提交表单（不等待导航，因为可能有验证码）
-                        submit_btn = page.query_selector('button[type="submit"], input[type="submit"]')
+                        submit_btn = page.query_selector(
+                            'button[type="submit"], input[type="submit"]'
+                        )
                         if submit_btn:
                             submit_btn.click()
                             page.wait_for_timeout(2000)
 
                             # 检查是否有验证码要求
-                            captcha = page.query_selector('img[src*="captcha"], img[src*="code"], input[name*="code"]')
+                            captcha = page.query_selector(
+                                'img[src*="captcha"], img[src*="code"], input[name*="code"]'
+                            )
                             if captcha:
                                 browser.close()
-                                return {"ok": False, "error": "CAS 需要验证码，请在浏览器中手动完成 CARSI 认证"}
+                                return {
+                                    "ok": False,
+                                    "error": "CAS 需要验证码，请在浏览器中手动完成 CARSI 认证",
+                                }
 
                             # 检查是否登录成功
                             if sp_domain and sp_domain in page.url:
                                 cookies = context.cookies()
                                 for c in cookies:
-                                    session.cookies.set(c["name"], c["value"], domain=c.get("domain", ""))
+                                    session.cookies.set(
+                                        c["name"],
+                                        c["value"],
+                                        domain=c.get("domain", ""),
+                                    )
                                 browser.close()
                                 return {"ok": True, "error": ""}
 
@@ -517,19 +571,26 @@ class CARSIAuth:
         except Exception as e:
             err_msg = str(e)
             # 检测浏览器未安装/版本不匹配的错误，提供可操作的指导
-            if "Executable doesn't exist" in err_msg or "Looks like Playwright" in err_msg:
+            if (
+                "Executable doesn't exist" in err_msg
+                or "Looks like Playwright" in err_msg
+            ):
                 detail = err_msg.splitlines()[0] if err_msg else "unknown"
                 # 获取诊断信息
                 cache_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
                 if not cache_path:
                     if sys.platform == "win32":
-                        cache_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
+                        cache_path = os.path.join(
+                            os.environ.get("LOCALAPPDATA", ""), "ms-playwright"
+                        )
                     else:
                         cache_path = os.path.expanduser("~/.cache/ms-playwright")
-                return {"ok": False,
-                        "error": f"Playwright 浏览器未安装或版本不匹配。请运行: python -m playwright install chromium\n"
-                                 f"浏览器缓存路径: {cache_path}\n"
-                                 f"详细信息: {detail}"}
+                return {
+                    "ok": False,
+                    "error": f"Playwright 浏览器未安装或版本不匹配。请运行: python -m playwright install chromium\n"
+                    f"浏览器缓存路径: {cache_path}\n"
+                    f"详细信息: {detail}",
+                }
             return {"ok": False, "error": f"CARSI 认证失败: {err_msg}"}
 
     def get_cookies_for_domain(self, domain: str) -> dict:
@@ -554,26 +615,31 @@ def get_supported_institutions() -> list:
         import requests
         import re
         import json as _json
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept-Language": "zh-CN,zh;q=0.9",
         }
-        resp = requests.get("https://www.carsi.edu.cn/IdPlist.html", headers=headers, timeout=15)
+        resp = requests.get(
+            "https://www.carsi.edu.cn/IdPlist.html", headers=headers, timeout=15
+        )
         resp.encoding = "utf-8"  # 强制 UTF-8，避免 ISO-8859-1 误判导致中文乱码
         if resp.ok:
             # 页面中嵌入了 JSON 数组：var IdPList1 = [{...}, ...]
-            match = re.search(r'var\s+\w+\s*=\s*(\[.*?\]);', resp.text, re.DOTALL)
+            match = re.search(r"var\s+\w+\s*=\s*(\[.*?\]);", resp.text, re.DOTALL)
             if match:
                 raw_list = _json.loads(match.group(1))
                 institutions = []
                 for i, item in enumerate(raw_list):
                     if item.get("status") == "3" and item.get("url"):
-                        institutions.append({
-                            "id": f"carsi_{i}",
-                            "name": item.get("name", ""),
-                            "idp_url": item.get("url", ""),
-                        })
+                        institutions.append(
+                            {
+                                "id": f"carsi_{i}",
+                                "name": item.get("name", ""),
+                                "idp_url": item.get("url", ""),
+                            }
+                        )
                 if institutions:
                     return institutions
     except Exception:
@@ -581,48 +647,163 @@ def get_supported_institutions() -> list:
 
     # 回退：本地硬编码列表
     return [
-        {"id": "tsinghua", "name": "清华大学", "idp_url": "https://id.tsinghua.edu.cn/idp/shibboleth"},
-        {"id": "pku", "name": "北京大学", "idp_url": "https://iaaa.pku.edu.cn/idp/shibboleth"},
-        {"id": "zju", "name": "浙江大学", "idp_url": "https://zjuam.zju.edu.cn/idp/shibboleth"},
-        {"id": "sjtu", "name": "上海交通大学", "idp_url": "https://jaccount.sjtu.edu.cn/idp/shibboleth"},
-        {"id": "fudan", "name": "复旦大学", "idp_url": "https://uis.fudan.edu.cn/idp/shibboleth"},
-        {"id": "ustc", "name": "中国科学技术大学", "idp_url": "https://passport.ustc.edu.cn/idp/shibboleth"},
-        {"id": "nju", "name": "南京大学", "idp_url": "https://authserver.nju.edu.cn/idp/shibboleth"},
-        {"id": "whu", "name": "武汉大学", "idp_url": "https://sso.whu.edu.cn/idp/shibboleth"},
-        {"id": "hust", "name": "华中科技大学", "idp_url": "https://idp.hust.edu.cn/idp/shibboleth"},
-        {"id": "sysu", "name": "中山大学", "idp_url": "https://cas.sysu.edu.cn/idp/shibboleth"},
-        {"id": "hit", "name": "哈尔滨工业大学", "idp_url": "https://ids.hit.edu.cn/idp/shibboleth"},
-        {"id": "xjtu", "name": "西安交通大学", "idp_url": "https://cas.xjtu.edu.cn/idp/shibboleth"},
-        {"id": "buaa", "name": "北京航空航天大学", "idp_url": "https://sso.buaa.edu.cn/idp/shibboleth"},
-        {"id": "scu", "name": "四川大学", "idp_url": "https://id.scu.edu.cn/idp/shibboleth"},
-        {"id": "tongji", "name": "同济大学", "idp_url": "https://ids.tongji.edu.cn/idp/shibboleth"},
-        {"id": "nankai", "name": "南开大学", "idp_url": "https://cas.nankai.edu.cn/idp/shibboleth"},
-        {"id": "tju", "name": "天津大学", "idp_url": "https://sso.tju.edu.cn/idp/shibboleth"},
-        {"id": "bit", "name": "北京理工大学", "idp_url": "https://login.bit.edu.cn/idp/shibboleth"},
-        {"id": "seu", "name": "东南大学", "idp_url": "https://auth.seu.edu.cn/idp/shibboleth"},
-        {"id": "sdu", "name": "山东大学", "idp_url": "https://pass.sdu.edu.cn/idp/shibboleth"},
-        {"id": "bnu", "name": "北京师范大学", "idp_url": "https://cas.bnu.edu.cn/idp/shibboleth"},
-        {"id": "csu", "name": "中南大学", "idp_url": "https://ca.csu.edu.cn/idp/shibboleth"},
-        {"id": "jlu", "name": "吉林大学", "idp_url": "https://cas.jlu.edu.cn/idp/shibboleth"},
-        {"id": "dlut", "name": "大连理工大学", "idp_url": "https://sso.dlut.edu.cn/idp/shibboleth"},
-        {"id": "ahmu", "name": "安徽医科大学", "idp_url": "https://idp.ahmu.edu.cn/idp/shibboleth"},
+        {
+            "id": "tsinghua",
+            "name": "清华大学",
+            "idp_url": "https://id.tsinghua.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "pku",
+            "name": "北京大学",
+            "idp_url": "https://iaaa.pku.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "zju",
+            "name": "浙江大学",
+            "idp_url": "https://zjuam.zju.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "sjtu",
+            "name": "上海交通大学",
+            "idp_url": "https://jaccount.sjtu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "fudan",
+            "name": "复旦大学",
+            "idp_url": "https://uis.fudan.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "ustc",
+            "name": "中国科学技术大学",
+            "idp_url": "https://passport.ustc.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "nju",
+            "name": "南京大学",
+            "idp_url": "https://authserver.nju.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "whu",
+            "name": "武汉大学",
+            "idp_url": "https://sso.whu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "hust",
+            "name": "华中科技大学",
+            "idp_url": "https://idp.hust.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "sysu",
+            "name": "中山大学",
+            "idp_url": "https://cas.sysu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "hit",
+            "name": "哈尔滨工业大学",
+            "idp_url": "https://ids.hit.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "xjtu",
+            "name": "西安交通大学",
+            "idp_url": "https://cas.xjtu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "buaa",
+            "name": "北京航空航天大学",
+            "idp_url": "https://sso.buaa.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "scu",
+            "name": "四川大学",
+            "idp_url": "https://id.scu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "tongji",
+            "name": "同济大学",
+            "idp_url": "https://ids.tongji.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "nankai",
+            "name": "南开大学",
+            "idp_url": "https://cas.nankai.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "tju",
+            "name": "天津大学",
+            "idp_url": "https://sso.tju.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "bit",
+            "name": "北京理工大学",
+            "idp_url": "https://login.bit.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "seu",
+            "name": "东南大学",
+            "idp_url": "https://auth.seu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "sdu",
+            "name": "山东大学",
+            "idp_url": "https://pass.sdu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "bnu",
+            "name": "北京师范大学",
+            "idp_url": "https://cas.bnu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "csu",
+            "name": "中南大学",
+            "idp_url": "https://ca.csu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "jlu",
+            "name": "吉林大学",
+            "idp_url": "https://cas.jlu.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "dlut",
+            "name": "大连理工大学",
+            "idp_url": "https://sso.dlut.edu.cn/idp/shibboleth",
+        },
+        {
+            "id": "ahmu",
+            "name": "安徽医科大学",
+            "idp_url": "https://idp.ahmu.edu.cn/idp/shibboleth",
+        },
     ]
 
     def search_wos(self, query="", year_from=0, year_to=0, max_results=30):
         """Web of Science 搜索（通过 CARSI Playwright 浏览器）"""
         try:
-            from playwright.sync_api import sync_playwright
+
             self._ensure_browser()
             if not self._browser:
                 return []
             page = self._browser.new_page()
             try:
                 # 注入 CARSI cookies
-                page.goto("https://www.webofscience.com", wait_until="domcontentloaded", timeout=15)
-                for name, value in self.get_cookies_for_domain("webofscience.com").items():
-                    page.context.add_cookies([{"name": name, "value": value, "domain": ".webofscience.com", "path": "/"}])
+                page.goto(
+                    "https://www.webofscience.com",
+                    wait_until="domcontentloaded",
+                    timeout=15,
+                )
+                for name, value in self.get_cookies_for_domain(
+                    "webofscience.com"
+                ).items():
+                    page.context.add_cookies(
+                        [
+                            {
+                                "name": name,
+                                "value": value,
+                                "domain": ".webofscience.com",
+                                "path": "/",
+                            }
+                        ]
+                    )
                 # 搜索
-                search_url = f"https://www.webofscience.com/wos/woscc/basic-search"
+                search_url = "https://www.webofscience.com/wos/woscc/basic-search"
                 page.goto(search_url, wait_until="domcontentloaded", timeout=15)
                 page.fill('input[data-id="search-field-input"]', query)
                 page.click('button[data-id="search-button"]')
@@ -654,19 +835,36 @@ def get_supported_institutions() -> list:
     def search_proquest(self, query="", year_from=0, year_to=0, max_results=20):
         """ProQuest 搜索（通过 CARSI Playwright 浏览器）"""
         try:
-            from playwright.sync_api import sync_playwright
+
             self._ensure_browser()
             if not self._browser:
                 return []
             page = self._browser.new_page()
             try:
-                page.goto("https://www.proquest.com", wait_until="domcontentloaded", timeout=15)
+                page.goto(
+                    "https://www.proquest.com",
+                    wait_until="domcontentloaded",
+                    timeout=15,
+                )
                 for name, value in self.get_cookies_for_domain("proquest.com").items():
-                    page.context.add_cookies([{"name": name, "value": value, "domain": ".proquest.com", "path": "/"}])
-                search_url = f"https://www.proquest.com/resultsol/advanced?query={query}"
+                    page.context.add_cookies(
+                        [
+                            {
+                                "name": name,
+                                "value": value,
+                                "domain": ".proquest.com",
+                                "path": "/",
+                            }
+                        ]
+                    )
+                search_url = (
+                    f"https://www.proquest.com/resultsol/advanced?query={query}"
+                )
                 page.goto(search_url, wait_until="domcontentloaded", timeout=15)
                 page.wait_for_timeout(5000)
-                results = page.query_selector_all(".resultItem, [data-testid='result-item']")
+                results = page.query_selector_all(
+                    ".resultItem, [data-testid='result-item']"
+                )
                 papers = []
                 for el in results[:max_results]:
                     try:

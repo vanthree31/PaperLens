@@ -3,9 +3,16 @@
 import os
 import sys
 from flask import Blueprint, request, jsonify, current_app
-from core.config import _get_app_data_dir, _get_default_data_dir, load_config, save_config, _mask_keys, _deep_update
+from core.config import (
+    _get_app_data_dir,
+    _get_default_data_dir,
+    load_config,
+    save_config,
+    _mask_keys,
+    _deep_update,
+)
 
-system_bp = Blueprint('system', __name__)
+system_bp = Blueprint("system", __name__)
 
 
 def _state():
@@ -26,14 +33,18 @@ def _restore_masked_config(update_data, current_config):
         if isinstance(v, dict):
             # 递归处理嵌套 dict，无论 current_config 中是否存在该 key
             sub_cfg = current_config.get(k) if isinstance(current_config, dict) else {}
-            result[k] = _restore_masked_config(v, sub_cfg if isinstance(sub_cfg, dict) else {})
+            result[k] = _restore_masked_config(
+                v, sub_cfg if isinstance(sub_cfg, dict) else {}
+            )
         elif _is_masked(v):
             # 脱敏值：从当前配置中恢复真实值
             if k in current_config:
                 cur_val = current_config[k]
                 if _is_masked(cur_val):
                     # 当前配置也是脱敏值（配置文件已损坏），跳过以防止覆盖
-                    print(f"[WARN] Skipping masked value for '{k}' (current config also masked)")
+                    print(
+                        f"[WARN] Skipping masked value for '{k}' (current config also masked)"
+                    )
                     continue
                 result[k] = cur_val
                 print(f"[INFO] Restored masked value for '{k}'")
@@ -106,7 +117,9 @@ def save_provider_config():
         if key not in cfg["ai_providers"]:
             cfg["ai_providers"][key] = {}
         # 将脱敏值替换为当前配置中的真实值，防止丢失
-        safe_provider_cfg = _restore_masked_config(provider_cfg, cfg["ai_providers"][key])
+        safe_provider_cfg = _restore_masked_config(
+            provider_cfg, cfg["ai_providers"][key]
+        )
         cfg["ai_providers"][key].update(safe_provider_cfg)
         save_config(cfg)
         return jsonify({"ok": True})
@@ -169,7 +182,9 @@ def open_export_dir():
         real_path = os.path.realpath(path)
         if export_dir:
             real_export = os.path.realpath(export_dir)
-            if not (real_path.startswith(real_export + os.sep) or real_path == real_export):
+            if not (
+                real_path.startswith(real_export + os.sep) or real_path == real_export
+            ):
                 return jsonify({"error": "invalid_path"}), 400
         else:
             # 未配置导出路径时，只允许打开应用数据目录下的路径
@@ -191,9 +206,10 @@ def choose_folder():
     try:
         import tkinter as tk
         from tkinter import filedialog
+
         root = tk.Tk()
         root.withdraw()
-        root.attributes('-topmost', True)
+        root.attributes("-topmost", True)
         folder = filedialog.askdirectory(parent=root, title="选择导出文件夹")
         root.destroy()
         if folder:
@@ -210,6 +226,7 @@ def playwright_status():
     # 1. 检测 playwright Python 包是否可 import
     try:
         import playwright as pw_pkg
+
         # Playwright 版本存在 _repo_version 中，不在 __version__
         try:
             from playwright._repo_version import version as pw_version
@@ -222,8 +239,11 @@ def playwright_status():
     browser_ready = False
     try:
         from access_proxy import _find_chromium_executable
+
         if sys.platform == "win32":
-            cache_base = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
+            cache_base = os.path.join(
+                os.environ.get("LOCALAPPDATA", ""), "ms-playwright"
+            )
         elif sys.platform == "darwin":
             cache_base = os.path.expanduser("~/Library/Caches/ms-playwright")
         else:
@@ -232,7 +252,9 @@ def playwright_status():
     except Exception:
         browser_ready = False
 
-    return jsonify({"installed": True, "browser_ready": browser_ready, "version": pw_version})
+    return jsonify(
+        {"installed": True, "browser_ready": browser_ready, "version": pw_version}
+    )
 
 
 @system_bp.route("/api/playwright/install", methods=["POST"])
@@ -241,22 +263,39 @@ def playwright_install():
     if request.remote_addr not in ("127.0.0.1", "::1"):
         return jsonify({"error": "local_only"}), 403
     import subprocess
+
     output = []
     try:
         # Step 1: pip install playwright
         output.append("[1/3] 安装 playwright Python 包...")
-        r1 = subprocess.run([sys.executable, "-m", "pip", "install", "playwright"],
-                          capture_output=True, text=True, timeout=120)
+        r1 = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "playwright"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         if r1.returncode != 0:
-            return jsonify({"ok": False, "error": r1.stderr or r1.stdout, "output": output}), 500
+            return jsonify(
+                {"ok": False, "error": r1.stderr or r1.stdout, "output": output}
+            ), 500
         output.append("  ✓ playwright 包已安装")
         # Step 2: playwright install chromium
         output.append("[2/3] 下载 Chromium 浏览器 (~150MB)...")
-        r2 = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
-                          capture_output=True, text=True, timeout=300)
+        r2 = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
         output.append(r2.stdout[-200:] if r2.stdout else "")
         if r2.returncode != 0:
-            return jsonify({"ok": False, "error": r2.stderr or "chromium install failed", "output": output}), 500
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": r2.stderr or "chromium install failed",
+                    "output": output,
+                }
+            ), 500
         output.append("  ✓ Chromium 已下载")
         # Step 3: 验证安装
         output.append("[3/3] 验证安装...")
@@ -265,12 +304,17 @@ def playwright_install():
         else:
             cache = os.path.expanduser("~/.cache/ms-playwright")
         from access_proxy import _find_chromium_executable
+
         exe = _find_chromium_executable(cache)
         if not exe:
             output.append(f"  ⚠ 缓存目录未找到 chromium 可执行文件: {cache}")
             output.append("  尝试安装系统依赖...")
-            r3 = subprocess.run([sys.executable, "-m", "playwright", "install-deps", "chromium"],
-                              capture_output=True, text=True, timeout=120)
+            r3 = subprocess.run(
+                [sys.executable, "-m", "playwright", "install-deps", "chromium"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
             output.append(r3.stdout[-200:] if r3.stdout else "")
         exe2 = _find_chromium_executable(cache)
         if exe2:
@@ -278,6 +322,7 @@ def playwright_install():
             # 快速冒烟测试
             try:
                 from playwright.sync_api import sync_playwright
+
                 pw = sync_playwright().start()
                 browser = pw.chromium.launch(headless=True)
                 browser.close()

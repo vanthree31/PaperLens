@@ -7,18 +7,18 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
 from core.utils import _get_user_data_path
 
-tags_bp = Blueprint('tags', __name__)
+tags_bp = Blueprint("tags", __name__)
 
 # 预设颜色池（8 色）
 TAG_COLORS = [
-    '#007AFF',  # Blue
-    '#34C759',  # Green
-    '#FF9500',  # Orange
-    '#FF3B30',  # Red
-    '#AF52DE',  # Purple
-    '#5856D6',  # Indigo
-    '#FF2D55',  # Pink
-    '#00C7BE',  # Teal
+    "#007AFF",  # Blue
+    "#34C759",  # Green
+    "#FF9500",  # Orange
+    "#FF3B30",  # Red
+    "#AF52DE",  # Purple
+    "#5856D6",  # Indigo
+    "#FF2D55",  # Pink
+    "#00C7BE",  # Teal
 ]
 
 
@@ -198,19 +198,22 @@ def delete_tag(tag_id):
 def _is_valid_hex_color(c: str) -> bool:
     """验证 hex 颜色格式（支持 #RGB, #RRGGBB, #RRGGBBAA）"""
     import re
-    return bool(re.match(r'^#[0-9A-Fa-f]{3,8}$', c))
+
+    return bool(re.match(r"^#[0-9A-Fa-f]{3,8}$", c))
 
 
 def _get_mcp_client():
     """获取可用的 Zotero 后端客户端（原生 API > MCP）"""
     try:
         from search_engine import ZoteroNativeClient, ZoteroMCPClient
+
         # Zotero 9 原生 API 优先
         native = ZoteroNativeClient()
         if native.ping():
             return native
         # MCP 兜底
         from core.config import load_config
+
         cfg = load_config()
         mcp_cfg = cfg.get("sources", {}).get("zotero_mcp", {})
         mcp_url = mcp_cfg.get("zotero_mcp_url", "http://127.0.0.1:23120")
@@ -267,6 +270,7 @@ def import_zotero_tags():
         else:
             # SQLite 回退
             from search_engine import ZoteroSQLiteReader
+
             sqlite = ZoteroSQLiteReader()
             if not sqlite.available:
                 return jsonify({"ok": False, "error": "zotero_not_found"})
@@ -278,8 +282,24 @@ def import_zotero_tags():
         # 合并到 PaperLens tags.json
         existing_tags = _read_tags()
         existing_names = {t["name"].lower() for t in existing_tags}
-        colors = ['#007AFF','#34C759','#FF9500','#FF3B30','#AF52DE','#5856D6','#FF2D55','#00C7BE',
-                  '#8E44AD','#2ECC71','#E74C3C','#3498DB','#F39C12','#1ABC9C','#E91E63','#00BCD4']
+        colors = [
+            "#007AFF",
+            "#34C759",
+            "#FF9500",
+            "#FF3B30",
+            "#AF52DE",
+            "#5856D6",
+            "#FF2D55",
+            "#00C7BE",
+            "#8E44AD",
+            "#2ECC71",
+            "#E74C3C",
+            "#3498DB",
+            "#F39C12",
+            "#1ABC9C",
+            "#E91E63",
+            "#00BCD4",
+        ]
         for tag_name in all_tags:
             if not tag_name or not tag_name.strip():
                 continue
@@ -315,15 +335,22 @@ def push_tags_to_zotero():
 
     item_key = _find_zotero_item_key(doi, title)
     if not item_key:
-        return jsonify({"ok": False, "error": "item_not_in_zotero",
-                       "hint": "该论文不在 Zotero 库中，请先同步到 Zotero"})
+        return jsonify(
+            {
+                "ok": False,
+                "error": "item_not_in_zotero",
+                "hint": "该论文不在 Zotero 库中，请先同步到 Zotero",
+            }
+        )
 
     mcp = _get_mcp_client()
     if not mcp:
         return jsonify({"ok": False, "error": "mcp_not_available"})
 
     try:
-        mcp.call_tool("write_tag", {"action": "add", "itemKey": item_key, "tags": tag_names})
+        mcp.call_tool(
+            "write_tag", {"action": "add", "itemKey": item_key, "tags": tag_names}
+        )
         return jsonify({"ok": True, "itemKey": item_key})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

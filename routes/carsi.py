@@ -1,13 +1,12 @@
 """CARSI campus access routes"""
 
 import copy
-import os
 from flask import Blueprint, request, jsonify, current_app
 from core.config import load_config, save_config
 from access_proxy import CARSIAuth, get_supported_institutions
 from search_engine import SearchEngine
 
-carsi_bp = Blueprint('carsi', __name__)
+carsi_bp = Blueprint("carsi", __name__)
 
 
 def _state():
@@ -29,6 +28,7 @@ def carsi_institutions():
 def carsi_status():
     """检查 CARSI cookies 是否有效"""
     import requests as req
+
     cfg = load_config()
     cookies = cfg.get("access_proxy", {}).get("carsi_cookies", {})
     if not cookies:
@@ -38,7 +38,12 @@ def carsi_status():
     cnki_cookies = cookies.get("fsso.cnki.net", {})
     if cnki_cookies:
         try:
-            r = req.get("https://fsso.cnki.net/", cookies=cnki_cookies, timeout=10, allow_redirects=False)
+            r = req.get(
+                "https://fsso.cnki.net/",
+                cookies=cnki_cookies,
+                timeout=10,
+                allow_redirects=False,
+            )
             # 200/302 都算有效，401/403 算过期
             if r.status_code in (200, 302, 303):
                 return jsonify({"authenticated": True, "source": "cnki"})
@@ -49,7 +54,12 @@ def carsi_status():
     cam_cookies = cookies.get("www.cambridge.org", {})
     if cam_cookies:
         try:
-            r = req.get("https://www.cambridge.org/core", cookies=cam_cookies, timeout=10, allow_redirects=False)
+            r = req.get(
+                "https://www.cambridge.org/core",
+                cookies=cam_cookies,
+                timeout=10,
+                allow_redirects=False,
+            )
             if r.status_code in (200, 302, 303):
                 return jsonify({"authenticated": True, "source": "cambridge"})
         except Exception:
@@ -79,11 +89,12 @@ def carsi_authenticate():
         # 加载已有 cookies，在 re-auth 时保留之前有效的 SP cookies
         cfg = load_config()
         existing_cookies = cfg.get("access_proxy", {}).get("carsi_cookies", {})
-        result = auth.authenticate(idp_url, username, password,
-                                   existing_cookies=existing_cookies)
+        result = auth.authenticate(
+            idp_url, username, password, existing_cookies=existing_cookies
+        )
         # 关闭 CARSI 认证过程中创建的 requests.Session
         try:
-            if hasattr(auth, 'session'):
+            if hasattr(auth, "session"):
                 auth.session.close()
         except Exception:
             pass
@@ -129,13 +140,14 @@ def _start_carsi_keepalive():
     """启动 CARSI cookies 保活线程（每 15 分钟心跳一次）"""
     global _carsi_keepalive_thread, _carsi_keepalive_stop
     import threading as _th
-    import time as _time
+
     if _carsi_keepalive_thread and _carsi_keepalive_thread.is_alive():
         return  # 已经运行
     _carsi_keepalive_stop = _th.Event()
 
     def _run():
         import requests as _req
+
         while not _carsi_keepalive_stop.wait(900):  # 15 分钟
             try:
                 cfg = load_config()
@@ -149,19 +161,31 @@ def _start_carsi_keepalive():
                     try:
                         sess = _req.Session()
                         sess.cookies.update(domain_cookies)
-                        r = sess.get(f"https://{domain}/", timeout=10, allow_redirects=False)
+                        r = sess.get(
+                            f"https://{domain}/", timeout=10, allow_redirects=False
+                        )
                         if r.status_code in (200, 302, 303):
                             # 200=OK, 302/303=重定向（SP 正常），但 302→login 则过期
-                            if r.status_code in (302, 303) and "login" in r.headers.get("Location", "").lower():
-                                print(f"[CARSI Keepalive] {domain} cookies may have expired (redirect to login)")
+                            if (
+                                r.status_code in (302, 303)
+                                and "login" in r.headers.get("Location", "").lower()
+                            ):
+                                print(
+                                    f"[CARSI Keepalive] {domain} cookies may have expired (redirect to login)"
+                                )
                             else:
-                                print(f"[CARSI Keepalive] {domain} OK ({r.status_code})")
+                                print(
+                                    f"[CARSI Keepalive] {domain} OK ({r.status_code})"
+                                )
                         else:
-                            print(f"[CARSI Keepalive] {domain} unexpected {r.status_code}")
+                            print(
+                                f"[CARSI Keepalive] {domain} unexpected {r.status_code}"
+                            )
                     except Exception as e:
                         print(f"[CARSI Keepalive] {domain} error: {e}")
             except Exception as e:
                 print(f"[CARSI Keepalive] error: {e}")
+
     _carsi_keepalive_thread = _th.Thread(target=_run, daemon=True)
     _carsi_keepalive_thread.start()
     print("[CARSI Keepalive] Started")

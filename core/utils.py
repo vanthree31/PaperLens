@@ -21,19 +21,28 @@ def _escape_paper(paper) -> dict:
         if s is None:
             return ""
         return str(s)
+
     def esc_list(lst):
         if not lst:
             return []
         return [esc(a) for a in lst]
+
     return {
-        "title": esc(paper.title), "authors": esc_list(paper.authors),
-        "journal": esc(paper.journal), "year": paper.year,
-        "doi": esc(paper.doi), "pmid": esc(paper.pmid),
-        "abstract": esc(paper.abstract), "citation_count": paper.citation_count,
-        "oa_url": esc(paper.oa_url), "keywords": esc_list(paper.keywords),
+        "title": esc(paper.title),
+        "authors": esc_list(paper.authors),
+        "journal": esc(paper.journal),
+        "year": paper.year,
+        "doi": esc(paper.doi),
+        "pmid": esc(paper.pmid),
+        "abstract": esc(paper.abstract),
+        "citation_count": paper.citation_count,
+        "oa_url": esc(paper.oa_url),
+        "keywords": esc_list(paper.keywords),
         "source": esc(paper.source),
-        "volume": esc(paper.volume), "issue": esc(paper.issue),
-        "pages": esc(paper.pages), "issn": esc(paper.issn),
+        "volume": esc(paper.volume),
+        "issue": esc(paper.issue),
+        "pages": esc(paper.pages),
+        "issn": esc(paper.issn),
         # Phase 5a: 学术元数据
         "orcid": esc(paper.orcid),
         "article_type": esc(paper.article_type),
@@ -49,7 +58,9 @@ def _escape_paper(paper) -> dict:
         # 专利标识
         "doc_type": esc(paper.doc_type),
         # 元数据完整性评分
-        "completeness_score": paper.completeness_score if hasattr(paper, 'completeness_score') else 0,
+        "completeness_score": paper.completeness_score
+        if hasattr(paper, "completeness_score")
+        else 0,
     }
 
 
@@ -58,9 +69,9 @@ def _sanitize_for_prompt(text: str) -> str:
     if not text:
         return ""
     # 移除控制字符，保留换行和制表符
-    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
     # 将多个连续换行合并为两个
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
@@ -75,9 +86,15 @@ def _build_paper_prompt(papers, mode, lang="zh"):
     paper_info = []
     for i, p in enumerate(papers, 1):
         title = _sanitize_for_prompt(p.title)
-        abstract = _sanitize_for_prompt(p.abstract) if p.abstract else ('No abstract' if lang == "en" else '无摘要')
-        authors = ', '.join(p.authors[:10])
-        keywords = ', '.join(p.keywords) if p.keywords else ('None' if lang == "en" else '无')
+        abstract = (
+            _sanitize_for_prompt(p.abstract)
+            if p.abstract
+            else ("No abstract" if lang == "en" else "无摘要")
+        )
+        authors = ", ".join(p.authors[:10])
+        keywords = (
+            ", ".join(p.keywords) if p.keywords else ("None" if lang == "en" else "无")
+        )
         journal = _sanitize_for_prompt(p.journal)
         doi = _sanitize_for_prompt(p.doi)
         pmid = _sanitize_for_prompt(p.pmid)
@@ -111,13 +128,17 @@ DOI: {doi}  PMID: {pmid}  被引: {p.citation_count}
                 # 重建对应论文的信息
                 title = _sanitize_for_prompt(p.title)
                 abstract = _sanitize_for_prompt(p.abstract)
-                authors = ', '.join(p.authors[:10])
-                keywords = ', '.join(p.keywords) if p.keywords else ('None' if lang == "en" else '无')
+                authors = ", ".join(p.authors[:10])
+                keywords = (
+                    ", ".join(p.keywords)
+                    if p.keywords
+                    else ("None" if lang == "en" else "无")
+                )
                 journal = _sanitize_for_prompt(p.journal)
                 doi = _sanitize_for_prompt(p.doi)
                 pmid = _sanitize_for_prompt(p.pmid)
                 if lang == "en":
-                    paper_info[i] = f"""[Paper {i+1}]
+                    paper_info[i] = f"""[Paper {i + 1}]
 Title: {title}
 Authors: {authors}
 Journal: {journal} ({p.year})
@@ -125,7 +146,7 @@ DOI: {doi}  PMID: {pmid}  Citations: {p.citation_count}
 Abstract: {abstract}
 Keywords: {keywords}"""
                 else:
-                    paper_info[i] = f"""【论文 {i+1}】
+                    paper_info[i] = f"""【论文 {i + 1}】
 标题: {title}
 作者: {authors}
 期刊: {journal} ({p.year})
@@ -340,13 +361,21 @@ def _check_url_safety(target_url, allow_loopback=False):
         except ValueError:
             # 2. DNS 域名：解析后检查所有 IP
             import socket
+
             try:
-                addrinfos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+                addrinfos = socket.getaddrinfo(
+                    hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+                )
                 for family, _, _, _, sockaddr in addrinfos:
                     ip = ipaddress.ip_address(sockaddr[0])
                     if allow_loopback and ip.is_loopback:
                         continue
-                    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_unspecified:
+                    if (
+                        ip.is_private
+                        or ip.is_loopback
+                        or ip.is_link_local
+                        or ip.is_unspecified
+                    ):
                         return False, "blocked_internal_url"
             except (socket.gaierror, OSError):
                 pass  # DNS 解析失败，让 requests 处理

@@ -6,7 +6,7 @@ from itertools import combinations
 from collections import Counter
 from flask import Blueprint, request, jsonify, current_app
 
-graph_bp = Blueprint('graph', __name__)
+graph_bp = Blueprint("graph", __name__)
 
 # 引用图谱缓存（内存，24小时过期）
 CITATION_CACHE_TTL = 24 * 3600  # 24小时
@@ -36,10 +36,13 @@ def citation_graph():
 
     try:
         import requests as req
+
         # 通过 OpenAlex 获取论文引用关系
         with state.cache_lock:
             email = state.config.get("sources", {}).get("openalex", {}).get("email", "")
-            api_key = state.config.get("sources", {}).get("openalex", {}).get("api_key", "")
+            api_key = (
+                state.config.get("sources", {}).get("openalex", {}).get("api_key", "")
+            )
         params = {}
         if email:
             params["mailto"] = email
@@ -47,28 +50,41 @@ def citation_graph():
             params["api_key"] = api_key
 
         # 获取论文信息
-        r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15)
+        r = req.get(
+            f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15
+        )
         if r.status_code != 200:
             return jsonify({"error": "paper_not_found"}), 404
 
         work = r.json()
         work_id = work.get("id", "")
-        title = re.sub(r'<[^>]+>', '', work.get("title", "") or "").strip()
+        title = re.sub(r"<[^>]+>", "", work.get("title", "") or "").strip()
         year = work.get("publication_year", 0)
         cited_count = work.get("cited_by_count", 0)
 
         # 获取引用这篇论文的文献（cited_by）
-        cited_by_params = {**params, "filter": f"cites:{work_id}", "per_page": 30, "sort": "cited_by_count:desc"}
-        r_cited = req.get("https://api.openalex.org/works", params=cited_by_params, timeout=15)
+        cited_by_params = {
+            **params,
+            "filter": f"cites:{work_id}",
+            "per_page": 30,
+            "sort": "cited_by_count:desc",
+        }
+        r_cited = req.get(
+            "https://api.openalex.org/works", params=cited_by_params, timeout=15
+        )
         citing_papers = []
         if r_cited.status_code == 200:
             for w in r_cited.json().get("results", []):
-                citing_papers.append({
-                    "doi": (w.get("doi", "") or "").replace("https://doi.org/", ""),
-                    "title": re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip(),
-                    "year": w.get("publication_year", 0),
-                    "citations": w.get("cited_by_count", 0),
-                })
+                citing_papers.append(
+                    {
+                        "doi": (w.get("doi", "") or "").replace("https://doi.org/", ""),
+                        "title": re.sub(
+                            r"<[^>]+>", "", w.get("title", "") or ""
+                        ).strip(),
+                        "year": w.get("publication_year", 0),
+                        "citations": w.get("cited_by_count", 0),
+                    }
+                )
 
         # 获取这篇论文引用的文献（references）
         refs = work.get("referenced_works", [])
@@ -77,18 +93,31 @@ def citation_graph():
             # 取前 20 个引用
             ref_ids = ",".join([r.split("/")[-1] for r in refs[:30]])
             ref_params = {**params, "filter": f"openalex:{ref_ids}", "per_page": 30}
-            r_refs = req.get("https://api.openalex.org/works", params=ref_params, timeout=15)
+            r_refs = req.get(
+                "https://api.openalex.org/works", params=ref_params, timeout=15
+            )
             if r_refs.status_code == 200:
                 for w in r_refs.json().get("results", []):
-                    referenced_papers.append({
-                        "doi": (w.get("doi", "") or "").replace("https://doi.org/", ""),
-                        "title": re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip(),
-                        "year": w.get("publication_year", 0),
-                        "citations": w.get("cited_by_count", 0),
-                    })
+                    referenced_papers.append(
+                        {
+                            "doi": (w.get("doi", "") or "").replace(
+                                "https://doi.org/", ""
+                            ),
+                            "title": re.sub(
+                                r"<[^>]+>", "", w.get("title", "") or ""
+                            ).strip(),
+                            "year": w.get("publication_year", 0),
+                            "citations": w.get("cited_by_count", 0),
+                        }
+                    )
 
         result = {
-            "paper": {"doi": doi, "title": title, "year": year, "citations": cited_count},
+            "paper": {
+                "doi": doi,
+                "title": title,
+                "year": year,
+                "citations": cited_count,
+            },
             "citing": citing_papers,
             "referenced": referenced_papers,
         }
@@ -98,7 +127,11 @@ def citation_graph():
             state.citation_cache[doi_lower] = {"data": result, "timestamp": now}
             # 清理过期缓存
             if len(state.citation_cache) > 200:
-                expired = [k for k, v in state.citation_cache.items() if now - v["timestamp"] > CITATION_CACHE_TTL]
+                expired = [
+                    k
+                    for k, v in state.citation_cache.items()
+                    if now - v["timestamp"] > CITATION_CACHE_TTL
+                ]
                 for k in expired:
                     del state.citation_cache[k]
 
@@ -119,9 +152,12 @@ def related_papers():
 
     try:
         import requests as req
+
         with state.cache_lock:
             email = state.config.get("sources", {}).get("openalex", {}).get("email", "")
-            api_key = state.config.get("sources", {}).get("openalex", {}).get("api_key", "")
+            api_key = (
+                state.config.get("sources", {}).get("openalex", {}).get("api_key", "")
+            )
         params = {}
         if email:
             params["mailto"] = email
@@ -129,7 +165,9 @@ def related_papers():
             params["api_key"] = api_key
 
         # 获取论文信息
-        r = req.get(f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15)
+        r = req.get(
+            f"https://api.openalex.org/works/doi:{doi}", params=params, timeout=15
+        )
         if r.status_code != 200:
             return jsonify({"error": "paper_not_found"}), 404
 
@@ -152,7 +190,9 @@ def related_papers():
                     "sort": "cited_by_count:desc",
                     "per_page": 10,
                 }
-                rc = req.get("https://api.openalex.org/works", params=cited_by_params, timeout=10)
+                rc = req.get(
+                    "https://api.openalex.org/works", params=cited_by_params, timeout=10
+                )
                 if rc.status_code == 200:
                     for w in rc.json().get("results", []):
                         wid = w.get("id", "")
@@ -161,8 +201,12 @@ def related_papers():
                         candidate_counter[wid] += 1
                         if wid not in candidate_info:
                             candidate_info[wid] = {
-                                "doi": (w.get("doi", "") or "").replace("https://doi.org/", ""),
-                                "title": re.sub(r'<[^>]+>', '', w.get("title", "") or "").strip(),
+                                "doi": (w.get("doi", "") or "").replace(
+                                    "https://doi.org/", ""
+                                ),
+                                "title": re.sub(
+                                    r"<[^>]+>", "", w.get("title", "") or ""
+                                ).strip(),
                                 "year": w.get("publication_year", 0),
                                 "citations": w.get("cited_by_count", 0),
                             }
@@ -197,7 +241,15 @@ def keyword_network():
     cooccurrence = Counter()
 
     for p in papers:
-        kws = [kw.strip().lower() for kw in (p.get("keywords", []) if isinstance(p, dict) else getattr(p, 'keywords', [])) if kw.strip()]
+        kws = [
+            kw.strip().lower()
+            for kw in (
+                p.get("keywords", [])
+                if isinstance(p, dict)
+                else getattr(p, "keywords", [])
+            )
+            if kw.strip()
+        ]
         kws = list(dict.fromkeys(kws))  # 去重保序
         for kw in kws:
             keyword_count[kw] += 1
@@ -210,11 +262,12 @@ def keyword_network():
         # 不够则取 top 20
         top_keywords = {kw for kw, _ in keyword_count.most_common(20)}
 
-    nodes = [{"id": kw, "label": kw, "count": keyword_count[kw]}
-             for kw in top_keywords]
-    links = [{"source": a, "target": b, "weight": w}
-             for (a, b), w in cooccurrence.items()
-             if a in top_keywords and b in top_keywords and w >= 1]
+    nodes = [{"id": kw, "label": kw, "count": keyword_count[kw]} for kw in top_keywords]
+    links = [
+        {"source": a, "target": b, "weight": w}
+        for (a, b), w in cooccurrence.items()
+        if a in top_keywords and b in top_keywords and w >= 1
+    ]
 
     return jsonify({"nodes": nodes, "links": links})
 
@@ -232,7 +285,15 @@ def author_network():
     cooccurrence = Counter()
 
     for p in papers:
-        authors = [a.strip() for a in (p.get("authors", []) if isinstance(p, dict) else getattr(p, 'authors', [])) if a.strip()]
+        authors = [
+            a.strip()
+            for a in (
+                p.get("authors", [])
+                if isinstance(p, dict)
+                else getattr(p, "authors", [])
+            )
+            if a.strip()
+        ]
         authors = list(dict.fromkeys(authors))  # 去重保序
         for a in authors:
             author_count[a] += 1
@@ -244,10 +305,11 @@ def author_network():
     if len(top_authors) < 3:
         top_authors = {a for a, _ in author_count.most_common(30)}
 
-    nodes = [{"id": a, "label": a, "count": author_count[a]}
-             for a in top_authors]
-    links = [{"source": a, "target": b, "weight": w}
-             for (a, b), w in cooccurrence.items()
-             if a in top_authors and b in top_authors and w >= 1]
+    nodes = [{"id": a, "label": a, "count": author_count[a]} for a in top_authors]
+    links = [
+        {"source": a, "target": b, "weight": w}
+        for (a, b), w in cooccurrence.items()
+        if a in top_authors and b in top_authors and w >= 1
+    ]
 
     return jsonify({"nodes": nodes, "links": links})

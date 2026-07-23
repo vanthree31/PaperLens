@@ -4,9 +4,13 @@ import copy
 from flask import Blueprint, request, jsonify, Response, current_app
 from core.config import load_config
 from core.utils import _build_paper_prompt, _check_url_safety
-from core.cache import _load_ai_analysis_cache, _save_ai_analysis_cache, _is_paper_in_collections
+from core.cache import (
+    _load_ai_analysis_cache,
+    _save_ai_analysis_cache,
+    _is_paper_in_collections,
+)
 
-ai_bp = Blueprint('ai', __name__)
+ai_bp = Blueprint("ai", __name__)
 
 
 def _state():
@@ -42,16 +46,31 @@ def ai_analyze_papers():
     if not selected:
         return jsonify({"error": "invalid_selection"}), 400
 
-    paper_ids = "_".join(sorted(set(
-        p.doi or p.pmid or f"t{hash(p.title or '')}"
-        for i, p in zip(indices, selected)
-    )))
+    paper_ids = "_".join(
+        sorted(
+            set(
+                p.doi or p.pmid or f"t{hash(p.title or '')}"
+                for i, p in zip(indices, selected)
+            )
+        )
+    )
     cache_key = f"{mode}_{lang}_{paper_ids}"
 
     # 检查内存缓存
     with state.cache_lock:
-        if not force_refresh and cache_key in state.ai_cache and state.ai_cache[cache_key]:
-            return jsonify({"response": state.ai_cache[cache_key], "count": len(selected), "mode": mode, "cached": True})
+        if (
+            not force_refresh
+            and cache_key in state.ai_cache
+            and state.ai_cache[cache_key]
+        ):
+            return jsonify(
+                {
+                    "response": state.ai_cache[cache_key],
+                    "count": len(selected),
+                    "mode": mode,
+                    "cached": True,
+                }
+            )
 
     # 检查磁盘缓存（收藏夹论文的分析结果）
     if not force_refresh:
@@ -61,7 +80,14 @@ def ai_analyze_papers():
             # 同时加载到内存缓存
             with state.cache_lock:
                 state.ai_cache[cache_key] = result
-            return jsonify({"response": result, "count": len(selected), "mode": mode, "cached": True})
+            return jsonify(
+                {
+                    "response": result,
+                    "count": len(selected),
+                    "mode": mode,
+                    "cached": True,
+                }
+            )
 
     prompt = _build_paper_prompt(selected, mode, lang)
     if lang == "en":
@@ -86,40 +112,55 @@ def ai_analyze_papers():
                     with state.cache_lock:
                         state.ai_cache[cache_key] = result
                         if len(state.ai_cache) > 50:
-                            for k in list(state.ai_cache.keys())[:len(state.ai_cache) - 50]:
+                            for k in list(state.ai_cache.keys())[
+                                : len(state.ai_cache) - 50
+                            ]:
                                 del state.ai_cache[k]
                     # 如果论文在收藏夹中，持久化到磁盘
-                    if any(_is_paper_in_collections(p.doi, state.collections_lock) for p in selected_copy if p.doi):
+                    if any(
+                        _is_paper_in_collections(p.doi, state.collections_lock)
+                        for p in selected_copy
+                        if p.doi
+                    ):
                         with state.disk_cache_lock:
                             disk_cache = _load_ai_analysis_cache()
                             disk_cache[cache_key] = result
                             if len(disk_cache) > 100:
                                 keys = list(disk_cache.keys())
-                                for k in keys[:len(disk_cache) - 100]:
+                                for k in keys[: len(disk_cache) - 100]:
                                     del disk_cache[k]
                             _save_ai_analysis_cache(disk_cache)
 
-        return Response(generate(), mimetype="text/plain; charset=utf-8",
-                        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        return Response(
+            generate(),
+            mimetype="text/plain; charset=utf-8",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     result = state.analysis_ai.chat(prompt, context, mode=mode)
     if result and not result.startswith("AI_ERROR:"):
         with state.cache_lock:
             state.ai_cache[cache_key] = result
             if len(state.ai_cache) > 50:
-                for k in list(state.ai_cache.keys())[:len(state.ai_cache) - 50]:
+                for k in list(state.ai_cache.keys())[: len(state.ai_cache) - 50]:
                     del state.ai_cache[k]
         # 如果论文在收藏夹中，持久化到磁盘
-        if any(_is_paper_in_collections(p.doi, state.collections_lock) for p in selected if p.doi):
+        if any(
+            _is_paper_in_collections(p.doi, state.collections_lock)
+            for p in selected
+            if p.doi
+        ):
             with state.disk_cache_lock:  # [Fix #8] 保护磁盘缓存读写
                 disk_cache = _load_ai_analysis_cache()
                 disk_cache[cache_key] = result
                 if len(disk_cache) > 100:
                     keys = list(disk_cache.keys())
-                    for k in keys[:len(disk_cache) - 100]:
+                    for k in keys[: len(disk_cache) - 100]:
                         del disk_cache[k]
                 _save_ai_analysis_cache(disk_cache)
-    return jsonify({"response": result, "count": len(selected), "mode": mode, "cached": False})
+    return jsonify(
+        {"response": result, "count": len(selected), "mode": mode, "cached": False}
+    )
 
 
 @ai_bp.route("/api/ai/chat", methods=["POST"])
@@ -129,7 +170,13 @@ def ai_chat():
         return jsonify({"error": "ai_analysis_not_enabled"}), 400
     data = request.json or {}
     try:
-        return jsonify({"response": state.analysis_ai.chat(data.get("message", ""), data.get("context", ""))})
+        return jsonify(
+            {
+                "response": state.analysis_ai.chat(
+                    data.get("message", ""), data.get("context", "")
+                )
+            }
+        )
     except Exception as e:
         print(f"[ERROR] AI chat failed: {e}")
         return jsonify({"error": "request_failed"}), 500
@@ -186,35 +233,71 @@ def ai_test_connection():
 
     try:
         import requests as req
+
         # 根据提供商构造请求
         if provider == "ollama":
             # 使用 OpenAI 兼容端点，与 AIAssistant 保持一致
-            url = (base_url or "http://localhost:11434").rstrip("/") + "/v1/chat/completions"
+            url = (base_url or "http://localhost:11434").rstrip(
+                "/"
+            ) + "/v1/chat/completions"
             headers = {"Content-Type": "application/json"}
-            payload = {"model": model or "qwen3.5:9b", "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+            payload = {
+                "model": model or "qwen3.5:9b",
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 5,
+            }
             resp = req.post(url, json=payload, headers=headers, timeout=30)
         elif provider == "deepseek":
             url = (base_url or "https://api.deepseek.com") + "/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            payload = {"model": model or "deepseek-chat", "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model or "deepseek-chat",
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 5,
+            }
             resp = req.post(url, json=payload, headers=headers, timeout=30)
         elif provider == "openai":
             url = (base_url or "https://api.openai.com") + "/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            payload = {"model": model or "gpt-4o-mini", "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model or "gpt-4o-mini",
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 5,
+            }
             resp = req.post(url, json=payload, headers=headers, timeout=30)
         elif provider == "anthropic":
             url = (base_url or "https://api.anthropic.com") + "/v1/messages"
-            headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
-            payload = {"model": model or "claude-sonnet-4-20250514", "max_tokens": 5, "messages": [{"role": "user", "content": "Hi"}]}
+            headers = {
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model or "claude-sonnet-4-20250514",
+                "max_tokens": 5,
+                "messages": [{"role": "user", "content": "Hi"}],
+            }
             resp = req.post(url, json=payload, headers=headers, timeout=30)
         else:
             # 自定义提供商
             if not base_url:
                 return jsonify({"ok": False, "error": "missing_base_url"})
             url = base_url.rstrip("/") + "/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-            payload = {"model": model, "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 5}
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 5,
+            }
             resp = req.post(url, json=payload, headers=headers, timeout=30)
 
         if resp.ok:
@@ -234,6 +317,7 @@ def ai_test_connection():
 def ollama_models():
     """检测本地 Ollama 已安装的模型"""
     import requests as req
+
     # 默认 Ollama 端口
     base_url = request.args.get("url", "http://localhost:11434").rstrip("/")
     # SSRF 防护：Ollama 是本地服务，允许 loopback
@@ -243,18 +327,26 @@ def ollama_models():
     try:
         resp = req.get(f"{base_url}/api/tags", timeout=5)
         if not resp.ok:
-            return jsonify({"ok": False, "models": [], "error": f"Ollama returned {resp.status_code}"})
+            return jsonify(
+                {
+                    "ok": False,
+                    "models": [],
+                    "error": f"Ollama returned {resp.status_code}",
+                }
+            )
         data = resp.json()
         models = []
         for m in data.get("models", []):
             name = m.get("name", "")
             size_bytes = m.get("size", 0)
             size_gb = round(size_bytes / (1024**3), 1) if size_bytes else 0
-            models.append({
-                "name": name,
-                "size": f"{size_gb}GB" if size_gb else "",
-                "modified": m.get("modified_at", ""),
-            })
+            models.append(
+                {
+                    "name": name,
+                    "size": f"{size_gb}GB" if size_gb else "",
+                    "modified": m.get("modified_at", ""),
+                }
+            )
         return jsonify({"ok": True, "models": models, "base_url": base_url})
     except req.exceptions.ConnectionError:
         return jsonify({"ok": False, "models": [], "error": "ollama_not_running"})
@@ -266,6 +358,7 @@ def ollama_models():
 def test_api_key():
     """测试数据源 API Key（使用后端存储的真实值）"""
     import requests as req
+
     data = request.json or {}
     source = data.get("source", "")
     api_key = data.get("api_key", "").strip()
@@ -313,8 +406,11 @@ def test_api_key():
         if not api_key:
             return jsonify({"ok": False, "error": "no_key"})
         try:
-            r = req.get("https://api.semanticscholar.org/graph/v1/paper/search?query=test&limit=1",
-                       headers={"x-api-key": api_key}, timeout=10)
+            r = req.get(
+                "https://api.semanticscholar.org/graph/v1/paper/search?query=test&limit=1",
+                headers={"x-api-key": api_key},
+                timeout=10,
+            )
             if r.ok:
                 return jsonify({"ok": True})
             return jsonify({"ok": False, "error": f"HTTP {r.status_code}"})
@@ -326,10 +422,12 @@ def test_api_key():
         if not api_key:
             return jsonify({"ok": False, "error": "no_key"})
         try:
-            r = req.get("https://api.core.ac.uk/v3/search/works",
-                       params={"q": "test", "limit": 1},
-                       headers={"Authorization": f"Bearer {api_key}"},
-                       timeout=10)
+            r = req.get(
+                "https://api.core.ac.uk/v3/search/works",
+                params={"q": "test", "limit": 1},
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
             if r.ok:
                 return jsonify({"ok": True})
             return jsonify({"ok": False, "error": f"HTTP {r.status_code}"})
@@ -341,15 +439,16 @@ def test_api_key():
         if not api_key:
             return jsonify({"ok": False, "error": "no_key"})
         try:
-            payload = {
-                "query": {"match_all": {}},
-                "size": 1
-            }
-            r = req.post("https://api.lens.org/scholarly/search",
-                        json=payload,
-                        headers={"Authorization": f"Bearer {api_key}",
-                                "Content-Type": "application/json"},
-                        timeout=10)
+            payload = {"query": {"match_all": {}}, "size": 1}
+            r = req.post(
+                "https://api.lens.org/scholarly/search",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=10,
+            )
             if r.ok:
                 return jsonify({"ok": True})
             return jsonify({"ok": False, "error": f"HTTP {r.status_code}"})

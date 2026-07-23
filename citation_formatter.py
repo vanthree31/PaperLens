@@ -52,6 +52,7 @@ def format_citations_batch(papers: list, style: str) -> str:
 
 # ============ 字段获取辅助 ============
 
+
 def _get(paper, field, default=""):
     """安全获取字段值，兼容 Paper dataclass 和 dict"""
     if isinstance(paper, dict):
@@ -75,6 +76,7 @@ def _plain_escape(text: str) -> str:
 
 
 # ============ 作者名格式化 ============
+
 
 def _parse_author(name: str):
     """解析作者名为 (姓, 名) 元组。
@@ -124,6 +126,7 @@ def _full_name(given: str) -> str:
 
 
 # ============ APA 7th ============
+
 
 def _format_apa(paper) -> str:
     authors = _get(paper, "authors", [])
@@ -177,6 +180,7 @@ def _format_authors_apa(authors: list) -> str:
 
 
 # ============ MLA 9th ============
+
 
 def _format_mla(paper) -> str:
     authors = _get(paper, "authors", [])
@@ -232,6 +236,7 @@ def _format_authors_mla(authors: list) -> str:
 
 # ============ GB/T 7714-2015 ============
 
+
 def _format_gb7714(paper) -> str:
     authors = _get(paper, "authors", [])
     year = _get_year(paper)
@@ -246,7 +251,7 @@ def _format_gb7714(paper) -> str:
     parts = [f"{author_str} "]
     parts.append(f"{title}")
     if journal:
-        parts.append(f"[J]")
+        parts.append("[J]")
         year_str = f", {year}" if year else ""
         vol_str = f", {volume}" if volume else ""
         issue_str = f"({issue})" if issue else ""
@@ -281,6 +286,7 @@ def _format_authors_gb7714(authors: list) -> str:
 
 
 # ============ Chicago 17th (Author-Date) ============
+
 
 def _format_chicago(paper) -> str:
     authors = _get(paper, "authors", [])
@@ -318,6 +324,7 @@ def _format_authors_chicago(authors: list) -> str:
 
 
 # ============ Vancouver ============
+
 
 def _format_vancouver(paper) -> str:
     authors = _get(paper, "authors", [])

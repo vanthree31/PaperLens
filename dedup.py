@@ -30,8 +30,8 @@ def deduplicate_papers(papers: list) -> list:
     if not papers:
         return []
 
-    doi_map = {}      # doi_lower -> merged paper
-    title_map = {}    # normalized_title -> merged paper (仅无 DOI 论文)
+    doi_map = {}  # doi_lower -> merged paper
+    title_map = {}  # normalized_title -> merged paper (仅无 DOI 论文)
 
     for p in papers:
         doi_key = (p.doi or "").strip().lower()
@@ -171,7 +171,9 @@ def _find_all_preprint_matches(published, papers, title_cache):
     Returns:
         匹配的预印本列表（可能为空）
     """
-    pub_title = title_cache.get(id(published)) or _normalize_title_for_version(published.title)
+    pub_title = title_cache.get(id(published)) or _normalize_title_for_version(
+        published.title
+    )
     if not pub_title:
         return []
 
@@ -182,7 +184,9 @@ def _find_all_preprint_matches(published, papers, title_cache):
         if not candidate.doi or not _is_preprint_doi(candidate.doi):
             continue
 
-        cand_title = title_cache.get(id(candidate)) or _normalize_title_for_version(candidate.title)
+        cand_title = title_cache.get(id(candidate)) or _normalize_title_for_version(
+            candidate.title
+        )
         if not cand_title:
             continue
 
@@ -208,8 +212,16 @@ def _merge_paper(existing, new):
 
     # 取非空字符串（新值优先，因为更新的数据源可能有更准确的信息）
     merged = {}
-    for fld in ("title", "journal", "doi", "pmid", "orcid",
-                "article_type", "conference", "abstract"):
+    for fld in (
+        "title",
+        "journal",
+        "doi",
+        "pmid",
+        "orcid",
+        "article_type",
+        "conference",
+        "abstract",
+    ):
         old_val = getattr(existing, fld, "")
         new_val = getattr(new, fld, "")
         if new_val and (not old_val or len(new_val) > len(old_val)):
@@ -218,7 +230,9 @@ def _merge_paper(existing, new):
             merged[fld] = old_val
 
     # 年份：取非零值
-    merged["year"] = new.year if (new.year and new.year != existing.year) else existing.year
+    merged["year"] = (
+        new.year if (new.year and new.year != existing.year) else existing.year
+    )
 
     # 引用数：取较大值
     merged["citation_count"] = max(
@@ -248,6 +262,7 @@ def _merge_paper(existing, new):
 
     # 构造新 Paper 对象
     from search_engine import Paper
+
     return Paper(**merged)
 
 
@@ -264,9 +279,9 @@ def _normalize_title(title: str) -> str:
     t = t.lower().strip()
     # 保留字母、数字、中文（CJK Unified Ideographs）、韩文、日文假名
     # 移除所有标点和特殊字符
-    t = re.sub(r'[^\w\s一-鿿぀-ゟ゠-ヿ가-힯]', '', t)
+    t = re.sub(r"[^\w\s一-鿿぀-ゟ゠-ヿ가-힯]", "", t)
     # 合并多余空格
-    t = re.sub(r'\s+', ' ', t).strip()
+    t = re.sub(r"\s+", " ", t).strip()
     return t
 
 
@@ -277,13 +292,13 @@ def _fullwidth_to_halfwidth(text: str) -> str:
     result = []
     for ch in text:
         cp = ord(ch)
-        if cp == 0x3000:       # 全角空格
-            result.append(' ')
+        if cp == 0x3000:  # 全角空格
+            result.append(" ")
         elif 0xFF01 <= cp <= 0xFF5E:  # 全角标点/字母/数字
             result.append(chr(cp - 0xFEE0))
         else:
             result.append(ch)
-    return ''.join(result)
+    return "".join(result)
 
 
 def _normalize_title_for_version(title: str) -> str:
@@ -298,14 +313,14 @@ def _normalize_title_for_version(title: str) -> str:
         return ""
     # 先移除预印本常见后缀（括号还在）
     t = title
-    t = re.sub(r'\s*\(arxiv\s*version\)', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'\s*\(arxiv\)', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'\s*\(preprint\)', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'\s*\(submitted\)', '', t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*\(arxiv\s*version\)", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*\(arxiv\)", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*\(preprint\)", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*\(submitted\)", "", t, flags=re.IGNORECASE)
     # 移除版本号后缀 (v1), (v2), (version 1) 等
-    t = re.sub(r'\s*\(v\d+\)', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'\s*\(version\s*\d+\)', '', t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*\(v\d+\)", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s*\(version\s*\d+\)", "", t, flags=re.IGNORECASE)
     # 移除 arXiv: 前缀
-    t = re.sub(r'^arxiv\s*:\s*\d+\.\d+', '', t, flags=re.IGNORECASE)
+    t = re.sub(r"^arxiv\s*:\s*\d+\.\d+", "", t, flags=re.IGNORECASE)
     # 再做基础归一化
     return _normalize_title(t)

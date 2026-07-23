@@ -130,6 +130,12 @@
           <span data-i18n="smartRouting">智能路由</span>
         </label>
       </div>
+      <div class="filter-group">
+        <label title="仅显示可免费获取全文的论文" data-i18n-title="oaOnlyHint">
+          <input type="checkbox" id="oaOnly">
+          <span data-i18n="oaOnly">仅OA</span>
+        </label>
+      </div>
       <button class="filters-toggle-btn" onclick="toggleAdvancedFilters()" id="filtersToggleBtn">
         <span data-i18n="advancedFilters">高级筛选</span><span class="arrow"> ▸</span>
       </button>
@@ -169,6 +175,11 @@
           <option value="clinical trial" data-i18n="typeClinical">临床试验</option>
           <option value="meta-analysis" data-i18n="typeMeta">Meta分析</option>
         </select>
+      </div>
+      <div class="filter-group">
+        <span data-i18n="institution">机构</span>:
+        <input type="text" id="filterAffiliation" placeholder="如: 清华大学 / MIT" data-i18n-placeholder="institutionPlaceholder"
+               style="width:180px;font-size:13px;padding:2px 6px">
       </div>
     </div>
   </div>
@@ -240,7 +251,13 @@
 <div class="settings-panel" id="settingsPanel" onclick="event.stopPropagation()">
   <div class="settings-panel-header">
     <h2>⚙ 设置</h2>
+    <button class="btn btn-sm btn-outline" onclick="refreshSettings(this)" style="margin-left:auto" data-i18n="refreshSettings">🔄 刷新配置</button>
   </div>
+  <!-- 配置状态总览（可折叠） -->
+  <details id="configStatusOverview" style="margin-bottom:16px">
+    <summary style="font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;padding:8px 0" data-i18n="configStatus">📊 配置状态</summary>
+    <div id="configStatusGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;font-size:11px;padding:8px 0"></div>
+  </details>
   <!-- 外观设置 - 主题切换 -->
   <div class="settings-section expanded" onclick="toggleSettingsSection(event, this)">
     <h3>🎨 <span data-i18n="appearance">外观</span> <span class="arrow">▾</span></h3>
@@ -266,6 +283,7 @@
   <div class="settings-section" onclick="toggleSettingsSection(event, this)">
     <h3>📚 <span data-i18n="dataSourceConfig">数据源配置</span> <span class="arrow">▸</span></h3>
     <div class="settings-section-content">
+      <div class="info-banner" data-i18n="dataSourceConfigHint">配置 API Key 可提高搜索速度和稳定性。大部分数据源无需配置即可使用。</div>
       <div class="form-group">
         <label data-i18n="pubmedEmail">PubMed Email</label>
         <div style="display:flex;gap:8px">
@@ -357,6 +375,7 @@
   <div class="settings-section" onclick="toggleSettingsSection(event, this)">
     <h3>📖 <span data-i18n="wanfangConfig">万方数据配置</span> <span class="arrow">▸</span></h3>
     <div class="settings-section-content">
+      <div class="info-banner" data-i18n="wanfangConfigHint">万方是国内学术数据库，需登录获取 Cookie 才能使用</div>
       <div class="toggle-row">
         <label data-i18n="enableWanfang">启用万方搜索</label>
         <label class="toggle-switch">
@@ -366,29 +385,28 @@
       </div>
       <div class="form-group">
         <label data-i18n="wanfangLogin">万方登录获取 Cookie</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-sm btn-outline" onclick="wanfangOpenBrowser()" id="wanfangOpenBtn" data-i18n="openWanfangBrowser">🌐 打开万方登录</button>
           <button class="btn btn-sm btn-primary" onclick="wanfangExtractCookie()" id="wanfangExtractBtn" data-i18n="extractCookie">提取 Cookie</button>
           <span id="wanfangLoginStatus" style="font-size:11px;display:flex;align-items:center"></span>
         </div>
-        <div class="hint" data-i18n="wanfangLoginHint">点击打开浏览器，在浏览器中登录万方，登录成功后点击「提取 Cookie」</div>
-        <div class="hint" style="color:var(--warning);margin-top:4px" data-i18n="wanfangCookieExpireHint">⚠ 万方 Cookie 会在一段时间后过期，建议每次启动 PaperLens 时重新配置</div>
+        <div class="hint" style="font-size:11px;color:var(--text-tertiary);margin-top:4px" data-i18n="wanfangLoginHint">打开浏览器登录万方，登录成功后点击「提取 Cookie」</div>
       </div>
-      <div class="form-group">
-        <details>
-          <summary style="font-size:12px;color:var(--text-secondary);cursor:pointer" data-i18n="manualCookie">手动输入 Cookie（高级）</summary>
-          <textarea id="cfgWanfangCookie" rows="3" placeholder="从浏览器开发者工具中复制 Cookie" data-i18n-placeholder="cookiePlaceholder" style="width:100%;font-size:12px;font-family:monospace;margin-top:8px"></textarea>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn btn-sm btn-outline" onclick="testWanfangCookie()" data-i18n="testBtn">测试</button>
-            <span id="wanfangCookieStatus" style="font-size:11px;display:flex;align-items:center"></span>
-          </div>
-        </details>
-      </div>
+      <details style="margin-top:4px">
+        <summary style="font-size:11px;color:var(--text-tertiary);cursor:pointer" data-i18n="manualCookie">手动输入 Cookie（高级）</summary>
+        <textarea id="cfgWanfangCookie" rows="2" placeholder="从浏览器开发者工具中复制 Cookie" data-i18n-placeholder="cookiePlaceholder" style="width:100%;font-size:12px;font-family:monospace;margin-top:8px"></textarea>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-sm btn-outline" onclick="testWanfangCookie()" data-i18n="testBtn">测试</button>
+          <span id="wanfangCookieStatus" style="font-size:11px;display:flex;align-items:center"></span>
+        </div>
+      </details>
+      <div class="hint" style="font-size:11px;color:var(--warning);margin-top:8px" data-i18n="wanfangCookieExpireHint">⚠ Cookie 会过期，建议每次启动时重新配置</div>
     </div>
   </div>
   <div class="settings-section expanded" data-section="search-ai" onclick="toggleSettingsSection(event, this)">
     <h3>🤖 <span data-i18n="aiSearchModel">AI 智能检索模型</span> <span class="arrow">▸</span></h3>
     <div class="settings-section-content">
+      <div class="info-banner" data-i18n="searchAiHint">用自然语言描述需求，AI 自动构建检索式并搜索</div>
       <div class="toggle-row">
         <label data-i18n="enableSearchAI">启用检索 AI</label>
         <label class="toggle-switch">
@@ -427,8 +445,8 @@
       </div>
       <div class="form-group">
         <label data-i18n="maxTokens">最大输出 Tokens</label>
-        <input type="number" id="cfgSearchMaxTokens" min="1024" max="131072" step="1024" value="4096">
-        <div class="hint" data-i18n="searchMaxTokensHint">检索模型建议 4096（快速响应）</div>
+        <input type="number" id="cfgSearchMaxTokens" min="1024" max="131072" step="1024" value="8192">
+        <div class="hint" data-i18n="searchMaxTokensHint">检索模型建议 8192</div>
       </div>
       <div style="margin-top:8px">
         <button class="btn btn-sm btn-outline" onclick="testAiConnection('Search')" id="testSearchAiBtn" data-i18n="testConnection">测试连接</button>
@@ -441,6 +459,7 @@
   <div class="settings-section" onclick="toggleSettingsSection(event, this)">
     <h3>🌐 <span data-i18n="translationConfig">翻译设置</span> <span class="arrow">▸</span></h3>
     <div class="settings-section-content">
+      <div class="info-banner" data-i18n="translationConfigHint">用中文搜索时，系统会自动翻译为英文查询国际数据库，提高检索准确率</div>
       <div class="toggle-row">
         <label data-i18n="enableTranslation">启用中文翻译</label>
         <label class="toggle-switch">
@@ -448,27 +467,27 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
-      <div class="hint" data-i18n="translationHint">将中文查询翻译为英文以搜索国际数据库（PubMed、OpenAlex等）</div>
-      <div class="toggle-row" style="margin-top:12px">
+      <div class="toggle-row">
         <label data-i18n="enableAITranslation">启用AI翻译回退</label>
         <label class="toggle-switch">
           <input type="checkbox" id="cfgAITranslationEnabled" onchange="saveTranslationConfig()">
           <span class="toggle-slider"></span>
         </label>
       </div>
-      <div class="hint"><span data-i18n="aiTranslationHint">当字典未覆盖时，使用AI进行翻译（需配置AI提供商）</span> <button class="btn-link" onclick="event.stopPropagation();scrollToAIConfig()" data-i18n="configureAI">配置AI</button></div>
-      <div class="form-group" style="margin-top:12px">
-        <label data-i18n="translationCache">翻译缓存</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span id="translationCacheSize" style="font-size:12px;color:var(--text-secondary)" data-i18n="cacheSizeLoading">缓存大小: 加载中...</span>
-          <button class="btn btn-sm btn-outline" onclick="clearTranslationCache()" data-i18n="clearCache">清除缓存</button>
-        </div>
+      <div class="hint" style="font-size:11px;color:var(--text-tertiary);margin-top:4px">
+        <span data-i18n="aiTranslationHint">内置词典未收录的专业术语（如"量子纠缠"、"机器学习"等），会调用AI翻译</span>
+        <button class="btn-link" onclick="event.stopPropagation();scrollToAIConfig()" data-i18n="configureAI">配置AI</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <span id="translationCacheSize" style="font-size:11px;color:var(--text-tertiary)" data-i18n="cacheSizeLoading">缓存: 加载中...</span>
+        <button class="btn btn-sm btn-outline" onclick="clearTranslationCache()" data-i18n="clearCache">清除</button>
       </div>
     </div>
   </div>
   <div class="settings-section expanded" onclick="toggleSettingsSection(event, this)">
     <h3>🧠 <span data-i18n="aiAnalysisModel">AI 论文分析模型</span> <span class="arrow">▸</span></h3>
     <div class="settings-section-content">
+      <div class="info-banner" data-i18n="analysisAiHint">对搜索结果进行总结、对比、创新点检测等深度分析</div>
       <div class="toggle-row">
         <label data-i18n="enableAnalysisAI">启用分析 AI</label>
         <label class="toggle-switch">
@@ -498,7 +517,7 @@
       <div class="form-group">
         <label data-i18n="modelName">模型名称</label>
         <input type="text" id="cfgAnalysisAiModel" data-i18n-placeholder="cfgAnalysisAiModel" placeholder="如 deepseek-v4-pro（高质量模型）">
-        <div class="hint" id="analysisModelHint" data-i18n="analysisAIHint">推荐：deepseek-v4-pro / gpt-4o / claude-sonnet</div>
+        <div class="hint" style="font-size:11px;color:var(--text-tertiary);margin-top:4px" id="analysisModelHint" data-i18n="analysisAIHint">推荐：deepseek-v4-pro / gpt-4o / claude-sonnet</div>
       </div>
       <div class="form-group">
         <label data-i18n="endpointURL">端点 URL</label>
@@ -520,13 +539,16 @@
   <div class="settings-section" onclick="toggleSettingsSection(event, this)">
     <h3>🌐 <span data-i18n="networkProxy">网络代理</span> <span class="arrow">▸</span></h3>
     <div class="settings-section-content">
+      <div class="info-banner" data-i18n="proxyHint">无法访问国外学术数据库时可配置代理（如 Clash、V2Ray 等本地端口）</div>
       <div class="form-group">
         <label data-i18n="httpProxy">HTTP 代理</label>
         <input type="text" id="cfgProxyHttp" placeholder="http://127.0.0.1:7890">
+        <div class="hint" style="font-size:11px;color:var(--text-tertiary);margin-top:4px" data-i18n="httpProxyHint">格式: http://IP:端口</div>
       </div>
       <div class="form-group">
         <label data-i18n="httpsProxy">HTTPS 代理</label>
         <input type="text" id="cfgProxyHttps" placeholder="http://127.0.0.1:7890">
+        <div class="hint" style="font-size:11px;color:var(--text-tertiary);margin-top:4px" data-i18n="httpsProxyHint">通常与 HTTP 代理相同</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
         <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();saveSettings()" data-i18n="testAndSave">测试并保存</button>
@@ -538,6 +560,7 @@
   <div class="settings-section" onclick="toggleSettingsSection(event, this)">
     <h3>🏫 <span data-i18n="institutionalAccess">校内访问</span> <span class="arrow">▸</span></h3>
     <div class="settings-section-content">
+      <div class="info-banner" data-i18n="institutionalAccessHint">高校师生可通过学校图书馆代理访问付费数据库，免费下载论文</div>
       <div class="form-group">
         <label data-i18n="accessMode">访问方式</label>
         <select id="cfgAccessMode" onchange="toggleAccessMode()">
@@ -1535,6 +1558,24 @@ async function doExport(fmt, indices) {
 // downloadFile 已移至 js/utils.js
 
 // 设置
+async function refreshSettings(btn) {
+  if (btn) {
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = "⏳ 加载中...";
+    try {
+      await loadSettings();
+      btn.textContent = "✓ 已刷新";
+      setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 1500);
+    } catch {
+      btn.textContent = "✗ 失败";
+      setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 1500);
+    }
+  } else {
+    await loadSettings();
+  }
+}
+
 async function loadSettings() {
   try {
     const r = await fetch(`${API}/api/config`);
@@ -1584,7 +1625,7 @@ async function loadSettings() {
       if (analysisModelEl) analysisModelEl.value = analysisAi.model || "";
     }
     // max_tokens 在 provider 切换之后设置，避免被异步操作覆盖
-    document.getElementById("cfgSearchMaxTokens").value = searchAi.max_tokens || 4096;
+    document.getElementById("cfgSearchMaxTokens").value = searchAi.max_tokens || 8192;
     document.getElementById("cfgAnalysisMaxTokens").value = analysisAi.max_tokens || 16384;
 
     document.getElementById("cfgProxyHttp").value = px.http || "";
@@ -1670,11 +1711,52 @@ async function loadSettings() {
 
     // 自动测试所有已配置的数据源连接
     autoTestConnections(cfg);
+    // 更新配置状态总览
+    updateConfigStatusOverview(cfg);
     // 刷新数据源 Chip 显示
     if (typeof window.renderSourceChips === 'function') window.renderSourceChips();
   } catch (e) {
     console.error("Load config error:", e);
   }
+}
+
+function updateConfigStatusOverview(cfg) {
+  const gridEl = document.getElementById("configStatusGrid");
+  if (!gridEl) return;
+
+  const makeItem = (label, configured, icon) => {
+    const color = configured ? "var(--success,#22c55e)" : "var(--text-secondary)";
+    const bg = configured ? "rgba(34,197,94,0.08)" : "rgba(100,100,100,0.05)";
+    const border = configured ? "var(--success,#22c55e)" : "var(--border,#ddd)";
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${bg};border:1px solid ${border};border-radius:6px">
+      <span style="font-size:14px">${icon}</span>
+      <span style="font-weight:500">${label}</span>
+      <span style="margin-left:auto;font-size:10px;color:${color}">${configured ? "✓" : "—"}</span>
+    </div>`;
+  };
+
+  const items = [];
+
+  // API Keys
+  const pm = cfg.sources?.pubmed || {};
+  const oa = cfg.sources?.openalex || {};
+  const s2 = cfg.sources?.semantic_scholar || {};
+  const core = cfg.sources?.core || {};
+  const lens = cfg.sources?.lens || {};
+
+  items.push(makeItem("PubMed", !!pm.api_key, "📗"));
+  items.push(makeItem("OpenAlex", !!oa.api_key, "📘"));
+  items.push(makeItem("Semantic Scholar", !!s2.api_key, "📙"));
+  items.push(makeItem("CORE", !!core.api_key, "📕"));
+  items.push(makeItem("Lens", !!lens.api_key, "📓"));
+
+  // AI
+  const searchAi = cfg.ai_search || cfg.ai || {};
+  const analysisAi = cfg.ai_analysis || cfg.ai || {};
+  items.push(makeItem("检索 AI", searchAi.enabled && !!searchAi.api_key, "🔍"));
+  items.push(makeItem("分析 AI", analysisAi.enabled && !!analysisAi.api_key, "🧠"));
+
+  gridEl.innerHTML = items.join("");
 }
 
 async function autoTestConnections(cfg) {
@@ -1813,15 +1895,12 @@ async function testAndUpdateStatus(statusId, testFn) {
   try {
     const ok = await testFn();
     if (ok) {
-      statusEl.textContent = "✓";
-      statusEl.style.color = "var(--success)";
+      statusEl.innerHTML = '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:var(--success);color:white;font-size:11px;font-weight:600">✓ 已连接</span>';
     } else {
-      statusEl.textContent = "✗";
-      statusEl.style.color = "var(--danger)";
+      statusEl.innerHTML = '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:var(--danger);color:white;font-size:11px;font-weight:600">✗ 未连接</span>';
     }
   } catch {
-    statusEl.textContent = "✗";
-    statusEl.style.color = "var(--danger)";
+    statusEl.innerHTML = '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:var(--danger);color:white;font-size:11px;font-weight:600">✗ 未连接</span>';
   }
 }
 

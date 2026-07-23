@@ -1,6 +1,5 @@
 """Search routes for PaperLens"""
 
-import time
 import json
 import copy
 import threading
@@ -9,7 +8,7 @@ from flask import Blueprint, request, jsonify, Response, current_app
 from core.utils import _escape_paper
 from dedup import deduplicate_papers
 
-search_bp = Blueprint('search', __name__)
+search_bp = Blueprint("search", __name__)
 
 
 def _state():
@@ -23,7 +22,9 @@ def ai_search_result():
     with state.cache_lock:
         resp = state.last_ai_search_result.get("resp")
         if resp:
-            print(f"[INFO] Fallback: returning cached AI search result ({resp.get('total', 0)} papers)")
+            print(
+                f"[INFO] Fallback: returning cached AI search result ({resp.get('total', 0)} papers)"
+            )
             # [Fix #2] fallback 返回后清空缓存，避免重复使用旧结果
             state.last_ai_search_result["resp"] = None
             # [Fix #10] 返回副本而非引用，防止并发修改
@@ -41,24 +42,37 @@ def search():
     current_year = datetime.now().year
     try:
         max_results = min(int(data.get("max_results", 50)), 200)
-        year_from = max(1900, min(int(data.get("year_from", current_year - 10)), current_year))
-        year_to = max(year_from, min(int(data.get("year_to", current_year)), current_year))
+        year_from = max(
+            1900, min(int(data.get("year_from", current_year - 10)), current_year)
+        )
+        year_to = max(
+            year_from, min(int(data.get("year_to", current_year)), current_year)
+        )
     except (ValueError, TypeError):
         max_results, year_from, year_to = 50, current_year - 10, current_year
     try:
         # 从前端 use_xxx 参数构建 enabled_sources 集合（插件架构）
         from search_engine import get_source_names
+
         _all_source_names = get_source_names()
-        enabled_sources = {name for name in _all_source_names
-                           if data.get(f"use_{name}", None)}
+        enabled_sources = {
+            name for name in _all_source_names if data.get(f"use_{name}", None)
+        }
         papers, search_errors = state.engine.search(
-            query=query, year_from=year_from, year_to=year_to,
-            sort=data.get("sort", "relevance"), max_results=max_results,
+            query=query,
+            year_from=year_from,
+            year_to=year_to,
+            sort=data.get("sort", "relevance"),
+            max_results=max_results,
             enabled_sources=enabled_sources,
-            journal=data.get("journal", "").strip(), field=data.get("field", "").strip(),
-            mesh_term=data.get("mesh_term", "").strip(), pub_type=data.get("pub_type", "").strip(),
+            journal=data.get("journal", "").strip(),
+            field=data.get("field", "").strip(),
+            mesh_term=data.get("mesh_term", "").strip(),
+            pub_type=data.get("pub_type", "").strip(),
             smart_routing=data.get("smart_routing", False),
             force_refresh=data.get("force_refresh", False),
+            oa_only=data.get("oa_only", False),
+            affiliation=data.get("affiliation", "").strip(),
         )
     except Exception as e:
         print(f"[ERROR] Search failed: {e}")
@@ -76,7 +90,7 @@ def search():
     if search_errors:
         resp["errors"] = search_errors
     # 添加 timing 信息
-    if hasattr(state.engine, '_last_timing_info') and state.engine._last_timing_info:
+    if hasattr(state.engine, "_last_timing_info") and state.engine._last_timing_info:
         resp["timing"] = state.engine._last_timing_info
     return jsonify(resp)
 
@@ -93,25 +107,36 @@ def search_stream():
     current_year = datetime.now().year
     try:
         max_results = min(int(data.get("max_results", 50)), 200)
-        year_from = max(1900, min(int(data.get("year_from", current_year - 10)), current_year))
-        year_to = max(year_from, min(int(data.get("year_to", current_year)), current_year))
+        year_from = max(
+            1900, min(int(data.get("year_from", current_year - 10)), current_year)
+        )
+        year_to = max(
+            year_from, min(int(data.get("year_to", current_year)), current_year)
+        )
     except (ValueError, TypeError):
         max_results, year_from, year_to = 50, current_year - 10, current_year
 
     def generate():
         import queue
+
         # 后台线程运行搜索生成器，主线程负责输出 + SSE 心跳（防代理超时）
         event_queue = queue.Queue()
         search_done = threading.Event()
+
         def _run_search():
             try:
                 from search_engine import get_source_names
+
                 _all_source_names = get_source_names()
-                enabled_sources = {name for name in _all_source_names
-                                   if data.get(f"use_{name}", None)}
+                enabled_sources = {
+                    name for name in _all_source_names if data.get(f"use_{name}", None)
+                }
                 for event in state.engine.search_stream(
-                    query=query, year_from=year_from, year_to=year_to,
-                    sort=data.get("sort", "relevance"), max_results=max_results,
+                    query=query,
+                    year_from=year_from,
+                    year_to=year_to,
+                    sort=data.get("sort", "relevance"),
+                    max_results=max_results,
                     enabled_sources=enabled_sources,
                     journal=data.get("journal", "").strip(),
                     field=data.get("field", "").strip(),
@@ -119,6 +144,8 @@ def search_stream():
                     pub_type=data.get("pub_type", "").strip(),
                     smart_routing=data.get("smart_routing", False),
                     force_refresh=data.get("force_refresh", False),
+                    oa_only=data.get("oa_only", False),
+                    affiliation=data.get("affiliation", "").strip(),
                 ):
                     event_queue.put(("event", event))
                 event_queue.put(("done", None))
@@ -127,6 +154,7 @@ def search_stream():
                 event_queue.put(("error", str(e)))
             finally:
                 search_done.set()
+
         threading.Thread(target=_run_search, daemon=True).start()
         try:
             while not search_done.is_set() or not event_queue.empty():
@@ -147,9 +175,11 @@ def search_stream():
                                 state.cached_papers["query"] = query_val
                             batch_size = 20
                             escaped_papers = [_escape_paper(p) for p in original_papers]
-                            total_batches = (len(escaped_papers) + batch_size - 1) // batch_size
+                            total_batches = (
+                                len(escaped_papers) + batch_size - 1
+                            ) // batch_size
                             for i in range(0, len(escaped_papers), batch_size):
-                                batch = escaped_papers[i:i + batch_size]
+                                batch = escaped_papers[i : i + batch_size]
                                 batch_event = {
                                     "type": "result_batch",
                                     "batch": i // batch_size,
@@ -159,7 +189,9 @@ def search_stream():
                                     "query": query_val,
                                 }
                                 batch_json = json.dumps(batch_event, ensure_ascii=False)
-                                print(f"[INFO] Yielding result batch {i // batch_size + 1}/{max(total_batches, 1)}: {len(batch)} papers, {len(batch_json)} bytes")
+                                print(
+                                    f"[INFO] Yielding result batch {i // batch_size + 1}/{max(total_batches, 1)}: {len(batch)} papers, {len(batch_json)} bytes"
+                                )
                                 yield f"data: {batch_json}\n\n"
                             done_event = {
                                 "type": "result",
@@ -182,8 +214,11 @@ def search_stream():
             print(f"[ERROR] search_stream failed: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)}, ensure_ascii=False)}\n\n"
 
-    return Response(generate(), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @search_bp.route("/api/ai-search", methods=["POST"])
@@ -231,7 +266,9 @@ def ai_search():
                 if ai_year_to == 0:
                     year_to = 0
                 else:
-                    year_to = max(year_from if year_from else 1900, min(ai_year_to, current_year))
+                    year_to = max(
+                        year_from if year_from else 1900, min(ai_year_to, current_year)
+                    )
             except (ValueError, TypeError):
                 year_from, year_to = current_year - 10, current_year
 
@@ -251,6 +288,7 @@ def ai_search():
         if not query_en and not query_zh:
             old_query = analysis.get("query", user_input)
             from search_engine import _contains_chinese, _translate_zh_to_en
+
             if _contains_chinese(old_query):
                 query_en = _translate_zh_to_en(old_query)
                 query_zh = old_query
@@ -258,21 +296,107 @@ def ai_search():
                 query_en = old_query
                 query_zh = old_query
 
-        # 使用 query_en 作为主查询（SearchEngine 内部会根据数据库类型选择语言）
+        # 使用 query_en 作为主查询，query_zh 传递给中文数据库
         papers, search_errors = state.engine.search(
             query=query_en,
-            year_from=year_from, year_to=year_to,
-            sort="relevance", max_results=max_results,
+            year_from=year_from,
+            year_to=year_to,
+            sort="relevance",
+            max_results=max_results,
             enabled_sources=enabled_sources,
             # [Fix] 优先使用AI返回的期刊/字段，回退到前端传递的值
             journal=analysis.get("journal", "") or data.get("journal", ""),
             field=analysis.get("field", "") or data.get("field", ""),
             pub_type=analysis.get("pub_type", "") or data.get("pub_type", ""),
             force_refresh=data.get("force_refresh", False),
+            oa_only=data.get("oa_only", False),
+            affiliation=data.get("affiliation", "").strip(),
+            query_zh=query_zh,
         )
         return papers, search_errors
 
+    def do_search_stream(analysis):
+        """使用流式搜索，返回 (papers, errors, events)"""
+        current_year = datetime.now().year
+        try:
+            max_results = min(int(data.get("max_results", 50)), 200)
+        except (ValueError, TypeError):
+            max_results = 50
+        # AI 搜索：优先使用前端传递的年份参数，其次使用 AI 返回的年份
+        frontend_yf = data.get("year_from")
+        frontend_yt = data.get("year_to")
+        if frontend_yf is not None and frontend_yt is not None:
+            try:
+                year_from = max(1900, min(int(frontend_yf), current_year))
+                year_to = max(year_from, min(int(frontend_yt), current_year))
+            except (ValueError, TypeError):
+                year_from, year_to = current_year - 10, current_year
+        else:
+            ai_year_from = analysis.get("year_from", current_year - 10)
+            ai_year_to = analysis.get("year_to", current_year)
+            try:
+                ai_year_from = int(ai_year_from)
+                ai_year_to = int(ai_year_to)
+                if ai_year_from == 0:
+                    year_from = 0
+                else:
+                    year_from = max(1900, min(ai_year_from, current_year))
+                if ai_year_to == 0:
+                    year_to = 0
+                else:
+                    year_to = max(
+                        year_from if year_from else 1900, min(ai_year_to, current_year)
+                    )
+            except (ValueError, TypeError):
+                year_from, year_to = current_year - 10, current_year
+
+        ai_sources = analysis.get("data_sources", [])
+        if ai_sources:
+            enabled_sources = set(ai_sources)
+        else:
+            # AI 未指定源 → 使用前端 checkbox 状态（与普通搜索一致）
+            from search_engine import get_source_names
+
+            _all_source_names = get_source_names()
+            enabled_sources = {
+                name for name in _all_source_names if data.get(f"use_{name}", None)
+            }
+
+        query_en = analysis.get("query_en", "")
+        query_zh = analysis.get("query_zh", "")
+        if not query_en and not query_zh:
+            old_query = analysis.get("query", user_input)
+            from search_engine import _contains_chinese, _translate_zh_to_en
+
+            if _contains_chinese(old_query):
+                query_en = _translate_zh_to_en(old_query)
+                query_zh = old_query
+            else:
+                query_en = old_query
+                query_zh = old_query
+
+        # 使用流式搜索获取每个数据源的状态
+        for event in state.engine.search_stream(
+            query=query_en,
+            year_from=year_from,
+            year_to=year_to,
+            sort="relevance",
+            max_results=max_results,
+            enabled_sources=enabled_sources,
+            journal=analysis.get("journal", "") or data.get("journal", ""),
+            field=analysis.get("field", "") or data.get("field", ""),
+            pub_type=analysis.get("pub_type", "") or data.get("pub_type", ""),
+            force_refresh=data.get("force_refresh", False),
+            oa_only=data.get("oa_only", False),
+            affiliation=data.get("affiliation", "").strip(),
+            query_zh=query_zh,
+        ):
+            yield event
+
+        return
+
     if use_stream:
+
         def generate():
             search_thread = None
             try:
@@ -289,151 +413,112 @@ def ai_search():
                     yield "\nAI_ERROR:analysis_failed"
                     return
 
-                # 在后台线程启动搜索，避免阻塞流式响应
-                search_state = {"papers": None, "errors": None, "error": None}
+                # 通知前端搜索已开始
+                yield "\n\n" + (
+                    "🔍 Searching databases..."
+                    if lang == "en"
+                    else "🔍 正在检索数据库..."
+                )
+
+                # 使用流式搜索，实时发送数据源状态
+                import queue
+
+                event_queue = queue.Queue()
+                search_done = threading.Event()
 
                 def _run_search():
                     try:
-                        print(f"[INFO] Starting search with query: {analysis.get('query', '')[:50]}")
-                        papers, search_errors = do_search(analysis)
-                        search_state["papers"] = papers
-                        search_state["errors"] = search_errors
-                        print(f"[INFO] Search completed: {len(papers)} papers, {len(search_errors)} errors")
+                        for event in do_search_stream(analysis):
+                            event_queue.put(("event", event))
+                        event_queue.put(("done", None))
                     except Exception as e:
                         import traceback
-                        print(f"[ERROR] AI search failed: {e}")
+
+                        print(f"[ERROR] AI search stream failed: {e}")
                         traceback.print_exc()
-                        search_state["error"] = str(e)
+                        event_queue.put(("error", str(e)))
+                    finally:
+                        search_done.set()
 
                 search_thread = threading.Thread(target=_run_search, daemon=True)
                 search_thread.start()
-                search_done = threading.Event()
 
-                # 通知前端搜索已开始
-                yield "\n\n" + ("🔍 Searching databases..." if lang == 'en' else "🔍 正在检索数据库...")
-
-                # 非阻塞等待搜索完成（最多90秒，每2秒检查一次）
-                MAX_WAIT = 90
-                waited = 0
-                last_yield_time = time.time()
-                while waited < MAX_WAIT:
-                    # 检查搜索是否完成
-                    if not search_thread.is_alive():
-                        search_done.set()
-                        break
-                    # 使用短超时的join，避免长时间阻塞
-                    search_thread.join(timeout=0.1)
-                    waited += 0.1
-                    # 每10秒输出一次等待状态（使用时间差避免阻塞影响输出）
-                    current_time = time.time()
-                    if current_time - last_yield_time >= 10:
-                        yield f"\n" + (f"⏳ Waited {int(waited)}s..." if lang == 'en' else f"⏳ 已等待 {int(waited)}秒...")
-                        last_yield_time = current_time
-
-                # 确保 happens-before：join() 保证线程写入对主线程可见
-                search_thread.join(timeout=0)
-                # 搜索完成，无论成功失败都返回结果
-                if search_thread.is_alive():
-                    print("[WARN] Search thread still alive after timeout")
-                    yield "\nAI_ERROR:search_timeout"
-                    return
-
-                # 即使有错误，也尝试返回部分结果
-                if search_state["error"]:
-                    print(f"[WARN] Search had error: {search_state['error']}, but returning partial results")
-
-                try:
-                    papers = search_state["papers"] or []
-                    # [Fix #13] 确保 search_errors 始终是 list，避免 tuple 导致 append 失败
-                    search_errors = list(search_state["errors"] or [])
-                    if search_state["error"]:
-                        search_errors.append(("Search error: " if lang == 'en' else "搜索异常: ") + search_state['error'])
-                    # Phase 5a: 跨源 DOI 去重
+                # 实时发送数据源状态给前端
+                all_papers = []
+                while not search_done.is_set() or not event_queue.empty():
                     try:
-                        papers = deduplicate_papers(papers)
-                    except Exception as e:
-                        print(f"[WARN] Dedup failed in ai-search (stream): {e}")
+                        kind, event = event_queue.get(timeout=0.5)
+                        if kind == "event":
+                            if event.get("type") == "source_done":
+                                # 发送数据源完成状态
+                                status_msg = (
+                                    f"✓ {event['source']} {event.get('count', 0)}篇"
+                                )
+                                if event.get("duration"):
+                                    status_msg += f" ({event['duration']}s)"
+                                status_msg += f" ({event.get('completed', 0)}/{event.get('total', 0)})"
+                                yield f"\n{status_msg}"
+                            elif event.get("type") == "source_error":
+                                yield f"\n✗ {event['source']}: {event.get('error', '未知错误')}"
+                            elif event.get("type") == "result":
+                                all_papers = event.get("papers", [])
+                        elif kind == "done":
+                            break
+                        elif kind == "error":
+                            yield f"\nAI_ERROR:{event}"
+                            break
+                    except queue.Empty:
+                        continue
 
-                    with state.cache_lock:
-                        state.cached_papers["papers"] = papers
-                        # [Fix] 使用 query_en 作为缓存的查询（用于后续引用图谱等操作）
-                        state.cached_papers["query"] = analysis.get("query_en", analysis.get("query", user_input))
-                    results = [_escape_paper(p) for p in papers]
+                # 确保搜索线程完成
+                if search_thread and search_thread.is_alive():
+                    search_thread.join(timeout=5)
+
+                # 获取最终结果
+                if all_papers:
                     # 构建完整的 resp 对象用于 fallback 缓存
+                    # Paper 对象转为 JSON 可序列化的 dict
+                    escaped_papers = [_escape_paper(p) for p in all_papers]
+
                     resp = {
-                        "total": len(results),
-                        "query": analysis.get("query_en", analysis.get("query", "")),
-                        "query_zh": analysis.get("query_zh", ""),
-                        "explanation": analysis.get("explanation", ""), "analysis": analysis, "papers": results,
-                    }
-                    if search_errors:
-                        resp["errors"] = search_errors
-                    if hasattr(state.engine, '_last_timing_info') and state.engine._last_timing_info:
-                        resp["timing"] = state.engine._last_timing_info
-                    with state.cache_lock:
-                        state.last_ai_search_result["resp"] = resp
-                    # 一次性返回所有论文（在 __SEARCH_RESULT__ 标记中）
-                    result_event = {
-                        "total": len(results),
+                        "total": len(escaped_papers),
                         "query": analysis.get("query_en", analysis.get("query", "")),
                         "query_zh": analysis.get("query_zh", ""),
                         "explanation": analysis.get("explanation", ""),
                         "analysis": analysis,
-                        "papers": results,
-                        "errors": search_errors,
-                        "timing": resp.get("timing", {}),
+                        "papers": escaped_papers,
                     }
-                    result_json = json.dumps(result_event, ensure_ascii=False)
-                    result_payload = "\n__SEARCH_RESULT__" + result_json
-                    print(f"[INFO] Yielding search result: {len(results)} papers, payload size: {len(result_payload)} bytes")
-                    yield result_payload
-                    print(f"[INFO] Yield completed successfully")
-                except Exception as build_err:
-                    import traceback
-                    print(f"[ERROR] Failed to build search results: {build_err}")
-                    traceback.print_exc()
-                    # 即使构建失败，也返回一个空结果，避免前端永远等待
-                    error_resp = {
-                        "total": 0,
-                        "query": analysis.get("query", user_input) if analysis else user_input,
-                        "explanation": "",
-                        "papers": [],
-                        "errors": [("Result build failed: " if lang == 'en' else "结果构建失败: ") + str(build_err)],
-                    }
-                    yield "\n__SEARCH_RESULT__" + json.dumps(error_resp, ensure_ascii=False)
+                    with state.cache_lock:
+                        state.last_ai_search_result["resp"] = resp
+                        state.cached_papers["papers"] = all_papers
 
-                print(f"[INFO] generate() generator finished normally")
+                    # 发送最终结果
+                    result_json = json.dumps(
+                        {
+                            "total": len(escaped_papers),
+                            "query": analysis.get(
+                                "query_en", analysis.get("query", "")
+                            ),
+                            "query_zh": analysis.get("query_zh", ""),
+                            "explanation": analysis.get("explanation", ""),
+                            "analysis": analysis,
+                            "papers": escaped_papers,
+                            "errors": [],
+                        },
+                        ensure_ascii=False,
+                    )
+                    yield "\n__SEARCH_RESULT__" + result_json
+
+                print("[INFO] generate() generator finished normally")
             finally:
-                # 确保客户端断连时清理后台搜索线程并写入 fallback 缓存
                 if search_thread and search_thread.is_alive():
                     print("[INFO] Client disconnected, search thread still running")
-                # 即使客户端断连，也尝试设置 fallback 结果
-                try:
-                    _analysis = analysis
-                    _search_state = search_state
-                except NameError:
-                    _analysis = None
-                    _search_state = {}
-                if _analysis is not None and _search_state.get("papers"):
-                    with state.cache_lock:
-                        if state.last_ai_search_result.get("resp") is None:
-                            try:
-                                papers = _search_state["papers"] or []
-                                results = [_escape_paper(p) for p in papers]
-                                state.last_ai_search_result["resp"] = {
-                                    "total": len(results),
-                                    "query": _analysis.get("query_en", _analysis.get("query", user_input)),
-                                    "query_zh": _analysis.get("query_zh", ""),
-                                    "explanation": _analysis.get("explanation", ""),
-                                    "analysis": _analysis,
-                                    "papers": results,
-                                }
-                                state.cached_papers["papers"] = papers
-                            except Exception:
-                                pass
 
-        return Response(generate(), mimetype="text/plain; charset=utf-8",
-                        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        return Response(
+            generate(),
+            mimetype="text/plain; charset=utf-8",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     # 非流式模式
     try:
@@ -450,18 +535,22 @@ def ai_search():
     with state.cache_lock:
         state.cached_papers["papers"] = papers
         # [Fix] 使用 query_en 作为缓存的查询
-        state.cached_papers["query"] = analysis.get("query_en", analysis.get("query", user_input))
+        state.cached_papers["query"] = analysis.get(
+            "query_en", analysis.get("query", user_input)
+        )
     results = [_escape_paper(p) for p in papers]
     resp = {
         "total": len(results),
         "query": analysis.get("query_en", analysis.get("query", "")),
         "query_zh": analysis.get("query_zh", ""),
-        "explanation": analysis.get("explanation", ""), "analysis": analysis, "papers": results,
+        "explanation": analysis.get("explanation", ""),
+        "analysis": analysis,
+        "papers": results,
     }
     if search_errors:
         resp["errors"] = search_errors
     # 添加 timing 信息
-    if hasattr(state.engine, '_last_timing_info') and state.engine._last_timing_info:
+    if hasattr(state.engine, "_last_timing_info") and state.engine._last_timing_info:
         resp["timing"] = state.engine._last_timing_info
     return jsonify(resp)
 
@@ -496,7 +585,13 @@ def batch_doi():
                 state.cached_papers["papers"].append(p)
                 existing_dois.add(p.doi.lower())
 
-    return jsonify({"total": len(found_escaped), "papers": found_escaped, "not_found": valid_count - len(found_escaped)})
+    return jsonify(
+        {
+            "total": len(found_escaped),
+            "papers": found_escaped,
+            "not_found": valid_count - len(found_escaped),
+        }
+    )
 
 
 @search_bp.route("/api/paper-by-doi", methods=["POST"])
@@ -527,7 +622,11 @@ def translation_cache_size():
     """获取翻译缓存大小"""
     state = _state()
     try:
-        size = state.engine._translator.get_cache_size() if hasattr(state.engine, '_translator') else 0
+        size = (
+            state.engine._translator.get_cache_size()
+            if hasattr(state.engine, "_translator")
+            else 0
+        )
         return jsonify({"size": size})
     except Exception as e:
         return jsonify({"size": 0, "error": str(e)})
@@ -538,7 +637,7 @@ def clear_translation_cache():
     """清除翻译缓存"""
     state = _state()
     try:
-        if hasattr(state.engine, '_translator') and state.engine._translator._cache:
+        if hasattr(state.engine, "_translator") and state.engine._translator._cache:
             with state.engine._translator._cache._lock:
                 state.engine._translator._cache._cache = {}
                 state.engine._translator._cache._save_cache()
@@ -549,6 +648,7 @@ def clear_translation_cache():
 
 
 # === 数据源健康监控 API ===
+
 
 @search_bp.route("/api/source-health", methods=["GET"])
 def get_source_health():

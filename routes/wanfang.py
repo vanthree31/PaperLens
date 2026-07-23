@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify, current_app
 from core.config import load_config, save_config
 from search_engine import SearchEngine
 
-wanfang_bp = Blueprint('wanfang', __name__)
+wanfang_bp = Blueprint("wanfang", __name__)
 
 # Playwright worker thread
 _wf_cmd = queue.Queue()
@@ -21,6 +21,7 @@ def _state():
 def _wf_worker():
     from playwright.sync_api import sync_playwright
     from access_proxy import _setup_playwright_browsers_path
+
     _setup_playwright_browsers_path()
     pw = None
     browser = None
@@ -55,11 +56,11 @@ def _wf_worker():
                 # 格式: {domain: {name: {value: ..., path: ...}}}
                 cookies_by_domain = {}
                 for c in cookies:
-                    domain = c.get('domain', '')
-                    if 'wanfangdata' in domain:
-                        cookies_by_domain.setdefault(domain, {})[c['name']] = {
-                            "value": c['value'],
-                            "path": c.get('path', '/')
+                    domain = c.get("domain", "")
+                    if "wanfangdata" in domain:
+                        cookies_by_domain.setdefault(domain, {})[c["name"]] = {
+                            "value": c["value"],
+                            "path": c.get("path", "/"),
                         }
                 browser.close()
                 if pw:
@@ -76,7 +77,9 @@ def _wf_worker():
                         for dc in cookies_by_domain.values()
                         for n, info in dc.items()
                     )
-                    _wf_result.put({"ok": True, "cookies": cookies_by_domain, "cookie": flat})
+                    _wf_result.put(
+                        {"ok": True, "cookies": cookies_by_domain, "cookie": flat}
+                    )
                 else:
                     _wf_result.put({"ok": False, "error": "wanfang_no_cookie"})
             elif cmd == "stop":
@@ -109,6 +112,7 @@ def _wf_worker():
 
 
 _worker_lock = threading.Lock()
+
 
 def _start_worker():
     global _worker_started

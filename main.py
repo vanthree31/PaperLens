@@ -5,9 +5,9 @@ import os
 import threading
 import time
 
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     os.chdir(os.path.dirname(sys.executable))
-    BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+    BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
 else:
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -20,7 +20,9 @@ def main():
 
     port = 51234
     server_thread = threading.Thread(
-        target=lambda: app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True),
+        target=lambda: app.run(
+            host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True
+        ),
         daemon=True,
     )
     server_thread.start()
@@ -28,6 +30,7 @@ def main():
 
     try:
         import webview
+
         kwargs = {
             "title": "PaperLens",
             "url": f"http://127.0.0.1:{port}",
@@ -41,6 +44,7 @@ def main():
         webview.start(gui="edgechromium", debug=False)
     except ImportError:
         import webbrowser
+
         webbrowser.open(f"http://127.0.0.1:{port}")
         print(f"已在浏览器中打开: http://127.0.0.1:{port}")
         print("按 Ctrl+C 退出")

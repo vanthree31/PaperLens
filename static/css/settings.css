@@ -68,6 +68,44 @@
   letter-spacing: -0.4px;
 }
 
+/* Settings Panel Header */
+.settings-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+}
+.settings-panel-header h2 {
+  margin-bottom: 0;
+}
+
+/* Config Status Overview */
+#configStatusOverview {
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+  padding: 0;
+}
+#configStatusOverview summary {
+  padding: 8px 0;
+  user-select: none;
+}
+#configStatusOverview summary:hover {
+  color: var(--text);
+}
+#configStatusGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  padding: 8px 0;
+}
+#configStatusGrid > div {
+  transition: all 0.2s ease;
+}
+#configStatusGrid > div:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
 /* Settings Section — Suppressed tier glass sub-card */
 .settings-section {
   background: var(--glass-s-bg);
@@ -173,6 +211,26 @@
   color: var(--text-secondary);
   margin-top: var(--space-2);
   line-height: 1.5;
+}
+
+/* iOS-style info banner — subtle, minimal */
+.info-banner {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: var(--primary-light, rgba(0, 122, 255, 0.06));
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.info-banner::before {
+  content: "ℹ️";
+  font-size: 13px;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 /* Link button style for inline actions */

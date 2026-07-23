@@ -152,6 +152,8 @@ Object.defineProperty(window, '_searchMode', {
     }
     if (prefs.filterField) document.getElementById("filterField").value = prefs.filterField;
     if (prefs.filterPubType) document.getElementById("filterPubType").value = prefs.filterPubType;
+    if (prefs.oaOnly !== undefined && document.getElementById("oaOnly")) document.getElementById("oaOnly").checked = prefs.oaOnly;
+    if (prefs.filterAffiliation !== undefined && document.getElementById("filterAffiliation")) document.getElementById("filterAffiliation").value = prefs.filterAffiliation;
     if (prefs.lang) {
       window.PaperLens.currentLang = prefs.lang;
       localStorage.setItem("paperlang", prefs.lang);
