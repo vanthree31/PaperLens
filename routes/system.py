@@ -262,6 +262,27 @@ def playwright_install():
     """安装 Playwright 浏览器（仅允许本地请求）"""
     if request.remote_addr not in ("127.0.0.1", "::1"):
         return jsonify({"error": "local_only"}), 403
+
+    # PyInstaller 打包后 sys.executable 指向 PaperLens.exe 自身，
+    # 用 subprocess 调用会启动第二个应用实例（"自己打开自己"），
+    # 且打包环境没有 pip/python，自动安装不可用。
+    if getattr(sys, "frozen", False):
+        return jsonify({
+            "ok": False,
+            "error": (
+                "打包版本不支持一键安装 Playwright。\n"
+                "请安装 Python 后手动执行:\n"
+                "  pip install playwright\n"
+                "  playwright install chromium"
+            ),
+            "output": [
+                "⚠ 检测到打包版本 (PaperLens.exe)，自动安装不可用",
+                "请手动在命令行中执行:",
+                "  pip install playwright",
+                "  playwright install chromium",
+            ],
+        }), 400
+
     import subprocess
 
     output = []
@@ -297,7 +318,7 @@ def playwright_install():
                 }
             ), 500
         output.append("  ✓ Chromium 已下载")
-        # Step 3: 验证安装
+        # Step 3: 验证安装（仅检查文件存在，不启动浏览器）
         output.append("[3/3] 验证安装...")
         if sys.platform == "win32":
             cache = os.path.join(os.environ.get("LOCALAPPDATA", ""), "ms-playwright")
@@ -319,17 +340,8 @@ def playwright_install():
         exe2 = _find_chromium_executable(cache)
         if exe2:
             output.append(f"  ✓ 浏览器就绪: {exe2}")
-            # 快速冒烟测试
-            try:
-                from playwright.sync_api import sync_playwright
-
-                pw = sync_playwright().start()
-                browser = pw.chromium.launch(headless=True)
-                browser.close()
-                pw.stop()
-                output.append("  ✓ 冒烟测试通过")
-            except Exception as e:
-                output.append(f"  ⚠ 冒烟测试失败: {e}")
+        else:
+            output.append("  ⚠ 浏览器未就绪，请手动执行: playwright install chromium")
         return jsonify({"ok": True, "output": output, "browser_path": exe2 or ""})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e), "output": output}), 500

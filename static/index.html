@@ -2246,8 +2246,9 @@ async function installPlaywright() {
       window.showToast("✓ Playwright 安装成功，可以搜索 CNKI/万方了");
     } else {
       const out = (data.output || []).join("<br>");
+      const errMsg = (data.error || "").replace(/\n/g, "<br>");
       statusEl.innerHTML = `<span style="color:var(--danger)">✗ 安装失败</span>` +
-        `<div style="font-size:10px;color:var(--text-secondary);margin-top:4px">${out}<br>${(data.error || "").substring(0, 300)}</div>`;
+        `<div style="font-size:10px;color:var(--text-secondary);margin-top:4px">${out}<br>${errMsg.substring(0, 600)}</div>`;
       installBtn.disabled = false;
     }
   } catch (e) {
