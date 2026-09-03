@@ -15,6 +15,37 @@ def _state():
     return current_app.config["APP_STATE"]
 
 
+def _to_float(value, default=0.0):
+    """安全转换为 float，用于影响因子等数值筛选参数。"""
+    try:
+        if value is None or value == "":
+            return default
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _resolve_author_fallback(user_input, analysis, data):
+    """AI 未识别作者意图时的规则引擎兜底，返回 (field, author)。
+
+    当 AI 分析与前端都未显式指定 field 时，用 QueryUnderstanding 从原始用户输入
+    提取作者名；命中则将 field 置为 au，使后端作者精确过滤生效。
+    """
+    field = (analysis or {}).get("field", "") or (data or {}).get("field", "")
+    author = ""
+    if not field and user_input:
+        try:
+            from search_engine import QueryUnderstanding
+
+            parsed = QueryUnderstanding.parse(user_input)
+            author = parsed.get("author") or ""
+            if author:
+                field = "au"
+        except Exception:
+            pass
+    return field, author
+
+
 @search_bp.route("/api/ai-search/result", methods=["GET"])
 def ai_search_result():
     """Fallback: 流式传输截断时，前端通过此端点获取完整搜索结果"""
@@ -73,6 +104,9 @@ def search():
             force_refresh=data.get("force_refresh", False),
             oa_only=data.get("oa_only", False),
             affiliation=data.get("affiliation", "").strip(),
+            impact_factor_min=_to_float(data.get("impact_factor_min")),
+            impact_factor_max=_to_float(data.get("impact_factor_max")),
+            cas_partition=data.get("cas_partition", ""),
         )
     except Exception as e:
         print(f"[ERROR] Search failed: {e}")
@@ -146,6 +180,9 @@ def search_stream():
                     force_refresh=data.get("force_refresh", False),
                     oa_only=data.get("oa_only", False),
                     affiliation=data.get("affiliation", "").strip(),
+                    impact_factor_min=_to_float(data.get("impact_factor_min")),
+                    impact_factor_max=_to_float(data.get("impact_factor_max")),
+                    cas_partition=data.get("cas_partition", ""),
                 ):
                     event_queue.put(("event", event))
                 event_queue.put(("done", None))
@@ -297,6 +334,7 @@ def ai_search():
                 query_zh = old_query
 
         # 使用 query_en 作为主查询，query_zh 传递给中文数据库
+        search_field, search_author = _resolve_author_fallback(user_input, analysis, data)
         papers, search_errors = state.engine.search(
             query=query_en,
             year_from=year_from,
@@ -304,14 +342,18 @@ def ai_search():
             sort="relevance",
             max_results=max_results,
             enabled_sources=enabled_sources,
-            # [Fix] 优先使用AI返回的期刊/字段，回退到前端传递的值
+            # [Fix] 优先使用AI返回的期刊/字段，回退到前端传递的值；作者走规则兜底
             journal=analysis.get("journal", "") or data.get("journal", ""),
-            field=analysis.get("field", "") or data.get("field", ""),
+            field=search_field,
             pub_type=analysis.get("pub_type", "") or data.get("pub_type", ""),
             force_refresh=data.get("force_refresh", False),
             oa_only=data.get("oa_only", False),
             affiliation=data.get("affiliation", "").strip(),
             query_zh=query_zh,
+            impact_factor_min=_to_float(data.get("impact_factor_min")),
+            impact_factor_max=_to_float(data.get("impact_factor_max")),
+            cas_partition=data.get("cas_partition", ""),
+            author=search_author,
         )
         return papers, search_errors
 
@@ -376,6 +418,7 @@ def ai_search():
                 query_zh = old_query
 
         # 使用流式搜索获取每个数据源的状态
+        search_field, search_author = _resolve_author_fallback(user_input, analysis, data)
         for event in state.engine.search_stream(
             query=query_en,
             year_from=year_from,
@@ -384,12 +427,16 @@ def ai_search():
             max_results=max_results,
             enabled_sources=enabled_sources,
             journal=analysis.get("journal", "") or data.get("journal", ""),
-            field=analysis.get("field", "") or data.get("field", ""),
+            field=search_field,
             pub_type=analysis.get("pub_type", "") or data.get("pub_type", ""),
             force_refresh=data.get("force_refresh", False),
             oa_only=data.get("oa_only", False),
             affiliation=data.get("affiliation", "").strip(),
             query_zh=query_zh,
+            impact_factor_min=_to_float(data.get("impact_factor_min")),
+            impact_factor_max=_to_float(data.get("impact_factor_max")),
+            cas_partition=data.get("cas_partition", ""),
+            author=search_author,
         ):
             yield event
 

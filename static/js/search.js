@@ -68,9 +68,13 @@ function buildSearchBody(overrides = {}) {
     use_zotero_mcp: document.getElementById("useZoteroMcp")?.checked ?? false,
     use_zenodo: document.getElementById("useZenodo")?.checked ?? true,
     use_datacite: document.getElementById("useDatacite")?.checked ?? true,
+    use_doaj: document.getElementById("useDoaj")?.checked ?? true,
     smart_routing: document.getElementById("smartRouting")?.checked ?? false,
     oa_only: document.getElementById("oaOnly")?.checked ?? false,
     affiliation: document.getElementById("filterAffiliation")?.value?.trim() || "",
+    impact_factor_min: parseFloat(document.getElementById("impactFactorMin")?.value) || 0,
+    impact_factor_max: parseFloat(document.getElementById("impactFactorMax")?.value) || 0,
+    cas_partition: getCasPartitionFilter(),
     journal: getJournalFilter(),
     field: document.getElementById("filterField").value,
     pub_type: document.getElementById("filterPubType").value,
@@ -197,6 +201,9 @@ function savePreferences() {
       filterPubType: document.getElementById("filterPubType").value,
       oaOnly: document.getElementById("oaOnly")?.checked ?? false,
       filterAffiliation: document.getElementById("filterAffiliation")?.value || "",
+      impactFactorMin: document.getElementById("impactFactorMin")?.value || "",
+      impactFactorMax: document.getElementById("impactFactorMax")?.value || "",
+      casPartition: getCasPartitionFilter(),
       lang: currentLang,
       dataSources: sources,
     };
@@ -276,6 +283,65 @@ function removeJournal(index) {
 function getJournalFilter() {
   const sj = getSelectedJournals();
   return sj.length > 0 ? sj.join(',') : '';
+}
+
+// 获取中科院分区筛选（勾选的 1区/2区/3区/4区）
+function getCasPartitionFilter() {
+  const cbs = document.querySelectorAll('.cas-partition-cb:checked');
+  return Array.from(cbs).map(cb => cb.value);
+}
+
+// ========== 搜索进度面板 ==========
+let _progressState = null; // {total, done, papers, sources: Map(name->status)}
+
+function showSearchProgress(total, sourceNames) {
+  const el = document.getElementById("searchProgress");
+  if (!el) return;
+  _progressState = {
+    total,
+    done: 0,
+    papers: 0,
+    sources: new Map((sourceNames || []).map(n => [n, "pending"])),
+  };
+  el.style.display = "block";
+  renderSearchProgress();
+}
+
+function updateSourceProgress(name, status) {
+  if (!_progressState) return;
+  const src = _progressState.sources;
+  if (src.has(name) && src.get(name) === "pending") {
+    src.set(name, status);
+    if (status === "done" || status === "error") _progressState.done++;
+  }
+  renderSearchProgress();
+}
+
+function updateProgressPapers(n) {
+  if (!_progressState) return;
+  _progressState.papers = n;
+  renderSearchProgress();
+}
+
+function renderSearchProgress() {
+  if (!_progressState) return;
+  const fill = document.getElementById("searchProgressFill");
+  const count = document.getElementById("searchProgressCount");
+  const sources = document.getElementById("searchProgressSources");
+  if (!fill || !count || !sources) return;
+  const pct = _progressState.total > 0
+    ? Math.round((_progressState.done / _progressState.total) * 100) : 0;
+  fill.style.width = pct + "%";
+  count.textContent = `${_progressState.done}/${_progressState.total} 源 · ${_progressState.papers} 篇`;
+  sources.innerHTML = [..._progressState.sources.entries()]
+    .map(([name, status]) => `<span class="search-progress-chip ${status}">${escapeHtml(name)}</span>`)
+    .join("");
+}
+
+function hideSearchProgress() {
+  const el = document.getElementById("searchProgress");
+  if (el) el.style.display = "none";
+  _progressState = null;
 }
 
 // ========== 期刊分组筛选 ==========
@@ -815,11 +881,14 @@ async function doSearch() {
 
         try {
           const event = JSON.parse(jsonStr);
-          if (event.type === "source_done") {
+          if (event.type === "search_start") {
+            showSearchProgress(event.total, event.sources || []);
+          } else if (event.type === "source_done") {
             sourceDiag.push({name: event.source, status: "ok", count: event.count, duration: event.duration || 0});
             const durationStr = event.duration ? ` (${event.duration}s)` : "";
             window.setStatus(`✓ ${event.source} ${event.count}篇 ${durationStr} (${event.completed}/${event.total})`);
             debugLog(`[SEARCH] ${event.source} done: ${event.count} papers (${event.completed}/${event.total}) ${event.duration}s`);
+            updateSourceProgress(event.source, "done");
             if (event.duration !== undefined) {
               updateSourceTimingIndicator(event.source, event.duration, "ok");
             }
@@ -833,6 +902,7 @@ async function doSearch() {
             sourceDiag.push({name: event.source, status: "error", count: 0, duration: event.duration || 0, error: event.error});
             const durationStr = event.duration ? ` (${event.duration}s)` : "";
             debugLog(`[SEARCH] ${event.source} error: ${event.error} (${event.completed}/${event.total})${durationStr}`);
+            updateSourceProgress(event.source, "error");
             if (event.duration !== undefined) {
               const errorStatus = event.error.includes("超时") ? "timeout" : "error";
               updateSourceTimingIndicator(event.source, event.duration, errorStatus);
@@ -841,6 +911,7 @@ async function doSearch() {
             // 分批论文数据，累积并立即渲染
             if (event.papers && event.papers.length > 0) {
               accumulatedPapers.push(...event.papers);
+              updateProgressPapers(accumulatedPapers.length);
               // 渐进渲染：每收到一批就更新界面
               window.PaperLens.allPapers = [...accumulatedPapers];
               window.PaperLens._searchQuery = query;
@@ -852,6 +923,7 @@ async function doSearch() {
             searchData = event;
             window.PaperLens._lastSearchDiag = sourceDiag;  // 诊断数据
           } else if (event.type === "error") {
+            hideSearchProgress();
             window.showToast(te(event.error) || t("searchFailed"));
             window.setStatus(t("searchFailed"));
             window.renderResults(); // 清除骨架屏，显示空状态
@@ -864,6 +936,7 @@ async function doSearch() {
     }
 
     if (!searchData) {
+      hideSearchProgress();
       window.showToast(t("searchFailed"));
       window.setStatus(t("searchFailed"));
       window.renderResults(); // 清除骨架屏，显示空状态
@@ -871,6 +944,7 @@ async function doSearch() {
     }
 
     // 处理最终结果
+    hideSearchProgress();
     window.PaperLens.allPapers = searchData.papers || [];
     window.PaperLens._originalPapers = [...(searchData.papers || [])];
     window.PaperLens.currentPage = 1;
@@ -1066,6 +1140,9 @@ async function doAISearch() {
     pub_type: document.getElementById("filterPubType").value,
     oa_only: document.getElementById("oaOnly")?.checked ?? false,
     affiliation: document.getElementById("filterAffiliation")?.value?.trim() || "",
+    impact_factor_min: parseFloat(document.getElementById("impactFactorMin")?.value) || 0,
+    impact_factor_max: parseFloat(document.getElementById("impactFactorMax")?.value) || 0,
+    cas_partition: getCasPartitionFilter(),
     use_pubmed: document.getElementById("usePubmed").checked,
     use_openalex: document.getElementById("useOpenalex").checked,
     use_semantic_scholar: document.getElementById("useSemanticScholar")?.checked || false,
@@ -1091,6 +1168,9 @@ async function doAISearch() {
     use_core: document.getElementById("useCore")?.checked ?? true,
     use_lens: document.getElementById("useLens")?.checked ?? true,
     use_lens_patents: document.getElementById("useLensPatents")?.checked ?? false,
+    use_zenodo: document.getElementById("useZenodo")?.checked ?? true,
+    use_datacite: document.getElementById("useDatacite")?.checked ?? true,
+    use_doaj: document.getElementById("useDoaj")?.checked ?? true,
     force_refresh: window._forceRefresh || false,
   };
 

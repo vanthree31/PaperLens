@@ -91,9 +91,9 @@ def ai_analyze_papers():
 
     prompt = _build_paper_prompt(selected, mode, lang)
     if lang == "en":
-        context = "You are a senior academic paper analysis expert. Provide precise, insightful, and concise paper analysis for fellow researchers. Automatically identify the research field and use domain-appropriate professional language."
+        context = "You are a senior academic paper analysis expert. Provide precise, insightful, and concise paper analysis for fellow researchers. Automatically identify the research field and use domain-appropriate professional language. Keep technical terms (method/model/dataset names) in their original English. Base analysis strictly on the provided abstracts; do not fabricate details not present."
     else:
-        context = "你是一位资深学术论文分析专家，擅长用中文为同行学者提供精准、深刻、不啰嗦的论文分析。根据论文内容自动判断所属领域，用该领域的专业语言进行分析。"
+        context = "你是一位资深学术论文分析专家，擅长用中文为同行学者提供精准、深刻、不啰嗦的论文分析。根据论文内容自动判断所属领域，用该领域的专业语言进行分析。专业术语（方法名/模型名/算法名/数据集名/基因蛋白名等）保留英文原文或使用「中文(英文)」格式，不要生硬直译。严格基于论文摘要内容分析，不要编造摘要中不存在的信息。"
 
     if use_stream:
         # [Fix #19] 在 generate 开始时复制 papers，避免流式传输期间被并发修改

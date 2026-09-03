@@ -37,6 +37,7 @@ from concurrent.futures import (
 import requests
 from access_proxy import EZproxyRewriter
 from dedup import deduplicate_papers
+import journal_metrics
 
 
 def _contains_chinese(text: str) -> bool:
@@ -1483,6 +1484,9 @@ class Paper:
     issue: str = ""
     pages: str = ""
     issn: str = ""
+    # 期刊指标（影响因子 + 中科院分区，用于搜索筛选）
+    impact_factor: float = 0.0  # JCR 影响因子，0 表示未知
+    cas_partition: str = ""  # 中科院分区：1区/2区/3区/4区，空表示未知
     # Phase 5a: 学术元数据（从 OpenAlex/PubMed/S2 解析）
     orcid: str = ""  # 通讯作者 ORCID
     article_type: str = ""  # 文章类型：journal-article, review, book-chapter, etc.
@@ -1521,6 +1525,8 @@ def _paper_to_dict(paper: Paper) -> dict:
         "issue": paper.issue or "",
         "pages": paper.pages or "",
         "issn": paper.issn or "",
+        "impact_factor": paper.impact_factor or 0.0,
+        "cas_partition": paper.cas_partition or "",
         "orcid": paper.orcid or "",
         "article_type": paper.article_type or "",
         "conference": paper.conference or "",
@@ -1558,6 +1564,8 @@ def _dict_to_paper(d: dict) -> Paper:
             issue=d.get("issue", ""),
             pages=d.get("pages", ""),
             issn=d.get("issn", ""),
+            impact_factor=d.get("impact_factor", 0.0) or 0.0,
+            cas_partition=d.get("cas_partition", "") or "",
             orcid=d.get("orcid", ""),
             article_type=d.get("article_type", ""),
             conference=d.get("conference", ""),
@@ -1814,8 +1822,8 @@ JOURNAL_ISSN = {
     "nature immunology": "1529-2908",
     "nat struct mol biol": "1545-9993",
     "nature structural & molecular biology": "1545-9993",
-    "nat rev mol cell biol": "1465-7392",
-    "nature reviews molecular cell biology": "1465-7392",
+    "nat rev mol cell biol": "1471-0072",
+    "nature reviews molecular cell biology": "1471-0072",
     "nat rev neurosci": "1471-003X",
     "nature reviews neuroscience": "1471-003X",
     "nat rev genet": "1471-0056",
@@ -1852,8 +1860,8 @@ JOURNAL_ISSN = {
     "nature reviews chemistry": "2397-3358",
     "nat rev phys": "2524-4914",
     "nature reviews physics": "2524-4914",
-    "nat rev mater": "2058-7546",
-    "nature reviews materials": "2058-7546",
+    "nat rev mater": "2058-8437",
+    "nature reviews materials": "2058-8437",
     "nat rev methods primers": "2662-8449",
     "nature reviews methods primers": "2662-8449",
     # ========== Science 系列 ==========
@@ -2061,7 +2069,7 @@ ISSN_TO_CANONICAL = {
     "1759-4774": "Nat Rev Clin Oncol",
     "2397-3358": "Nat Rev Chem",
     "2524-4914": "Nat Rev Phys",
-    "2058-7546": "Nat Rev Mater",
+    "2058-8437": "Nat Rev Mater",
     "2662-8449": "Nat Rev Methods Primers",
     "0036-8075": "Science",
     "2375-2548": "Sci Adv",
@@ -2367,6 +2375,63 @@ def _convert_author_name_for_pubmed(name: str) -> str:
         initials = "".join(n[0].upper() for n in given_names if n)
         return f"{family_name} {initials}"
     return clean_name
+
+
+def _normalize_author_name(name: str) -> str:
+    """归一化作者名：全角转半角、小写、去标点、压缩空白。
+
+    Examples:
+        "Jinhua Zhou" -> "jinhua zhou"
+        "Zhou, Jinhua" -> "zhou jinhua"
+        "J. H. Zhou" -> "j h zhou"
+        "周金华" -> "周金华"
+    """
+    if not name:
+        return ""
+    out = []
+    for ch in str(name):
+        code = ord(ch)
+        if code == 0x3000:  # 全角空格
+            out.append(" ")
+        elif 0xFF01 <= code <= 0xFF5E:  # 全角字符转半角
+            out.append(chr(code - 0xFEE0))
+        else:
+            out.append(ch)
+    text = "".join(out).lower()
+    # 去掉标点（点、逗号、引号、连字符、括号、&），保留字母/数字/中文/空格
+    text = re.sub(r"[.,;:'\"\-()\[\]&]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _author_name_matches(target: str, author: str) -> bool:
+    """判断目标作者名（检索词）是否与论文作者名匹配。
+
+    支持：完全相等、子串、姓+名首字母（顺序无关）、中文名子串。
+    """
+    t = _normalize_author_name(target)
+    a = _normalize_author_name(author)
+    if not t or not a:
+        return False
+    if t == a:
+        return True
+    if t in a or a in t:
+        return True
+    tt = t.split()
+    aa = a.split()
+    if len(tt) < 2 or len(aa) < 2:
+        return False
+    # 多词名：找双方共同出现的「姓」，再比对「名」首字母（顺序无关）
+    common = set(tt) & set(aa)
+    if not common:
+        return False
+    t_given = [w for w in tt if w not in common]
+    a_given = [w for w in aa if w not in common]
+    if not t_given or not a_given:
+        return True  # 一方只给了姓（名被缩写省略）
+    t_init = "".join(w[0] for w in t_given)
+    a_init = "".join(w[0] for w in a_given)
+    return t_init == a_init or t_init in a_init or a_init in t_init
 
 
 def build_pubmed_query(
@@ -9598,6 +9663,11 @@ class QueryUnderstanding:
         re.compile(r"(?:作者|author)[：:]\s*([一-鿿]{2,4})"),
         # "by Smith J" "by Zhang San"
         re.compile(r"\bby\s+([A-Z][a-z]+(?:\s+[A-Z]\.?)*)\b"),
+        # "周金华发表的论文" / "张三撰写的文章" / "李四著作"（作者名在动词前）
+        # 中文姓名通常 2-3 字，用 {2,3} 避免把「找一下/搜索」等前缀的字也吞进作者名
+        re.compile(
+            r"([一-鿿]{2,3})\s*(?:发表|撰写|著作|写作|出版)\s*的?\s*(?:论文|文章|著作|作品)?"
+        ),
     ]
 
     # 时间/学术相关词（用于过滤作者误匹配）
@@ -10693,6 +10763,103 @@ class DataCiteSource(BaseSearchSource):
             return []
 
 
+@register_source
+class DOAJSource(BaseSearchSource):
+    """DOAJ（Directory of Open Access Journals）搜索源 — 纯开放获取期刊/文章索引"""
+
+    SOURCE_NAME = "doaj"
+    DISPLAY_NAME = "DOAJ"
+    DEFAULT_ENABLED = True
+    MAX_RESULTS = 30
+    BASE = "https://doaj.org/api/search/articles"
+
+    def __init__(self, **config):
+        super().__init__(**config)
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "PaperLens/1.0"
+
+    def search(
+        self,
+        query: str,
+        year_from: int = 0,
+        year_to: int = 0,
+        max_results: int = 30,
+        **kwargs,
+    ) -> list:
+        from urllib.parse import quote
+
+        try:
+            # DOAJ 简单检索（标题/摘要/关键词），URL 路径需编码
+            url = f"{self.BASE}/{quote(query)}"
+            params = {
+                "pageSize": min(max_results, 50),
+                "page": 1,
+            }
+            r = self.session.get(url, params=params, timeout=15)
+            if r.status_code == 429:  # 限流：退避重试一次
+                time.sleep(3)
+                r = self.session.get(url, params=params, timeout=15)
+            r.raise_for_status()
+            data = r.json()
+
+            papers = []
+            for item in data.get("results", []):
+                try:
+                    bib = item.get("bibjson", {}) or {}
+                    p = Paper(source="doaj")
+                    p.title = bib.get("title", "") or ""
+                    if not p.title:
+                        continue
+
+                    # 作者
+                    for author in (bib.get("author", []) or [])[:10]:
+                        name = author.get("name", "") or ""
+                        if name:
+                            p.authors.append(name)
+
+                    # 年份
+                    year_str = bib.get("year", "") or ""
+                    if year_str:
+                        try:
+                            p.year = int(str(year_str)[:4])
+                        except ValueError:
+                            pass
+
+                    # 期刊
+                    journal = (bib.get("journal", {}) or {}).get("title", "") or ""
+                    p.journal = journal
+
+                    # DOI
+                    for ident in bib.get("identifier", []) or []:
+                        if (ident.get("type", "") or "").lower() == "doi":
+                            p.doi = ident.get("id", "") or ""
+                            break
+
+                    # 摘要
+                    p.abstract = (bib.get("abstract", "") or "")[:2000]
+
+                    # 关键词
+                    keywords = bib.get("keywords", []) or []
+                    if isinstance(keywords, list):
+                        p.keywords = [str(k) for k in keywords[:10]]
+
+                    # 全文链接（OA，DOAJ 全部开放）
+                    oa_url = ""
+                    for link in bib.get("link", []) or []:
+                        if (link.get("type", "") or "") == "fulltext":
+                            oa_url = link.get("url", "") or ""
+                            break
+                    p.oa_url = oa_url
+
+                    papers.append(p)
+                except Exception:
+                    continue
+            return papers
+        except Exception as e:
+            print(f"[DOAJ] search error: {e}")
+            return []
+
+
 class SearchEngine:
     """聚合检索引擎"""
 
@@ -10987,6 +11154,32 @@ class SearchEngine:
 
         return False
 
+    def _enrich_journal_metrics(self, p) -> None:
+        """为论文补充期刊指标（影响因子 + 中科院分区）。
+
+        解析流程：
+        1. 优先使用论文自带 ISSN；若为空，尝试通过期刊名解析 ISSN。
+        2. 用 ISSN 或期刊名在 journal_metrics 中查找指标。
+        3. 命中则写入 p.impact_factor / p.cas_partition。
+
+        未命中时保持默认值（impact_factor=0.0, cas_partition=""）。
+        """
+        journal_name = getattr(p, "journal", "") or ""
+        issn = getattr(p, "issn", "") or ""
+        # 尝试用期刊名解析 ISSN（仅当论文本身没有 ISSN 时）
+        if not issn and journal_name:
+            try:
+                issn = _resolve_journal_issn(journal_name) or ""
+            except Exception:
+                issn = ""
+        try:
+            metrics = journal_metrics.lookup_metrics(issn=issn, name=journal_name)
+        except Exception:
+            metrics = None
+        if metrics:
+            p.impact_factor = metrics.get("impact_factor", 0.0) or 0.0
+            p.cas_partition = metrics.get("cas_partition", "") or ""
+
     def _title_matches_keywords(self, paper, keywords: set) -> bool:
         """检查论文标题是否包含至少一个搜索关键词（宁缺毋滥）
 
@@ -11175,6 +11368,10 @@ class SearchEngine:
         oa_only=False,
         affiliation="",
         query_zh="",
+        impact_factor_min=0.0,
+        impact_factor_max=0.0,
+        cas_partition="",
+        author="",
     ) -> tuple:
         """聚合检索（并发执行）
 
@@ -11184,6 +11381,7 @@ class SearchEngine:
             field: 默认字段标签（ti/tiab/au/tw）
             mesh_term: MeSH 主题词
             pub_type: 文献类型（review/clinical trial 等）
+            author: 作者名（自然语言作者查询时，规则引擎提取的作者名，用于精确过滤）
             enabled_sources: 数据源名称集合（如 {"pubmed", "openalex"}），
                 传入时覆盖所有 use_xxx 参数。None 表示使用 use_xxx 参数。
             smart_routing: 启用智能学科路由，基于查询关键词自动筛选相关数据源，
@@ -11192,6 +11390,9 @@ class SearchEngine:
             use_openalex: [旧接口] 启用 OpenAlex
             ...其余 use_xxx 参数同理...
             query_zh: 中文查询（用于中文数据库），为空时自动从 query 中提取
+            impact_factor_min: 影响因子下限（0 表示不限制）
+            impact_factor_max: 影响因子上限（0 表示不限制）
+            cas_partition: 中科院分区过滤（如 "1区"、"1区,2区" 或列表）
 
         Returns:
             tuple: (papers, errors) — errors 为各数据源错误信息列表
@@ -11250,6 +11451,11 @@ class SearchEngine:
                         print(
                             f"[DOI Lookup] Found: {p.title[:60]}... ({p.journal}, {p.year})"
                         )
+                        # 补充期刊指标（影响因子 + 中科院分区）
+                        try:
+                            self._enrich_journal_metrics(p)
+                        except Exception:
+                            pass
                         self._last_timing_info = {
                             "crossref_doi": {"duration": 0.5, "status": "ok"}
                         }
@@ -11279,6 +11485,12 @@ class SearchEngine:
             year_to = parsed_query["year_to"]
         if not pub_type and parsed_query["pub_type"]:
             pub_type = parsed_query["pub_type"]
+
+        # --- 作者检测：自然语言作者查询 → 自动切换为作者精确搜索 ---
+        if parsed_query.get("author"):
+            author = parsed_query["author"]
+            if not field:
+                field = "au"
 
         # --- 智能学科路由 ---
         if smart_routing and enabled_sources is not None:
@@ -11333,10 +11545,10 @@ class SearchEngine:
                 use_lens,
             )
         )
-        # 缓存 key 追加 journal/field/pub_type 过滤参数，避免不同筛选共用缓存
-        filter_seed = hashlib.md5(f"{journal}|{field}|{pub_type}".encode()).hexdigest()[
-            :8
-        ]
+        # 缓存 key 追加 journal/field/pub_type/影响因子/分区 过滤参数，避免不同筛选共用缓存
+        filter_seed = hashlib.md5(
+            f"{journal}|{field}|{pub_type}|{impact_factor_min}|{impact_factor_max}|{cas_partition}".encode()
+        ).hexdigest()[:8]
         sources_hash = f"{sources_hash}_{filter_seed}"
         # force_refresh 时跳过缓存
         if not force_refresh:
@@ -11444,6 +11656,10 @@ class SearchEngine:
             oa_only=oa_only,
             affiliation=affiliation,
             query_zh=query_zh,
+            impact_factor_min=impact_factor_min,
+            impact_factor_max=impact_factor_max,
+            cas_partition=cas_partition,
+            author=author,
         )
 
         # --- 写入搜索结果缓存 ---
@@ -12056,6 +12272,10 @@ class SearchEngine:
         oa_only=False,
         affiliation="",
         query_zh="",
+        impact_factor_min=0.0,
+        impact_factor_max=0.0,
+        cas_partition="",
+        author="",
     ):
         """后处理搜索结果：去重、年份过滤、期刊过滤、pub_type/mesh_term过滤、引用补充、相关性评分、排序"""
         # 跨源合并去重：DOI/标题匹配 + 字段级非空覆盖空 + 预印本版本检测
@@ -12067,8 +12287,23 @@ class SearchEngine:
         if dropped > 0:
             print(f"[INFO] 过滤掉 {dropped} 篇无元数据的垃圾论文")
 
-        # 全局 DOI 补全：对所有有 DOI 的论文用 CrossRef 补全缺失字段
-        needs_enrich = [p for p in unique if p.doi]
+        # 全局 DOI 补全：仅对「元数据不完整」的论文用 CrossRef 补全缺失字段
+        # 性能优化：完整论文（已有标题+期刊+年份+作者+摘要）跳过，避免对 CrossRef
+        # 发起大量无收益请求（既拖慢搜索又易触发限流），且不影响结果数量
+        def _needs_enrichment(p):
+            return bool(
+                p.doi
+                and (
+                    not p.title
+                    or len(p.title) < 10
+                    or not p.journal
+                    or not p.year
+                    or not p.authors
+                    or not p.abstract
+                )
+            )
+
+        needs_enrich = [p for p in unique if _needs_enrichment(p)]
         if needs_enrich:
             from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -12157,6 +12392,10 @@ class SearchEngine:
         for p in unique:
             p.completeness_score = self._calc_completeness(p)
 
+        # 期刊指标富集：影响因子 + 中科院分区（供筛选与展示）
+        for p in unique:
+            self._enrich_journal_metrics(p)
+
         # 年份过滤
         if year_from or year_to:
             filtered = []
@@ -12231,19 +12470,71 @@ class SearchEngine:
                     f"[INFO] 机构过滤：移除 {filtered_count} 篇不匹配 '{affiliation}' 的论文"
                 )
 
-        # 作者名过滤：当 field=="au" 时，只保留作者名匹配的论文
-        if field == "au":
-            # 提取搜索词中的完整作者名（按 OR 分割）
+        # 影响因子过滤：只保留影响因子落在 [min, max] 区间的论文
+        # 注意：影响因子未知（0）的论文在启用过滤时直接丢弃（宁缺毋滥）
+        if impact_factor_min or impact_factor_max:
+            _if_min = float(impact_factor_min or 0)
+            _if_max = float(impact_factor_max or 0)
+            before_count = len(unique)
+            filtered = []
+            for p in unique:
+                _if = getattr(p, "impact_factor", 0.0) or 0.0
+                if _if <= 0:
+                    continue  # 未知影响因子 → 丢弃
+                if _if_min and _if < _if_min:
+                    continue
+                if _if_max and _if > _if_max:
+                    continue
+                filtered.append(p)
+            unique = filtered
+            filtered_count = before_count - len(unique)
+            if filtered_count > 0:
+                print(
+                    f"[INFO] 影响因子过滤：移除 {filtered_count} 篇（IF 不在 "
+                    f"[{_if_min or '-'}, {_if_max or '-'}] 区间）"
+                )
+
+        # 中科院分区过滤：只保留分区命中的论文
+        if cas_partition:
+            if isinstance(cas_partition, (list, tuple, set)):
+                partitions = {str(x).strip() for x in cas_partition if str(x).strip()}
+            else:
+                partitions = {
+                    x.strip() for x in str(cas_partition).split(",") if x.strip()
+                }
+            before_count = len(unique)
+            unique = [
+                p
+                for p in unique
+                if getattr(p, "cas_partition", "") in partitions
+            ]
+            filtered_count = before_count - len(unique)
+            if filtered_count > 0:
+                print(
+                    f"[INFO] 中科院分区过滤：移除 {filtered_count} 篇（保留分区 {sorted(partitions)}）"
+                )
+
+        # 作者名过滤：当 field=="au" 或提取到作者时，只保留作者名匹配的论文
+        if field == "au" or author:
+            # 收集候选作者名：规则引擎提取的作者（精确）+ 查询词（field=au 时查询词即作者名，
+            # 含翻译后的英文名，用于匹配中英文不同书写形式）
+            def _split_author_names(s):
+                if not s:
+                    return []
+                return [
+                    p.strip()
+                    for p in re.split(r"\s+OR\s+|[,;，；、]", s, flags=re.IGNORECASE)
+                    if p.strip()
+                ]
+
             author_names = []
-            for part in re.split(r"\s+OR\s+", query_en, flags=re.IGNORECASE):
-                part = part.strip()
-                if part:
-                    author_names.append(part.lower())
+            if author:
+                author_names.extend(_split_author_names(author))
+            author_names.extend(_split_author_names(query_en))
             if query_zh:
-                for part in re.split(r"\s+OR\s+", query_zh, flags=re.IGNORECASE):
-                    part = part.strip()
-                    if part:
-                        author_names.append(part.lower())
+                author_names.extend(_split_author_names(query_zh))
+            # 去重保序
+            author_names = list(dict.fromkeys(author_names))
 
             if author_names:
                 before_count = len(unique)
@@ -12265,34 +12556,20 @@ class SearchEngine:
                         continue
                     # 过滤掉 "et al." 等噪音
                     authors_clean = [
-                        a.lower().strip()
+                        a.strip()
                         for a in p.authors
                         if a.strip().lower() not in noise_words and len(a.strip()) > 1
                     ]
                     if not authors_clean:
                         continue
 
-                    # 检查是否有作者名匹配（逐个作者对比）
+                    # 检查是否有作者名匹配（逐个作者对比，归一化后）
                     matched = False
                     for target in author_names:
-                        for author in authors_clean:
-                            # 跳过空作者
-                            if not author:
-                                continue
-                            # 完整匹配："jinhua zhou" in "jinhua zhou"
-                            if target in author or author in target:
+                        for author_name in authors_clean:
+                            if _author_name_matches(target, author_name):
                                 matched = True
                                 break
-                            # 姓+首字母匹配："zhou j" matches "zhou jh"
-                            parts = target.split()
-                            if len(parts) >= 2:
-                                family = parts[-1]
-                                given_init = "".join(p[0] for p in parts[:-1] if p)
-                                short = f"{family} {given_init}".lower()
-                                # 只检查 short in author（避免 "j" 匹配所有含 j 的作者）
-                                if short and short in author:
-                                    matched = True
-                                    break
                         if matched:
                             break
                     if matched:
@@ -12551,6 +12828,10 @@ class SearchEngine:
         oa_only=False,
         affiliation="",
         query_zh="",
+        impact_factor_min=0.0,
+        impact_factor_max=0.0,
+        cas_partition="",
+        author="",
     ):
         """流式聚合检索（逐源推送结果）
 
@@ -12592,6 +12873,12 @@ class SearchEngine:
             year_to = parsed_query["year_to"]
         if not pub_type and parsed_query["pub_type"]:
             pub_type = parsed_query["pub_type"]
+
+        # --- 作者检测：自然语言作者查询 → 自动切换为作者精确搜索 ---
+        if parsed_query.get("author"):
+            author = parsed_query["author"]
+            if not field:
+                field = "au"
 
         # --- 智能学科路由 ---
         if smart_routing and enabled_sources is not None:
@@ -12673,6 +12960,13 @@ class SearchEngine:
             else:
                 # 跳过的源先通知前端
                 pass
+
+        # 搜索开始事件：通知前端待搜索的源列表，用于初始化进度面板
+        yield {
+            "type": "search_start",
+            "total": total_sources,
+            "sources": [name for name, _ in enabled_tasks],
+        }
 
         all_papers = []
         errors = []
@@ -12761,6 +13055,10 @@ class SearchEngine:
             oa_only=oa_only,
             affiliation=affiliation,
             query_zh=query_zh,
+            impact_factor_min=impact_factor_min,
+            impact_factor_max=impact_factor_max,
+            cas_partition=cas_partition,
+            author=author,
         )
 
         # 写入缓存
@@ -12798,9 +13096,9 @@ class SearchEngine:
                 use_lens,
             )
         )
-        filter_seed = hashlib.md5(f"{journal}|{field}|{pub_type}".encode()).hexdigest()[
-            :8
-        ]
+        filter_seed = hashlib.md5(
+            f"{journal}|{field}|{pub_type}|{impact_factor_min}|{impact_factor_max}|{cas_partition}".encode()
+        ).hexdigest()[:8]
         sources_hash = f"{sources_hash}_{filter_seed}"
         self._search_cache.put(query, year_from, year_to, sources_hash, unique)
         stats = self._search_cache.stats()
@@ -12874,17 +13172,24 @@ class SearchEngine:
 
     def search_by_doi(self, doi: str):
         """通过 DOI 精确查询"""
+        paper = None
         if self.pubmed:
             pmids, _ = self.pubmed.search(doi, max_results=1)
             if pmids:
                 papers = self.pubmed.fetch_details(pmids)
                 if papers:
-                    return papers[0]
-        if self.openalex:
+                    paper = papers[0]
+        if paper is None and self.openalex:
             papers = self.openalex.search(doi, max_results=1)
             if papers:
-                return papers[0]
-        return None
+                paper = papers[0]
+        if paper is not None:
+            # 补充期刊指标（影响因子 + 中科院分区），与搜索结果保持一致
+            try:
+                self._enrich_journal_metrics(paper)
+            except Exception:
+                pass
+        return paper
 
     def close(self):
         """关闭所有搜索源的 Session"""

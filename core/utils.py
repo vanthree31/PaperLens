@@ -43,6 +43,9 @@ def _escape_paper(paper) -> dict:
         "issue": esc(paper.issue),
         "pages": esc(paper.pages),
         "issn": esc(paper.issn),
+        # 期刊指标（影响因子 + 中科院分区）
+        "impact_factor": paper.impact_factor if hasattr(paper, "impact_factor") else 0.0,
+        "cas_partition": esc(getattr(paper, "cas_partition", "")),
         # Phase 5a: 学术元数据
         "orcid": esc(paper.orcid),
         "article_type": esc(paper.article_type),
@@ -120,14 +123,14 @@ DOI: {doi}  PMID: {pmid}  被引: {p.citation_count}
     # 防止多篇论文 prompt 超过模型上下文窗口（约8000 token ≈ 32000字符英文/12000字符中文）
     MAX_PROMPT_CHARS = 28000 if lang == "en" else 10000
     if len(papers_text) > MAX_PROMPT_CHARS:
-        # 截断每篇论文的摘要以缩减总长度
+        # 截断每篇论文的摘要以缩减总长度（用局部变量，避免修改原 Paper 对象）
         per_paper_limit = max(500, MAX_PROMPT_CHARS // len(papers) - 600)
         for i, p in enumerate(papers):
             if p.abstract and len(p.abstract) > per_paper_limit:
-                p.abstract = p.abstract[:per_paper_limit] + "..."
+                truncated_abstract = p.abstract[:per_paper_limit] + "..."
                 # 重建对应论文的信息
                 title = _sanitize_for_prompt(p.title)
-                abstract = _sanitize_for_prompt(p.abstract)
+                abstract = _sanitize_for_prompt(truncated_abstract)
                 authors = ", ".join(p.authors[:10])
                 keywords = (
                     ", ".join(p.keywords)
@@ -228,6 +231,11 @@ What insights from other fields could be applied to advance this research? Where
 5. Promising Research Directions
 What are the most promising next steps? What experiments or studies would have the highest impact?
 
+Important constraints:
+- Base your analysis strictly on the abstracts provided; do not fabricate details, data, conclusions, or citations not present in the abstracts
+- Reference specific papers (e.g., "Paper 1", "Paper 2") when attributing a claim
+- If the abstract does not mention something, say "not mentioned in abstract"
+
 {papers_text}"""
 
         else:  # summary
@@ -249,7 +257,9 @@ No pleasantries — straight to content.
         fmt = """格式要求：
 - 用中文回答，使用纯文本，不要用 Markdown 符号（# * - ` > 等）
 - 用"一、二、三"或"1. 2. 3."编号，段落之间空一行
-- 语言专业精炼，像资深教授写给同行的评审意见"""
+- 语言专业精炼，像资深教授写给同行的评审意见
+- 术语规范：方法名、模型名、算法名、数据集名、基因/蛋白名、化学物质名等专业术语保留英文原文（如 Transformer、CRISPR-Cas9、ImageNet），或首次出现时用「中文(英文)」格式，不要生硬直译
+- 不要逐字机翻英文摘要，请用中文母语者的学术口吻重新组织语言，确保语句通顺自然、无翻译腔"""
 
         if mode == "detail":
             prompt = f"""你是一位在该领域有深厚造诣的资深学者和大学教授，请对以下论文进行深度解析。你的读者是同行专家，不需要科普，直接说干货。
@@ -278,6 +288,10 @@ No pleasantries — straight to content.
 
 七、未来方向
 这项研究开启了哪些新的研究机会？
+
+重要约束：
+- 严格基于论文摘要给出的信息，不要编造摘要中不存在的实验、数据或结论
+- 摘要未提及的内容明确写「摘要未提及」
 
 {papers_text}"""
 
@@ -324,6 +338,11 @@ No pleasantries — straight to content.
 五、有前景的研究方向
 最有价值的下一步是什么？哪些实验或研究会有最高的影响力？
 
+重要约束：
+- 严格基于论文摘要给出的信息分析，不要编造摘要中不存在的细节、数据、结论或引用
+- 每个判断尽量对应到具体论文，例如用「论文 1」「论文 2」标明依据来源
+- 摘要未提及的内容，明确写「摘要未提及」，不要凭空补全
+
 {papers_text}"""
 
         else:  # summary
@@ -338,6 +357,7 @@ No pleasantries — straight to content.
 - 有什么用（学术或应用价值）
 
 不需要客套话，直接说内容。
+严格基于摘要内容，不要编造摘要中不存在的结论。
 
 {papers_text}"""
 

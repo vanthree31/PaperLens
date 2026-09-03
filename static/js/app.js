@@ -154,6 +154,11 @@ Object.defineProperty(window, '_searchMode', {
     if (prefs.filterPubType) document.getElementById("filterPubType").value = prefs.filterPubType;
     if (prefs.oaOnly !== undefined && document.getElementById("oaOnly")) document.getElementById("oaOnly").checked = prefs.oaOnly;
     if (prefs.filterAffiliation !== undefined && document.getElementById("filterAffiliation")) document.getElementById("filterAffiliation").value = prefs.filterAffiliation;
+    if (prefs.impactFactorMin !== undefined && document.getElementById("impactFactorMin")) document.getElementById("impactFactorMin").value = prefs.impactFactorMin;
+    if (prefs.impactFactorMax !== undefined && document.getElementById("impactFactorMax")) document.getElementById("impactFactorMax").value = prefs.impactFactorMax;
+    if (Array.isArray(prefs.casPartition)) {
+      document.querySelectorAll('.cas-partition-cb').forEach(cb => { cb.checked = prefs.casPartition.includes(cb.value); });
+    }
     if (prefs.lang) {
       window.PaperLens.currentLang = prefs.lang;
       localStorage.setItem("paperlang", prefs.lang);

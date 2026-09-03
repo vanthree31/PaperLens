@@ -97,6 +97,7 @@
         <label><input type="checkbox" id="useZoteroMcp"> Zotero Local</label>
         <label><input type="checkbox" id="useZenodo" checked> Zenodo</label>
         <label><input type="checkbox" id="useDatacite" checked> DataCite</label>
+        <label><input type="checkbox" id="useDoaj" checked> DOAJ</label>
         <label><input type="checkbox" id="useOup" checked> Oxford Academic</label>
         <label><input type="checkbox" id="useCup" checked> Cambridge Core</label>
         <label><input type="checkbox" id="useSage" checked> SAGE</label>
@@ -181,6 +182,21 @@
         <input type="text" id="filterAffiliation" placeholder="如: 清华大学 / MIT" data-i18n-placeholder="institutionPlaceholder"
                style="width:180px;font-size:13px;padding:2px 6px">
       </div>
+      <div class="filter-group">
+        <span data-i18n="impactFactor">影响因子</span>:
+        <input type="number" id="impactFactorMin" min="0" step="0.1" placeholder="≥" title="影响因子下限"
+               style="width:70px;font-size:13px;padding:2px 6px">
+        <span style="color:var(--text-secondary)">—</span>
+        <input type="number" id="impactFactorMax" min="0" step="0.1" placeholder="≤" title="影响因子上限"
+               style="width:70px;font-size:13px;padding:2px 6px">
+      </div>
+      <div class="filter-group">
+        <span data-i18n="casPartition">中科院分区</span>:
+        <label style="margin-left:2px"><input type="checkbox" value="1区" class="cas-partition-cb"><span data-i18n="partition1">1区</span></label>
+        <label style="margin-left:6px"><input type="checkbox" value="2区" class="cas-partition-cb"><span data-i18n="partition2">2区</span></label>
+        <label style="margin-left:6px"><input type="checkbox" value="3区" class="cas-partition-cb"><span data-i18n="partition3">3区</span></label>
+        <label style="margin-left:6px"><input type="checkbox" value="4区" class="cas-partition-cb"><span data-i18n="partition4">4区</span></label>
+      </div>
     </div>
   </div>
 
@@ -196,6 +212,16 @@
       <button class="btn btn-outline" onclick="resetAllSourceHealth()" style="font-size:11px;padding:2px 8px" data-i18n="resetAll">重置全部</button>
     </div>
   </div>
+</div>
+
+<!-- 搜索进度面板 -->
+<div id="searchProgress" class="search-progress" style="display:none">
+  <div class="search-progress-top">
+    <span id="searchProgressText" class="search-progress-text">🔍 正在搜索…</span>
+    <span id="searchProgressCount" class="search-progress-count">0/0 源</span>
+  </div>
+  <div class="search-progress-bar"><div id="searchProgressFill" class="search-progress-fill"></div></div>
+  <div id="searchProgressSources" class="search-progress-sources"></div>
 </div>
 
 <div class="main">
@@ -1301,6 +1327,7 @@ function renderResults() {
         <div class="paper-meta">
           <span class="tag">${authors}</span>
           <span class="tag">${p.journal ? `<b>${escapeHtml(p.journal)}</b>` : ''}${p.volume ? `, ${escapeHtml(p.volume)}` : ''}${p.issue ? ` (${escapeHtml(p.issue)})` : ''}${p.pages ? `, ${escapeHtml(p.pages)}` : ''}${p.year ? `${(p.journal || p.volume || p.issue || p.pages) ? ', ' : ''}${p.year}` : ''}</span>
+          ${p.impact_factor > 0 ? `<span class="badge badge-if" title="${t('impactFactor')}">IF ${p.impact_factor.toFixed(1)}</span>` : ''}${p.cas_partition ? `<span class="badge badge-partition">${escapeHtml(p.cas_partition)}</span>` : ''}
           ${p.doi ? `<a class="doi-link" href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" onclick="event.stopPropagation();recordReadingAction('view', allPapers[${idx}])">${p.doc_type === 'patent' ? t('patents') : 'DOI'}:${escapeHtml(p.doi)}</a>` : ""}
           ${citationTag}
           ${(() => { const ci = _findCollectionItem(p); return ci ? (window.renderTagPills ? window.renderTagPills(ci.tags || []) : '') : ''; })()}
@@ -3186,7 +3213,8 @@ async function aiAnalyzePapers(mode, forceRefresh) {
       <b><span class="spinner" style="width:16px;height:16px;border-width:2px;vertical-align:middle"></span> ${modeNames[mode]}...</b>
       <span id="aiTimer" style="color:var(--text-secondary);font-size:12px">0 ${t("seconds")}</span>
     </div>
-    <div id="aiStreamText" style="line-height:1.8;font-size:14px;white-space:pre-wrap"></div>`;
+    <div id="aiStreamText" style="line-height:1.8;font-size:14px;white-space:pre-wrap"></div>
+    <div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);color:var(--text-secondary);font-size:11px">${t("aiDisclaimer")}</div>`;
 
   const timer = setInterval(() => {
     elapsed++;

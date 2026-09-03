@@ -307,7 +307,7 @@ const LANGS = {
     zotero_connection_failed: "Zotero 连接失败", no_path: "未配置路径",
     zotero_sync_failed: "同步到 Zotero 失败", dialog_failed: "弹窗加载失败",
     ai_not_enabled: "AI 功能未启用，请在设置中配置 API Key",
-    aiDisclaimer: "⚠️ 此分析由 AI 生成，基于论文摘要信息。可能存在不准确之处，请以原文为准。关键结论请查阅原文验证。",
+    aiDisclaimer: "⚠️ 此分析由 AI 生成，基于论文摘要信息，可能存在不准确之处，请以原文为准，关键结论请查阅原文验证。分析质量与当前配置的 AI 模型相关，如需更高质量可在设置中更换更强的模型。",
     request_failed: "AI 请求失败",
     network_interrupted: "AI 网络连接中断，已自动重试",
     searchTimeout: "搜索超时，请减少数据源后重试",
@@ -359,6 +359,9 @@ const LANGS = {
     cacheClearFailed: "清除缓存失败",
     // 期刊分组
     journalGroups: "分组:", journalClearAll: "清空",
+    // 影响因子与中科院分区筛选
+    impactFactor: "影响因子", casPartition: "中科院分区",
+    partition1: "1区", partition2: "2区", partition3: "3区", partition4: "4区",
     aiSearchFailedRetry: "AI 搜索失败，请重试",
   },
   en: {
@@ -668,7 +671,7 @@ const LANGS = {
     zotero_connection_failed: "Zotero connection failed", no_path: "Path not configured",
     zotero_sync_failed: "Failed to sync to Zotero", dialog_failed: "Dialog load failed",
     ai_not_enabled: "AI not enabled, configure API Key in settings",
-    aiDisclaimer: "This analysis is AI-generated based on paper abstracts. May contain inaccuracies. Please verify key conclusions with the original text.",
+    aiDisclaimer: "This analysis is AI-generated based on paper abstracts and may contain inaccuracies — please verify key conclusions with the original text. Output quality depends on your configured AI model; switch to a stronger model in Settings for better results.",
     request_failed: "AI request failed",
     network_interrupted: "AI network interrupted, auto-retrying",
     searchTimeout: "Search timeout, reduce data sources and retry",
@@ -720,6 +723,9 @@ const LANGS = {
     cacheClearFailed: "Failed to clear cache",
     // Journal Groups
     journalGroups: "Groups:", journalClearAll: "Clear all",
+    // Impact Factor & CAS Partition filters
+    impactFactor: "Impact Factor", casPartition: "CAS Partition",
+    partition1: "Zone 1", partition2: "Zone 2", partition3: "Zone 3", partition4: "Zone 4",
     aiSearchFailedRetry: "AI search failed, please retry",
   }
 };

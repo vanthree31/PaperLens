@@ -87,6 +87,14 @@
   background: rgba(52,199,89,0.12);
   color: var(--success);
 }
+.paper-meta .badge-if {
+  background: rgba(175,82,222,0.14);
+  color: var(--color-crossref);
+}
+.paper-meta .badge-partition {
+  background: rgba(255,149,0,0.14);
+  color: var(--color-semantic);
+}
 .paper-abstract {
   font-size: 13px;
   color: var(--text-secondary);
