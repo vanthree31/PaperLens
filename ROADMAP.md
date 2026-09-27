@@ -55,14 +55,15 @@
 
 已完成（2026-09）：
 - [x] 作者搜索精度：自然语言作者查询自动切换精确过滤 + 姓名归一化 / 顺序无关 / 中英转写匹配
+- [x] AI 搜索作者识别兜底：AI 漏设 field=au 时，用规则引擎从原始输入兜底（`routes/search.py` 的 `_resolve_author_fallback`）
 - [x] 筛选可靠性：9 种筛选独立 + 组合验证通过
 - [x] 新增数据源：DOAJ（开放获取期刊索引，现共 45 源）
 - [x] 性能：CrossRef DOI 补全仅针对元数据不完整论文，降低限流风险且不减结果
 - [x] 进度可视化：进度面板（进度条 + N/M 源 + 已获取 X 篇 + 各源状态）
+- [x] AI 分析 prompt 优化：术语保留英文 / 反机翻 / 反幻觉 grounding / 等待态提示语
 
 待办：
-- [ ] AI 搜索作者识别兜底（AI 漏设 field=au 时规则引擎兜底）
-- [ ] 中英文查询相关性过滤调优（减少无关结果）
+- [ ] 中英文查询相关性过滤调优（减少无关结果）—— 风险：会降低召回，需真实使用反馈后再动
 - [ ] 结果召回进一步提升（按需评估 BASE / Dimensions 等需 key 的源）
 
 ---
@@ -159,7 +160,7 @@
 
 **目标**：Sidebar + List + Inspector 三栏布局，Inspector 成为论文详情和 AI 分析的主战场
 
-**前置条件**：Phase 2 完成
+**前置条件**：Phase 4a（Workspace 基础）完成 —— 2026-09 重排：本 Phase 从 Workspace 的前置改为后继
 
 ### 3.1 三栏布局
 
@@ -206,7 +207,9 @@
 
 **目标**：从收藏夹升级为结构化研究工作区
 
-**前置条件**：Phase 3 完成
+**前置条件**：Phase 2 完成 —— 2026-09 重排：本 Phase 先于 Phase 3（三栏布局）执行
+
+> 现状说明（2026-09-27）：数据模型与 API **已存在**（`collections.json` 已支持 groups / reading_status / tags / notes；后端已有 `/api/collections/groups` 与 `/api/collections/item`）。本 Phase 实际工作量集中在：改名 Workspace、`citations/year` 指标、笔记独立存储（`notes.json`）、schema 文档、分组 UI 打磨 —— 比下列清单描述的更小。
 
 - [ ] 收藏夹改名为 Workspace
 - [ ] 支持分组（项目 / 主题 / 状态）
@@ -430,6 +433,8 @@
 ## 时间线与里程碑
 
 采用相对估算（T-shirt sizing），每个 Phase 的 Definition of Done：
+
+> ⚠️ 下表按 Phase 编号排列，**不代表执行顺序**。实际执行顺序以顶部「当前优先级（2026-09 重排）」为准：**P0 搜索质量 → Phase 4a → Phase 3 → Phase 4b → Phase 6**。
 
 | Phase | 规模估算 | DoD |
 |-------|----------|-----|
