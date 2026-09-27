@@ -215,7 +215,7 @@
 - [ ] 支持分组（项目 / 主题 / 状态）
 - [x] **批量导出**：已在 Phase 1 完成（复选框 + 全选 + 批量操作栏）
 - [ ] **Workspace schema 设计文档**（先定义数据模型，再开发 UI）
-- [ ] **引用速度指标**（citations/year，本地零 API 调用计算）
+- [x] **引用速度指标**（citations/year，本地零 API 调用计算）—— 2026-09-27 完成：`core/utils.py:_calc_citations_per_year` 派生字段 + 论文卡片徽标显示
 - [ ] **笔记数据独立存储**：notes.json（paper_id → notes），不嵌入 collections.json
 
 **Definition of Done**：所有勾选项完成 + 5 条回归测试通过 + 无 P0/P1 bug + 文档更新
