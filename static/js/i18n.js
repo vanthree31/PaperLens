@@ -26,6 +26,7 @@ const LANGS = {
     // 结果
     totalPapers: "共", papers: "篇", showing: "显示", selected: "已选",
     sortBtn: "排序：", cited: "被引", date: "时间", title: "标题",
+    perYearUnit: "/年", citationsPerYearTip: "引用速度：年均被引次数（引用数 ÷ 论文年龄，本地计算）",
     selectAll: "全选", deselectAll: "取消全选", aiSummary: "AI 总结", aiDetail: "AI 详析", aiCompare: "AI 对比", aiNovelty: "创新点检测",
     aiCompareTip: "需选中至少 2 篇论文", aiNoveltyTip: "需选中至少 1 篇论文",
     keyMaskedTip: "已有密钥存储，**** 为脱敏显示。如不修改请勿清空",
@@ -395,6 +396,7 @@ const LANGS = {
     // Results
     totalPapers: "Found", papers: "papers", showing: "Showing", selected: "Selected",
     sortBtn: "Sort:", cited: "Cited", date: "Date", title: "Title",
+    perYearUnit: "/yr", citationsPerYearTip: "Citation velocity: average citations per year (citations ÷ paper age, computed locally)",
     selectAll: "Select All", deselectAll: "Deselect All", aiSummary: "AI Summary", aiDetail: "AI Detail", aiCompare: "AI Compare", aiNovelty: "Novelty Detection",
     aiCompareTip: "Select at least 2 papers", aiNoveltyTip: "Select at least 1 paper",
     keyMaskedTip: "Key stored. **** is masked display. Do not clear if you don't want to change it",

@@ -1318,6 +1318,7 @@ function renderResults() {
     const safeOaUrl = p.oa_url && /^https?:\/\//i.test(p.oa_url) ? p.oa_url : "";
     const oaLink = safeOaUrl ? `<a href="${escapeHtml(safeOaUrl)}" target="_blank" class="badge badge-green">OA</a>` : "";
     const citationTag = p.citation_count > 0 ? `<span class="badge">${t("cited")} ${p.citation_count.toLocaleString()}</span>` : "";
+    const velocityTag = p.citations_per_year > 0 ? `<span class="badge" title="${t("citationsPerYearTip")}">📈 ${p.citations_per_year}${t("perYearUnit")}</span>` : "";
 
     html += `
     <div class="paper-card${isChecked ? ' selected' : ''}" id="card-${idx}"${p.source ? ` data-source="${escapeHtml(p.source)}"` : ''}${p.doc_type === 'patent' ? ' data-doctype="patent"' : ''} style="--stagger-delay: ${i * 30}ms">
@@ -1329,7 +1330,7 @@ function renderResults() {
           <span class="tag">${p.journal ? `<b>${escapeHtml(p.journal)}</b>` : ''}${p.volume ? `, ${escapeHtml(p.volume)}` : ''}${p.issue ? ` (${escapeHtml(p.issue)})` : ''}${p.pages ? `, ${escapeHtml(p.pages)}` : ''}${p.year ? `${(p.journal || p.volume || p.issue || p.pages) ? ', ' : ''}${p.year}` : ''}</span>
           ${p.impact_factor > 0 ? `<span class="badge badge-if" title="${t('impactFactor')}">IF ${p.impact_factor.toFixed(1)}</span>` : ''}${p.cas_partition ? `<span class="badge badge-partition">${escapeHtml(p.cas_partition)}</span>` : ''}
           ${p.doi ? `<a class="doi-link" href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" onclick="event.stopPropagation();recordReadingAction('view', allPapers[${idx}])">${p.doc_type === 'patent' ? t('patents') : 'DOI'}:${escapeHtml(p.doi)}</a>` : ""}
-          ${citationTag}
+          ${citationTag}${velocityTag}
           ${(() => { const ci = _findCollectionItem(p); return ci ? (window.renderTagPills ? window.renderTagPills(ci.tags || []) : '') : ''; })()}
           <span class="tag-selector">
             <button class="tag-selector-trigger" onclick="toggleTagSelector(event, ${idx}, this)">+ ${t('tag')}</button>

@@ -3,6 +3,7 @@
 import os
 import re
 import ipaddress
+from datetime import datetime
 from urllib.parse import urlparse
 from core.config import _get_app_data_dir
 
@@ -14,6 +15,22 @@ def _get_user_data_path(filename: str) -> str:
     if not safe_name or safe_name != filename:
         raise ValueError(f"Invalid filename: {filename}")
     return os.path.join(_get_app_data_dir(), safe_name)
+
+
+def _calc_citations_per_year(paper) -> float:
+    """引用速度指标：引用数 / 论文年龄（年）。本地计算，零 API 调用。
+
+    无引用或无年份时返回 0；当年论文年龄按 1 计，避免除零。
+    """
+    try:
+        citations = int(getattr(paper, "citation_count", 0) or 0)
+        year = int(getattr(paper, "year", 0) or 0)
+    except (ValueError, TypeError):
+        return 0.0
+    if citations <= 0 or year <= 0:
+        return 0.0
+    age = max(1, datetime.now().year - year)
+    return round(citations / age, 2)
 
 
 def _escape_paper(paper) -> dict:
@@ -36,6 +53,8 @@ def _escape_paper(paper) -> dict:
         "pmid": esc(paper.pmid),
         "abstract": esc(paper.abstract),
         "citation_count": paper.citation_count,
+        # 引用速度指标（citations/year，本地零 API 计算）
+        "citations_per_year": _calc_citations_per_year(paper),
         "oa_url": esc(paper.oa_url),
         "keywords": esc_list(paper.keywords),
         "source": esc(paper.source),
