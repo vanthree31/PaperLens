@@ -57,13 +57,15 @@
 - [x] 作者搜索精度：自然语言作者查询自动切换精确过滤 + 姓名归一化 / 顺序无关 / 中英转写匹配
 - [x] AI 搜索作者识别兜底：AI 漏设 field=au 时，用规则引擎从原始输入兜底（`routes/search.py` 的 `_resolve_author_fallback`）
 - [x] 筛选可靠性：9 种筛选独立 + 组合验证通过
-- [x] 新增数据源：DOAJ（开放获取期刊索引，现共 45 源）
+- [x] 新增数据源：DOAJ、OpenAIRE（开放获取聚合，现共 46 源）
 - [x] 性能：CrossRef DOI 补全仅针对元数据不完整论文，降低限流风险且不减结果
 - [x] 进度可视化：进度面板（进度条 + N/M 源 + 已获取 X 篇 + 各源状态）
 - [x] AI 分析 prompt 优化：术语保留英文 / 反机翻 / 反幻觉 grounding / 等待态提示语
 
 待办：
-- [ ] 中英文查询相关性过滤调优（减少无关结果）—— 风险：会降低召回，需真实使用反馈后再动
+- [~] 中英文查询相关性过滤调优（减少无关结果）—— **作者查询部分已完成**（识别层
+  「XX的论文」/纯中文名/by 完整姓氏/所有格/头衔 + 分发层 author 透传 + 结果端零匹配降权，
+  实测「papers by Jinhua Zhou」0→76 条、「张伟的论文」全干净）；剩余：主题相关性调优
 - [ ] 结果召回进一步提升（按需评估 BASE / Dimensions 等需 key 的源）
 
 ---
@@ -214,7 +216,7 @@
 - [ ] 收藏夹改名为 Workspace
 - [ ] 支持分组（项目 / 主题 / 状态）
 - [x] **批量导出**：已在 Phase 1 完成（复选框 + 全选 + 批量操作栏）
-- [ ] **Workspace schema 设计文档**（先定义数据模型，再开发 UI）
+- [x] **Workspace schema 设计文档**（先定义数据模型，再开发 UI）—— 2026-09-27 完成：见 `WORKSPACE_SCHEMA.md`
 - [x] **引用速度指标**（citations/year，本地零 API 调用计算）—— 2026-09-27 完成：`core/utils.py:_calc_citations_per_year` 派生字段 + 论文卡片徽标显示
 - [ ] **笔记数据独立存储**：notes.json（paper_id → notes），不嵌入 collections.json
 
@@ -280,7 +282,7 @@
 
 ### 5b. 数据源补充（按用户反馈驱动）
 
-**已接入（45 源）**：
+**已接入（46 源）**：
 - [x] PubMed + OpenAlex（核心）
 - [x] CrossRef + arXiv（免费）
 - [x] ScienceDirect + Scopus + JSTOR（CARSI）
@@ -316,6 +318,14 @@
 - [x] J-STAGE（日本学术论文，JST 免费 API）
 - [x] Cochrane Library（循证医学系统综述，PubMed 解析）
 - [x] DOAJ（开放获取期刊/文章索引，免费 API）
+- [x] OpenAIRE（欧盟 OA 聚合，1 亿+ 研究成果，Graph API）
+
+> **口径说明**：46 个检索入口 = **29 个独立上游索引** + **17 个 CrossRef 出版社切片**
+> （ACS / IEEE / Wiley / Springer / IOP / AIP / RSC / Optica / OUP / CUP / SAGE /
+> T&F / EBSCO / Frontiers / ACM / JSTOR / Project MUSE — 同属 CrossRef 索引，
+> 按 member 过滤，用于定向覆盖特定期刊群，不重复增加索引多样性）。
+> Web UI 默认勾选 37 个；9 个默认关闭（AGRIS、Google Scholar、Bing Academic、
+> 万方、维普、专利、Zotero Local、WoS、ProQuest —— 需订阅或耗时较长）。
 
 **暂缓接入**：
 - [ ] SSRN（社科预印本，无官方 API）— 按用户反馈决定
@@ -354,10 +364,14 @@
 
 ### 6a. 智能引用图谱增强（优先）
 
-- [ ] 增强现有 D3.js 引用图谱：节点叠加 AI 分析标签
-- [ ] 关键词共现网络可视化
-- [ ] 作者合作网络可视化
-- [ ] 先做基于 OpenAlex 的英文论文图谱（已有基础）
+- [x] 增强现有 D3.js 引用图谱 —— `CitationGraphV2` 三栏谱系布局（被引/本文/引用）：
+      Top N + 平铺/年份分段/聚类（年份气泡点击展开）+ 锚定物理拖拽 + 纯等比缩放，
+      AI 工具条（总结/详析/创新点/导出）保留；浮动小图谱保留旧渲染器
+- [x] 关键词共现网络可视化 —— `NetworkGraphV2`：环形/同心/聚类三种确定性布局 + 锚定物理 +
+      社区发现（加权标签传播）着色 + 跨簇虚线 + Top N 控件 + 纯等比缩放
+- [x] 作者合作网络可视化 —— 与共现网络同一渲染器，按合作圈子着色（连通分量在真实
+      合作网络上恒为全连通单组，故改用加权 LPA）
+- [x] 先做基于 OpenAlex 的英文论文图谱（已有基础）
 - [ ] 中文论文图谱（需 CNKI/Wanfang 引用数据，技术难度高，按需推进）
 
 **启动条件**：Phase 4b 完成后，用户反馈中 ≥20% 提及图谱需求

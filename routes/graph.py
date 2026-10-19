@@ -256,17 +256,19 @@ def keyword_network():
         for a, b in combinations(sorted(kws), 2):
             cooccurrence[(a, b)] += 1
 
-    # 取出现频次 >= 2 的关键词
-    top_keywords = {kw for kw, cnt in keyword_count.items() if cnt >= 2}
-    if len(top_keywords) < 3:
-        # 不够则取 top 20
-        top_keywords = {kw for kw, _ in keyword_count.most_common(20)}
+    # 返回按频次排序的前 120 个关键词，Top N 切片交给前端（NetworkGraphV2
+    # 的「Top 10 / Top 20 / 全部」控件需要全量数据才能就地切换，不必重新请求）
+    top_keywords = [kw for kw, _ in keyword_count.most_common(120)]
 
-    nodes = [{"id": kw, "label": kw, "count": keyword_count[kw]} for kw in top_keywords]
+    nodes = [
+        {"id": kw, "label": kw, "count": keyword_count[kw]}
+        for kw in top_keywords
+    ]
+    top_set = set(top_keywords)
     links = [
         {"source": a, "target": b, "weight": w}
         for (a, b), w in cooccurrence.items()
-        if a in top_keywords and b in top_keywords and w >= 1
+        if a in top_set and b in top_set and w >= 1
     ]
 
     return jsonify({"nodes": nodes, "links": links})
@@ -300,16 +302,15 @@ def author_network():
         for a, b in combinations(sorted(authors), 2):
             cooccurrence[(a, b)] += 1
 
-    # 取发文 >= 2 的作者
-    top_authors = {a for a, cnt in author_count.items() if cnt >= 2}
-    if len(top_authors) < 3:
-        top_authors = {a for a, _ in author_count.most_common(30)}
+    # 返回按发文排序的前 120 位作者，Top N 切片交给前端（同 keyword-network）
+    top_authors = [a for a, _ in author_count.most_common(120)]
 
     nodes = [{"id": a, "label": a, "count": author_count[a]} for a in top_authors]
+    top_set = set(top_authors)
     links = [
         {"source": a, "target": b, "weight": w}
         for (a, b), w in cooccurrence.items()
-        if a in top_authors and b in top_authors and w >= 1
+        if a in top_set and b in top_set and w >= 1
     ]
 
     return jsonify({"nodes": nodes, "links": links})

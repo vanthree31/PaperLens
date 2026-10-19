@@ -20,11 +20,16 @@ def _get_user_data_path(filename: str) -> str:
 def _calc_citations_per_year(paper) -> float:
     """引用速度指标：引用数 / 论文年龄（年）。本地计算，零 API 调用。
 
-    无引用或无年份时返回 0；当年论文年龄按 1 计，避免除零。
+    支持 Paper 对象与 dict（收藏项）。无引用或无年份时返回 0；
+    当年论文年龄按 1 计，避免除零。
     """
     try:
-        citations = int(getattr(paper, "citation_count", 0) or 0)
-        year = int(getattr(paper, "year", 0) or 0)
+        if isinstance(paper, dict):
+            citations = int(paper.get("citation_count", 0) or 0)
+            year = int(paper.get("year", 0) or 0)
+        else:
+            citations = int(getattr(paper, "citation_count", 0) or 0)
+            year = int(getattr(paper, "year", 0) or 0)
     except (ValueError, TypeError):
         return 0.0
     if citations <= 0 or year <= 0:
@@ -65,6 +70,8 @@ def _escape_paper(paper) -> dict:
         # 期刊指标（影响因子 + 中科院分区）
         "impact_factor": paper.impact_factor if hasattr(paper, "impact_factor") else 0.0,
         "cas_partition": esc(getattr(paper, "cas_partition", "")),
+        # 影响因子来源：jcr=官方值 / openalex=估计值（前端据此标注）
+        "impact_factor_src": esc(getattr(paper, "impact_factor_src", "")),
         # Phase 5a: 学术元数据
         "orcid": esc(paper.orcid),
         "article_type": esc(paper.article_type),

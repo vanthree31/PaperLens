@@ -1,0 +1,111 @@
+/* ===========================================================
+   Liquid Glass — Apple 风格折射玻璃表面
+   技法参考：liquid-glass-react（SVG feDisplacementMap 边缘折射
+   + RGB 三通道色散 + backdrop-filter），转为原生 JS/CSS 实现。
+
+   结构（玻璃层由 js/liquid-glass.js 自动注入）：
+     <div class="lg-surface">          ← 加这个类即可
+       <span class="lg-warp"></span>       ← 折射层（磨砂 + 位移滤镜）
+       <span class="lg-border"></span>     ← 高光边框 1
+       <span class="lg-border2"></span>    ← 高光边框 2
+       <span class="lg-highlight"></span>  ← 悬停高光
+       <div class="lg-content">…</div>     ← 内容层（被抬到玻璃之上）
+     </div>
+
+   适用：小控件 / 弹窗 / 浮动条。**不建议用于大面板**（折射在大面积上会显脏）。
+   =========================================================== */
+
+/* 本文件最后加载：由 .lg-warp 接管背景与磨砂，避免与元素原有玻璃叠加成"双层玻璃" */
+.lg-surface {
+  position: relative;
+  isolation: isolate;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 折射层：磨砂 + 边缘位移 + 底色。filter 由 JS 在元素静止时挂上（url(#lgf-N)） */
+.lg-warp {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--lg-tint, rgba(255, 255, 255, 0.62));
+  -webkit-backdrop-filter: var(--lg-blur, saturate(180%) blur(20px));
+  backdrop-filter: var(--lg-blur, saturate(180%) blur(20px));
+}
+[data-theme="dark"] .lg-warp {
+  background: var(--lg-tint, rgba(44, 44, 46, 0.62));
+}
+@media (prefers-color-scheme: dark) {
+  [data-theme="auto"] .lg-warp {
+    background: var(--lg-tint, rgba(44, 44, 46, 0.62));
+  }
+}
+
+/* 内容层：抬到折射层之上，保证清晰 */
+.lg-surface > .lg-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* 高光边框：用 mask-composite 只保留约 1.2px 描边 */
+.lg-border,
+.lg-border2 {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1.2px;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.55) 33%,
+    rgba(255, 255, 255, 0.78) 66%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.lg-border {
+  mix-blend-mode: screen;
+  opacity: 0.3;
+}
+.lg-border2 {
+  mix-blend-mode: overlay;
+}
+
+/* 顶部高光 */
+.lg-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% 0%,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0) 55%
+  );
+  mix-blend-mode: overlay;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.lg-surface:hover .lg-highlight {
+  opacity: 0.5;
+}
+
+/* 降级：不支持 backdrop-filter 时用纯色兜底 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lg-warp {
+    background: var(--glass-e-bg);
+  }
+}

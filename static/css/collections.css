@@ -232,3 +232,114 @@
     padding: var(--space-3);
   }
 }
+
+/* ============================================================
+   Workspace 面板 — iOS 风格（沿用面板原有磨砂玻璃，不叠加折射层）
+   ============================================================ */
+
+/* 概览统计行 */
+.ws-overview {
+  padding: 9px 24px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+.ws-overview .ws-ov-num {
+  color: var(--text);
+  font-weight: 500;
+}
+.ws-overview .ws-ov-sep {
+  opacity: 0.45;
+}
+
+/* 搜索 + 排序工具栏 */
+.ws-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.ws-search {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  outline: none;
+  box-sizing: border-box;
+}
+.ws-search:focus {
+  border-color: var(--primary);
+}
+.ws-sort {
+  width: 104px;
+  height: 30px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  padding: 0 6px;
+  box-sizing: border-box;
+}
+
+/* 收藏项：笔记行 + 行内编辑器 */
+.collection-item .notes-row {
+  margin-top: var(--space-2);
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: text;
+  border: 0.5px dashed var(--border);
+  color: var(--text-tertiary);
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.collection-item .notes-row:hover {
+  border-color: var(--primary);
+  color: var(--text-secondary);
+}
+.collection-item .notes-row.has-note {
+  border-style: solid;
+  background: var(--bg);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.collection-item .notes-editor {
+  margin-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.collection-item .notes-editor textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.collection-item .notes-editor textarea:focus {
+  border-color: var(--primary);
+}
+.collection-item .notes-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}

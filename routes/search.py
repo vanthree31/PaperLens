@@ -29,7 +29,11 @@ def _resolve_author_fallback(user_input, analysis, data):
     """AI 未识别作者意图时的规则引擎兜底，返回 (field, author)。
 
     当 AI 分析与前端都未显式指定 field 时，用 QueryUnderstanding 从原始用户输入
-    提取作者名；命中则将 field 置为 au，使后端作者精确过滤生效。
+    提取作者名；**仅当去掉作者名后没有剩余主题词**（纯作者查询）才把 field 置为 au，
+    使后端作者精确过滤生效。
+
+    注意：「作者+主题」查询（"张伟发表的CRISPR研究"）不能设 field=au，否则主题词
+    会被当成作者名下发到各数据源，造成召回暴跌。
     """
     field = (analysis or {}).get("field", "") or (data or {}).get("field", "")
     author = ""
@@ -39,7 +43,8 @@ def _resolve_author_fallback(user_input, analysis, data):
 
             parsed = QueryUnderstanding.parse(user_input)
             author = parsed.get("author") or ""
-            if author:
+            residual = (parsed.get("query") or "").strip()
+            if author and not residual:
                 field = "au"
         except Exception:
             pass
@@ -89,6 +94,11 @@ def search():
         enabled_sources = {
             name for name in _all_source_names if data.get(f"use_{name}", None)
         }
+        # ★ 关键词检索模式同样要做作者识别 —— 此前只有 AI 检索路径
+        # （do_search/do_search_stream）调了 _resolve_author_fallback，
+        # 「搜某作者的论文」在关键词模式下 field 恒为前端空串，
+        # 作者名被当全文关键词 → 结果全是无关论文。
+        search_field, search_author = _resolve_author_fallback(query, None, data)
         papers, search_errors = state.engine.search(
             query=query,
             year_from=year_from,
@@ -97,7 +107,7 @@ def search():
             max_results=max_results,
             enabled_sources=enabled_sources,
             journal=data.get("journal", "").strip(),
-            field=data.get("field", "").strip(),
+            field=search_field,
             mesh_term=data.get("mesh_term", "").strip(),
             pub_type=data.get("pub_type", "").strip(),
             smart_routing=data.get("smart_routing", False),
@@ -107,6 +117,8 @@ def search():
             impact_factor_min=_to_float(data.get("impact_factor_min")),
             impact_factor_max=_to_float(data.get("impact_factor_max")),
             cas_partition=data.get("cas_partition", ""),
+            if_include_unknown=data.get("if_include_unknown", True),
+            author=search_author,
         )
     except Exception as e:
         print(f"[ERROR] Search failed: {e}")
@@ -183,6 +195,7 @@ def search_stream():
                     impact_factor_min=_to_float(data.get("impact_factor_min")),
                     impact_factor_max=_to_float(data.get("impact_factor_max")),
                     cas_partition=data.get("cas_partition", ""),
+            if_include_unknown=data.get("if_include_unknown", True),
                 ):
                     event_queue.put(("event", event))
                 event_queue.put(("done", None))
@@ -353,6 +366,7 @@ def ai_search():
             impact_factor_min=_to_float(data.get("impact_factor_min")),
             impact_factor_max=_to_float(data.get("impact_factor_max")),
             cas_partition=data.get("cas_partition", ""),
+            if_include_unknown=data.get("if_include_unknown", True),
             author=search_author,
         )
         return papers, search_errors
@@ -436,6 +450,7 @@ def ai_search():
             impact_factor_min=_to_float(data.get("impact_factor_min")),
             impact_factor_max=_to_float(data.get("impact_factor_max")),
             cas_partition=data.get("cas_partition", ""),
+            if_include_unknown=data.get("if_include_unknown", True),
             author=search_author,
         ):
             yield event

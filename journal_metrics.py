@@ -24,6 +24,7 @@
 import json
 import os
 import re
+import threading
 from pathlib import Path
 
 # ============================================================
@@ -162,6 +163,21 @@ def _norm_name(value: str) -> str:
     return re.sub(r"\s+", " ", str(value)).strip().lower()
 
 
+def _canonical_issn(value: str) -> str:
+    """把 ISSN 还原成 OpenAlex 要求的带连字符形式（XXXX-XXXX）。
+
+    注意：OpenAlex 的 issn 过滤**必须**带连字符，传 "21567085" 会返回 0 条
+    （实测），因此查询前需要还原；缓存键仍用去连字符的 _norm_issn。
+    """
+    s = _norm_issn(value)
+    return f"{s[:4]}-{s[4:]}" if len(s) == 8 else s
+
+
+# 指标来源标记
+SOURCE_LOCAL = "jcr"       # 内置表 / 用户自定义文件（官方 JCR 值）
+SOURCE_OPENALEX = "openalex"  # OpenAlex 2yr_mean_citedness 估计值
+
+
 # ============================================================
 # 构建索引
 # ============================================================
@@ -176,6 +192,7 @@ def _build_indexes():
             "journal": name,
             "impact_factor": float(impact_factor),
             "cas_partition": cas_partition,
+            "source": SOURCE_LOCAL,
         }
         if issn:
             key = _norm_issn(issn)
@@ -210,6 +227,7 @@ def _load_custom_metrics():
                 "journal": str(raw_val.get("journal", "") or raw_key),
                 "impact_factor": float(raw_val.get("impact_factor", 0) or 0),
                 "cas_partition": str(raw_val.get("cas_partition", "") or ""),
+                "source": SOURCE_LOCAL,
             }
             issn_key = _norm_issn(raw_key)
             name_key = _norm_name(raw_key)
@@ -261,3 +279,161 @@ def get_cas_partition(issn: str = "", name: str = "") -> str:
     """便捷方法：返回中科院分区，未找到返回空字符串。"""
     entry = lookup_metrics(issn=issn, name=name)
     return entry["cas_partition"] if entry else ""
+
+
+# ============================================================
+# 在线兜底：OpenAlex 期刊影响力（2yr_mean_citedness）
+# ============================================================
+# 背景：内置表仅覆盖约 102 种期刊，远不足以支撑「影响因子筛选」。
+# 启用 IF 过滤而只认内置表，等价于「只保留这 102 种期刊」，会让绝大多数
+# 查询（尤其专业领域）返回空结果。
+#
+# OpenAlex 为每个期刊提供 summary_stats.2yr_mean_citedness（两年平均被引），
+# 与 JIF 度量的是同一物理量，免费、无需 key、覆盖数万期刊。
+# 但它**不是 JCR 官方影响因子**（量级通常偏低，例如 Nature 官方 50.5
+# 而 OpenAlex 为 19.1），因此仅作为**估计值**兜底，并在结果中标记来源。
+
+_OA_CACHE = {}          # norm_issn -> {"impact_factor": float}
+_OA_MISSING = set()     # 查过但无结果的 ISSN，避免重复请求
+_OA_LOCK = threading.Lock()
+_OA_CACHE_PATH = Path.home() / ".paperlens" / "openalex_journal_cache.json"
+_OA_ENDPOINT = "https://api.openalex.org/sources"
+_OA_BATCH = 50          # 单次请求的 ISSN 数量上限
+_OA_TIMEOUT = 4         # 秒；失败即跳过，不阻塞搜索
+
+
+def _load_oa_cache():
+    """加载持久化的 OpenAlex 期刊缓存。"""
+    global _OA_CACHE
+    try:
+        if not _OA_CACHE_PATH.exists():
+            return
+        with open(_OA_CACHE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            _OA_CACHE = {
+                k: {"impact_factor": float(v.get("impact_factor", 0) or 0)}
+                for k, v in data.items()
+                if isinstance(v, dict)
+            }
+            print(f"[INFO] journal_metrics: 已加载 OpenAlex 期刊缓存 ({len(_OA_CACHE)} 条)")
+    except Exception as e:
+        print(f"[WARN] journal_metrics: 加载 OpenAlex 缓存失败: {e}")
+
+
+def _save_oa_cache():
+    """持久化 OpenAlex 期刊缓存（失败不影响主流程）。"""
+    try:
+        _OA_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(_OA_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(_OA_CACHE, f, ensure_ascii=False, indent=1)
+    except Exception as e:
+        print(f"[WARN] journal_metrics: 保存 OpenAlex 缓存失败: {e}")
+
+
+def prefetch_openalex(issns, enabled: bool = True) -> int:
+    """批量从 OpenAlex 拉取期刊 2yr_mean_citedness 并写入缓存。
+
+    - 只请求「未缓存且未标记缺失」的 ISSN，按 ≤50 一批
+    - 任何失败都静默跳过（网络问题不应影响搜索主流程）
+    - 返回本次新增条数
+    """
+    if not enabled:
+        return 0
+
+    with _OA_LOCK:
+        todo = [
+            k
+            for k in (_norm_issn(x) for x in (issns or []))
+            if k and k not in _OA_CACHE and k not in _OA_MISSING
+        ]
+    todo = list(dict.fromkeys(todo))
+    if not todo:
+        return 0
+
+    try:
+        import requests  # 延迟导入：避免模块级强依赖
+    except Exception:
+        return 0
+
+    added = 0
+    for i in range(0, len(todo), _OA_BATCH):
+        batch = todo[i : i + _OA_BATCH]
+        try:
+            r = requests.get(
+                _OA_ENDPOINT,
+                params={
+                    "filter": "issn:"
+                    + "|".join(_canonical_issn(k) for k in batch),
+                    "per-page": len(batch),
+                    "select": "issn,display_name,summary_stats",
+                },
+                timeout=_OA_TIMEOUT,
+            )
+            if r.status_code != 200:
+                continue
+            results = (r.json() or {}).get("results", []) or []
+            hit = set()
+            for item in results:
+                val = (item.get("summary_stats") or {}).get("2yr_mean_citedness")
+                if val is None:
+                    continue
+                try:
+                    val = float(val)
+                except (TypeError, ValueError):
+                    continue
+                for issn_raw in item.get("issn") or []:
+                    k = _norm_issn(issn_raw)
+                    if k in batch:
+                        hit.add(k)
+                        with _OA_LOCK:
+                            _OA_CACHE[k] = {"impact_factor": round(val, 3)}
+                        added += 1
+            with _OA_LOCK:
+                for k in batch:
+                    if k not in hit:
+                        _OA_MISSING.add(k)
+        except Exception as e:
+            print(f"[WARN] journal_metrics: OpenAlex 查询失败（已跳过）: {e}")
+            continue
+
+    if added:
+        _save_oa_cache()
+        print(f"[INFO] journal_metrics: OpenAlex 新增期刊指标 {added} 条")
+    return added
+
+
+def get_openalex_metrics(issn: str = "") -> dict:
+    """从缓存取 OpenAlex 估计指标；未命中返回 None。"""
+    k = _norm_issn(issn)
+    if not k:
+        return None
+    with _OA_LOCK:
+        entry = _OA_CACHE.get(k)
+    return dict(entry) if entry else None
+
+
+def lookup_metrics_with_fallback(issn: str = "", name: str = "") -> dict:
+    """先查内置/自定义表（官方 JCR 值），未命中用 OpenAlex 估计值兜底。
+
+    Returns:
+        dict: {"journal", "impact_factor", "cas_partition", "source"}
+              source 为 SOURCE_LOCAL（官方值）或 SOURCE_OPENALEX（估计值）。
+        两处都未命中返回 None。
+    """
+    entry = lookup_metrics(issn=issn, name=name)
+    if entry:
+        return {**entry, "source": entry.get("source", SOURCE_LOCAL)}
+
+    oa = get_openalex_metrics(issn)
+    if oa:
+        return {
+            "journal": name or "",
+            "impact_factor": oa["impact_factor"],
+            "cas_partition": "",  # 中科院分区无免费来源，仅内置表有
+            "source": SOURCE_OPENALEX,
+        }
+    return None
+
+
+_load_oa_cache()

@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="/static/css/collections.css">
 <link rel="stylesheet" href="/static/css/tags.css">
 <link rel="stylesheet" href="/static/css/misc.css">
+<link rel="stylesheet" href="/static/css/liquid-glass.css">
 <script type="module" src="/static/js/app.js"></script>
 </head>
 <body>
@@ -98,6 +99,7 @@
         <label><input type="checkbox" id="useZenodo" checked> Zenodo</label>
         <label><input type="checkbox" id="useDatacite" checked> DataCite</label>
         <label><input type="checkbox" id="useDoaj" checked> DOAJ</label>
+        <label><input type="checkbox" id="useOpenaire" checked> OpenAIRE</label>
         <label><input type="checkbox" id="useOup" checked> Oxford Academic</label>
         <label><input type="checkbox" id="useCup" checked> Cambridge Core</label>
         <label><input type="checkbox" id="useSage" checked> SAGE</label>
@@ -189,6 +191,10 @@
         <span style="color:var(--text-secondary)">—</span>
         <input type="number" id="impactFactorMax" min="0" step="0.1" placeholder="≤" title="影响因子上限"
                style="width:70px;font-size:13px;padding:2px 6px">
+        <label style="margin-left:6px" data-i18n-title="ifUnknownHint" title="勾选后保留期刊未收录（影响因子未知）的论文；不勾选时这些论文会被过滤掉">
+          <input type="checkbox" id="ifIncludeUnknown" checked><span data-i18n="ifUnknown">保留未收录</span>
+        </label>
+        <span class="filter-hint" id="ifCoverageHint" data-i18n-title="ifCoverageHint" title="影响因子：内置表约 102 种期刊用官方 JCR 值，其余期刊自动从 OpenAlex 取估计值">ⓘ</span>
       </div>
       <div class="filter-group">
         <span data-i18n="casPartition">中科院分区</span>:
@@ -196,6 +202,8 @@
         <label style="margin-left:6px"><input type="checkbox" value="2区" class="cas-partition-cb"><span data-i18n="partition2">2区</span></label>
         <label style="margin-left:6px"><input type="checkbox" value="3区" class="cas-partition-cb"><span data-i18n="partition3">3区</span></label>
         <label style="margin-left:6px"><input type="checkbox" value="4区" class="cas-partition-cb"><span data-i18n="partition4">4区</span></label>
+        <label style="margin-left:6px" data-i18n-title="partitionUnknownHint" title="勾选后同时保留期刊未被分区表收录的论文"><input type="checkbox" value="__unknown__" class="cas-partition-cb"><span data-i18n="partitionUnknown">未收录</span></label>
+        <span class="filter-hint" id="casCoverageHint" data-i18n-title="casCoverageHint" title="内置分区表仅覆盖约 102 种期刊，且不含 4区 条目">ⓘ</span>
       </div>
     </div>
   </div>
@@ -752,7 +760,7 @@
 <div class="settings-overlay" id="collectionsOverlay" onclick="toggleCollections()"></div>
 <div class="collections-panel" id="collectionsPanel">
   <h2>
-    <span id="collectionsTitle">★ <span data-i18n="collections">我的收藏</span></span>
+    <span id="collectionsTitle" data-i18n="collections">研究工作区</span>
     <span>
       <button class="btn btn-sm btn-outline" onclick="importFromZotero()" id="importZoteroBtn" data-i18n-title="importZotero">📥 从 Zotero 导入</button>
       <button class="btn btn-sm btn-outline" onclick="openTagManager()" data-i18n-title="manageTags">🏷</button>
@@ -760,7 +768,17 @@
       <button class="btn btn-sm btn-outline" onclick="toggleCollections()">✕</button>
     </span>
   </h2>
+  <div class="ws-overview" id="wsOverview"></div>
   <div class="group-tabs" id="groupTabs"></div>
+  <div class="ws-toolbar">
+    <input type="text" id="wsSearch" class="ws-search" placeholder="搜索工作区…" data-i18n-placeholder="wsSearchPlaceholder" autocomplete="off">
+    <select id="wsSort" class="ws-sort">
+      <option value="added" data-i18n="wsSortAdded">按添加时间</option>
+      <option value="year" data-i18n="wsSortYear">按年份</option>
+      <option value="citations" data-i18n="wsSortCitations">按被引</option>
+      <option value="velocity" data-i18n="wsSortVelocity">按引用速度</option>
+    </select>
+  </div>
   <div class="tag-filter" id="tagFilter" style="display:none">
     <div class="tag-filter-header">
       <span data-i18n="filterByTag">按标签筛选</span>
@@ -779,15 +797,17 @@
 
 <!-- 标签管理弹窗 -->
 <div class="tag-manager-overlay" id="tagManagerOverlay" onclick="if(event.target===this)closeTagManager()">
-  <div class="tag-manager-modal">
-    <h3 data-i18n="tagManager">🏷 标签管理</h3>
-    <div class="tag-manager-list" id="tagManagerList" style="flex:1;overflow-y:auto;padding:12px 20px"></div>
-    <div class="tag-manager-footer" style="display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--border);flex-wrap:wrap;align-items:center">
-      <input type="text" id="newTagName" placeholder="新标签名..." maxlength="50" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none">
-      <input type="color" id="tagColorPicker" value="#007AFF" style="width:32px;height:32px;border:none;border-radius:8px;cursor:pointer;padding:0">
-      <button class="btn btn-sm btn-primary" onclick="createTagFromModal()" style="white-space:nowrap">创建</button>
-      <button class="btn btn-sm btn-outline" onclick="importZoteroTags()" id="importZoteroTagsBtn" style="white-space:nowrap">📥 导入 Zotero</button>
-      <button class="btn btn-sm btn-outline" onclick="closeTagManager()" style="white-space:nowrap">关闭</button>
+  <div class="tag-manager-modal lg-surface" data-lg-scale="30">
+    <div class="lg-content" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <h3 data-i18n="tagManager">🏷 标签管理</h3>
+      <div class="tag-manager-list" id="tagManagerList" style="flex:1;overflow-y:auto;padding:12px 20px"></div>
+      <div class="tag-manager-footer" style="display:flex;gap:8px;padding:12px 20px;border-top:1px solid var(--border);flex-wrap:wrap;align-items:center">
+        <input type="text" id="newTagName" placeholder="新标签名..." maxlength="50" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none">
+        <input type="color" id="tagColorPicker" value="#007AFF" style="width:32px;height:32px;border:none;border-radius:8px;cursor:pointer;padding:0">
+        <button class="btn btn-sm btn-primary" onclick="createTagFromModal()" style="white-space:nowrap">创建</button>
+        <button class="btn btn-sm btn-outline" onclick="importZoteroTags()" id="importZoteroTagsBtn" style="white-space:nowrap">📥 导入 Zotero</button>
+        <button class="btn btn-sm btn-outline" onclick="closeTagManager()" style="white-space:nowrap">关闭</button>
+      </div>
     </div>
   </div>
 </div>
@@ -832,12 +852,53 @@
       <button class="btn btn-sm btn-outline" onclick="graphDownloadPDF()" data-i18n="downloadPDF">PDF</button>
       <button class="btn btn-sm btn-outline" onclick="graphOpenOriginal()" id="graphOriginalBtn" data-i18n="original">原文</button>
     </div>
+    <div id="networkToolbar" class="net-toolbar" style="display:none">
+      <span class="nt-lab" data-i18n="netData">数据</span>
+      <div class="net-seg" id="netSegType">
+        <label><input type="radio" name="netTy" value="keyword" checked><span data-i18n="keywordNetwork">关键词共现</span></label>
+        <label><input type="radio" name="netTy" value="author"><span data-i18n="authorNetwork">作者合作</span></label>
+      </div>
+      <span class="nt-lab" data-i18n="netArrange">排列</span>
+      <div class="net-seg" id="netSegMode">
+        <label><input type="radio" name="netMd" value="circular" checked><span data-i18n="netModeCircular">环形</span></label>
+        <label><input type="radio" name="netMd" value="concentric"><span data-i18n="netModeConcentric">同心</span></label>
+        <label><input type="radio" name="netMd" value="cluster"><span data-i18n="netModeCluster">聚类</span></label>
+      </div>
+      <span class="nt-lab" data-i18n="netCount">数量</span>
+      <div class="net-seg" id="netSegTop">
+        <label><input type="radio" name="netTp" value="10" checked><span>Top 10</span></label>
+        <label><input type="radio" name="netTp" value="20"><span>Top 20</span></label>
+        <label><input type="radio" name="netTp" value="0"><span data-i18n="all">全部</span></label>
+      </div>
+      <span class="nt-sp"></span>
+      <button class="net-btn" id="netFitBtn" data-i18n="netFit">适应</button>
+      <span class="net-zoom-pct" id="netZoomPct">100%</span>
+    </div>
+    <div id="citationToolbar" class="net-toolbar" style="display:none">
+      <span class="nt-lab" data-i18n="netCount">数量</span>
+      <div class="net-seg" id="citSegLimit">
+        <label><input type="radio" name="citLm" value="10"><span>Top 10</span></label>
+        <label><input type="radio" name="citLm" value="20"><span>Top 20</span></label>
+        <label><input type="radio" name="citLm" value="all" checked><span data-i18n="all">全部</span></label>
+      </div>
+      <span class="nt-lab" data-i18n="netArrange">排列</span>
+      <div class="net-seg" id="citSegArrange">
+        <label><input type="radio" name="citAr" value="flat" checked><span data-i18n="citArrangeFlat">平铺</span></label>
+        <label><input type="radio" name="citAr" value="year"><span data-i18n="citArrangeYear">年份分段</span></label>
+        <label><input type="radio" name="citAr" value="cluster"><span data-i18n="netModeCluster">聚类</span></label>
+      </div>
+      <span class="nt-sp"></span>
+      <button class="net-btn" id="citResetBtn" data-i18n="citReset">重排</button>
+      <button class="net-btn" id="citFitBtn" data-i18n="netFit">适应</button>
+      <span class="net-zoom-pct" id="citZoomPct">100%</span>
+    </div>
     <div class="graph-body" id="graphBody">
       <svg id="graphSvg"></svg>
       <div class="graph-legend">
         <div id="legendCenterRow"><span class="dot" style="background:#2563eb"></span> <span id="legendCenter" data-i18n="legendCenter">当前论文</span></div>
         <div id="legendCitingRow"><span class="dot" style="background:#10b981"></span> <span id="legendCiting" data-i18n="legendCiting">引用了此论文</span></div>
         <div id="legendReferencedRow"><span class="dot" style="background:#f59e0b"></span> <span id="legendReferenced" data-i18n="legendReferenced">此论文引用</span></div>
+        <div id="legendClustersRow"></div>
         <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--text-secondary);font-size:11px"><span id="graphZoomLevel">100%</span> · <span id="graphHintText" data-i18n="graphHint">滚轮缩放 · 拖拽平移 · 点击节点展开引用</span> · <a href="#" onclick="resetGraphZoom();return false" style="color:var(--text-secondary)" id="resetZoomLink" data-i18n="resetZoom">重置缩放</a></div>
         <div style="margin-top:4px;color:var(--text-secondary);font-size:10px" data-i18n="graphDataSource">数据来源：OpenAlex（引用数据可能不完整，仅供参考）</div>
       </div>
@@ -878,14 +939,16 @@
 
 <!-- 批量 DOI 模态框 -->
 <div class="modal-overlay" id="doiModal">
-  <div class="modal">
-    <h3>批量 DOI 导入</h3>
-    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px" data-i18n="doiHint"></p>
-    <textarea id="doiTextarea" data-i18n-placeholder="doiHint" placeholder="10.1038/s41586-025-08985-1&#10;10.1021/acsnano.1c11507&#10;doi:10.1364/OL.417039"></textarea>
-    <div id="doiResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary)"></div>
-    <div class="modal-btns">
-      <button class="btn btn-outline" onclick="closeDoiModal()" data-i18n="cancel">取消</button>
-      <button class="btn btn-primary" id="doiBtn" onclick="batchDoiLookup()" data-i18n="query">查询</button>
+  <div class="modal lg-surface" data-lg-scale="30">
+    <div class="lg-content">
+      <h3>批量 DOI 导入</h3>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px" data-i18n="doiHint"></p>
+      <textarea id="doiTextarea" data-i18n-placeholder="doiHint" placeholder="10.1038/s41586-025-08985-1&#10;10.1021/acsnano.1c11507&#10;doi:10.1364/OL.417039"></textarea>
+      <div id="doiResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary)"></div>
+      <div class="modal-btns">
+        <button class="btn btn-outline" onclick="closeDoiModal()" data-i18n="cancel">取消</button>
+        <button class="btn btn-primary" id="doiBtn" onclick="batchDoiLookup()" data-i18n="query">查询</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1038,9 +1101,7 @@ function applyLang() {
   const doiCancelBtn = document.querySelector("#doiModal .btn-outline");
   if (doiCancelBtn) doiCancelBtn.textContent = t("cancel");
 
-  // 收藏面板
-  const collectionsTitle = document.getElementById("collectionsTitle");
-  if (collectionsTitle) collectionsTitle.textContent = `★ ${t("collections")}`;
+  // 收藏面板（标题由 data-i18n="collections" 自动翻译）
   const collectionsBtn = document.getElementById("collectionsBtn");
   if (collectionsBtn) collectionsBtn.title = t("collections");
   const collectionsEmptyText = document.getElementById("collectionsEmptyText");
@@ -1078,7 +1139,11 @@ function applyLang() {
   const graphOriginalBtn = document.getElementById("graphOriginalBtn");
   if (graphOriginalBtn) graphOriginalBtn.textContent = t("original");
   const graphHintText = document.getElementById("graphHintText");
-  if (graphHintText) graphHintText.textContent = t("graphHint");
+  if (graphHintText) {
+    // 共现 / 合作网络打开期间用网络图提示语，其余用引用图提示语
+    const isNet = document.getElementById("graphTitle")?.dataset?.nettype;
+    graphHintText.textContent = t(isNet ? "netHintNetwork" : "graphHint");
+  }
   const resetZoomLink = document.getElementById("resetZoomLink");
   if (resetZoomLink) resetZoomLink.textContent = t("resetZoom");
   const graphAiPanelTitle = document.getElementById("graphAiPanelTitle");
@@ -1328,7 +1393,7 @@ function renderResults() {
         <div class="paper-meta">
           <span class="tag">${authors}</span>
           <span class="tag">${p.journal ? `<b>${escapeHtml(p.journal)}</b>` : ''}${p.volume ? `, ${escapeHtml(p.volume)}` : ''}${p.issue ? ` (${escapeHtml(p.issue)})` : ''}${p.pages ? `, ${escapeHtml(p.pages)}` : ''}${p.year ? `${(p.journal || p.volume || p.issue || p.pages) ? ', ' : ''}${p.year}` : ''}</span>
-          ${p.impact_factor > 0 ? `<span class="badge badge-if" title="${t('impactFactor')}">IF ${p.impact_factor.toFixed(1)}</span>` : ''}${p.cas_partition ? `<span class="badge badge-partition">${escapeHtml(p.cas_partition)}</span>` : ''}
+          ${p.impact_factor > 0 ? `<span class="badge badge-if" title="${p.impact_factor_src === 'openalex' ? t('ifEstimatedTip') : t('impactFactor')}">IF ${p.impact_factor.toFixed(1)}${p.impact_factor_src === 'openalex' ? '*' : ''}</span>` : ''}${p.cas_partition ? `<span class="badge badge-partition">${escapeHtml(p.cas_partition)}</span>` : ''}
           ${p.doi ? `<a class="doi-link" href="https://doi.org/${encodeURIComponent(p.doi)}" target="_blank" onclick="event.stopPropagation();recordReadingAction('view', allPapers[${idx}])">${p.doc_type === 'patent' ? t('patents') : 'DOI'}:${escapeHtml(p.doi)}</a>` : ""}
           ${citationTag}${velocityTag}
           ${(() => { const ci = _findCollectionItem(p); return ci ? (window.renderTagPills ? window.renderTagPills(ci.tags || []) : '') : ''; })()}
@@ -3701,6 +3766,15 @@ async function showCitationGraph(encodedDoi, encodedTitle) {
   document.getElementById("legendReferenced").textContent = t("legendReferenced");
   document.getElementById("legendCitingRow").style.display = "";
   document.getElementById("legendReferencedRow").style.display = "";
+  document.getElementById("legendCenterRow").style.display = "";
+  document.getElementById("legendClustersRow").style.display = "none";
+  document.getElementById("networkToolbar").style.display = "none";
+  document.getElementById("citationToolbar").style.display = "flex";
+  _syncCitationToolbar();
+  const citHintEl = document.getElementById("graphHintText");
+  if (citHintEl) citHintEl.textContent = t("graphHint");
+  const citTitleEl = document.getElementById("graphTitle");
+  if (citTitleEl) delete citTitleEl.dataset.nettype;
   document.getElementById("graphOverlay").classList.add("show");
   document.getElementById("graphToolbar").style.display = "none";
   document.getElementById("graphAiPanel").style.display = "none";
@@ -3723,19 +3797,14 @@ async function showCitationGraph(encodedDoi, encodedTitle) {
         year: data.paper.year, citations: data.paper.citations,
       });
 
-      // 使用新的 CitationGraph 类
+      // 引用谱系图 V2：三栏谱系布局（graph-hybrid 原型）
       if (_currentGraph) { _currentGraph.destroy(); }
-      _currentGraph = new CitationGraph(svg, {
+      _currentGraph = new window.CitationGraphV2(svg, {
         onNodeClick: (d) => {
-          if (d.doi || d.fullTitle) openNewCitationGraph(d.doi, d.fullTitle || "");
-        },
-        onZoomChange: (transform) => {
-          renderGraph._currentTransform = transform;
+          if (d.doi || d.title) openNewCitationGraph(d.doi, d.title || "");
         },
       });
       _currentGraph.setData(data);
-      renderGraph._zoomBehavior = _currentGraph._zoom;
-      renderGraph._currentTransform = d3.zoomIdentity;
     } else {
       svg.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--danger)">${te(data.error) || t("analysisFailed")}</text>`;
     }
@@ -3754,11 +3823,18 @@ function closeGraph() {
   document.getElementById("graphAiPanel")?.classList.remove("fullscreen");
   document.getElementById("graphPanelEl")?.classList.remove("fullscreen");
   document.getElementById("graphOverlay").classList.remove("show");
+  document.getElementById("networkToolbar").style.display = "none";
+  document.getElementById("citationToolbar").style.display = "none";
+  document.getElementById("legendClustersRow").style.display = "none";
+  const gt = document.getElementById("graphTitle");
+  if (gt) delete gt.dataset.nettype;
 }
 
 function resetGraphZoom() {
   if (_currentGraph) {
-    _currentGraph.resetZoom();
+    // NetworkGraphV2 没有 resetZoom（语义同「适应」），做兼容分发
+    if (typeof _currentGraph.resetZoom === "function") _currentGraph.resetZoom();
+    else if (typeof _currentGraph.fit === "function") _currentGraph.fit();
   }
 }
 
@@ -4398,25 +4474,37 @@ function graphNoveltyDetection() {
   }).catch(e => { if (e.name !== 'AbortError') { content.textContent = t("fetchPaperFailed") + ": " + e.message; } _graphAnalysisLock = false; _graphAiAbort = null; });
 }
 
-// ========== 关键词共现 / 作者合作网络 ==========
-async function showKeywordNetwork() {
+// ========== 关键词共现 / 作者合作网络（NetworkGraphV2） ==========
+// 排列 / 数量在两种数据之间保持（用户不需要每次重新调）；
+// 数据切换走完整 show 流程（重新拉取），排列/数量就地重渲染（不重新请求）。
+let _netState = { mode: "circular", top: 10 };
+
+async function _showNetworkGraph(type) {
   if (!allPapers.length) { showToast(t("pleaseSearchFirst")); return; }
   const svgEl = document.getElementById("graphSvg");
-  document.getElementById("graphTitle").textContent = t("keywordNetwork");
-  document.getElementById("legendCenter").textContent = t("keywordNetwork");
+  document.getElementById("graphTitle").textContent =
+    t(type === "keyword" ? "keywordNetwork" : "authorNetwork");
+  document.getElementById("graphTitle").dataset.nettype = type;
+  document.getElementById("legendCenterRow").style.display = "none";
   document.getElementById("legendCitingRow").style.display = "none";
   document.getElementById("legendReferencedRow").style.display = "none";
+  document.getElementById("legendClustersRow").style.display = "none";
+  const hintEl = document.getElementById("graphHintText");
+  if (hintEl) hintEl.textContent = t("netHintNetwork");
   document.getElementById("graphOverlay").classList.add("show");
   document.getElementById("graphToolbar").style.display = "none";
   document.getElementById("graphAiPanel").style.display = "none";
+  document.getElementById("citationToolbar").style.display = "none";
+  document.getElementById("networkToolbar").style.display = "flex";
+  _syncNetworkToolbar(type);
   svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text-secondary)">${t("loadingNetwork")}</text>`;
 
   try {
-    const r = await fetch(`${API}/api/keyword-network`, { method: "POST" });
+    const r = await fetch(`${API}/api/${type}-network`, { method: "POST" });
     const data = await r.json();
-    if (r.ok && data.nodes.length > 0) {
+    if (r.ok && data.nodes && data.nodes.length > 0) {
       if (_currentGraph) { _currentGraph.destroy(); }
-      _currentGraph = new CitationGraph(svgEl, { onNodeClick: null });
+      _currentGraph = new window.NetworkGraphV2(svgEl, { type, mode: _netState.mode, top: _netState.top });
       _currentGraph.setData(data);
     } else {
       svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text-secondary)">${te(data.error) || t("noResults")}</text>`;
@@ -4426,32 +4514,81 @@ async function showKeywordNetwork() {
   }
 }
 
-async function showAuthorNetwork() {
-  if (!allPapers.length) { showToast(t("pleaseSearchFirst")); return; }
-  const svgEl = document.getElementById("graphSvg");
-  document.getElementById("graphTitle").textContent = t("authorNetwork");
-  document.getElementById("legendCenter").textContent = t("authorNetwork");
-  document.getElementById("legendCitingRow").style.display = "none";
-  document.getElementById("legendReferencedRow").style.display = "none";
-  document.getElementById("graphOverlay").classList.add("show");
-  document.getElementById("graphToolbar").style.display = "none";
-  document.getElementById("graphAiPanel").style.display = "none";
-  svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text-secondary)">${t("loadingNetwork")}</text>`;
+function showKeywordNetwork() { return _showNetworkGraph("keyword"); }
+function showAuthorNetwork() { return _showNetworkGraph("author"); }
 
-  try {
-    const r = await fetch(`${API}/api/author-network`, { method: "POST" });
-    const data = await r.json();
-    if (r.ok && data.nodes.length > 0) {
-      if (_currentGraph) { _currentGraph.destroy(); }
-      _currentGraph = new CitationGraph(svgEl, { onNodeClick: null });
-      _currentGraph.setData(data);
-    } else {
-      svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--text-secondary)">${te(data.error) || t("noResults")}</text>`;
-    }
-  } catch (e) {
-    svgEl.innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="var(--danger)">${t("networkError")}</text>`;
-  }
+/** 控件选中态与 _netState 对齐（show / 切换语言后调用） */
+function _syncNetworkToolbar(type) {
+  const set = (segId, val) => {
+    const el = document.querySelector(`#netSeg${segId} input[value="${val}"]`);
+    if (el) el.checked = true;
+  };
+  set("Type", type);
+  set("Mode", _netState.mode);
+  set("Top", String(_netState.top));
 }
+
+// 控件事件（绑定一次；change 只在用户交互时触发，此时 module 必然已加载）
+(function _bindNetworkToolbar() {
+  const box = document.getElementById("networkToolbar");
+  if (!box) return;
+  box.addEventListener("change", e => {
+    if (e.target.name === "netTy") {
+      if (e.target.value === "keyword") showKeywordNetwork(); else showAuthorNetwork();
+      return;
+    }
+    _netState.mode = document.querySelector('#netSegMode input:checked').value;
+    _netState.top = +document.querySelector('#netSegTop input:checked').value;
+    if (_currentGraph && typeof _currentGraph.setTop === "function") {
+      _currentGraph.state.mode = _netState.mode;
+      _currentGraph.setTop(_netState.top);
+    }
+  });
+  const fitBtn = document.getElementById("netFitBtn");
+  if (fitBtn) fitBtn.addEventListener("click", () => {
+    if (_currentGraph && typeof _currentGraph.fit === "function") _currentGraph.fit();
+  });
+})();
+
+// ========== 引用谱系图 V2 控件（数量 / 排列 / 重排 / 适应） ==========
+let _citState = { limit: "all", arrange: "flat" };
+
+function _syncCitationToolbar() {
+  const set = (segId, val) => {
+    const el = document.querySelector(`#citSeg${segId} input[value="${val}"]`);
+    if (el) el.checked = true;
+  };
+  set("Limit", String(_citState.limit));
+  set("Arrange", _citState.arrange);
+}
+window._syncCitationToolbar = _syncCitationToolbar;
+
+(function _bindCitationToolbar() {
+  const box = document.getElementById("citationToolbar");
+  if (!box) return;
+  box.addEventListener("change", e => {
+    if (e.target.name === "citLm") _citState.limit = e.target.value;
+    else if (e.target.name === "citAr") _citState.arrange = e.target.value;
+    else return;
+    if (_currentGraph && typeof _currentGraph.setLimit === "function") {
+      _currentGraph.state.limit = _citState.limit;
+      _currentGraph.state.arrange = _citState.arrange;
+      if (e.target.name === "citAr" && typeof _currentGraph.setArrange === "function") {
+        _currentGraph.setArrange(_citState.arrange);
+      } else {
+        _currentGraph.render(true);
+      }
+    }
+  });
+  const rb = document.getElementById("citResetBtn");
+  if (rb) rb.addEventListener("click", () => {
+    if (_currentGraph && typeof _currentGraph.reset === "function") _currentGraph.reset();
+  });
+  const fb = document.getElementById("citFitBtn");
+  if (fb) fb.addEventListener("click", () => {
+    if (_currentGraph && typeof _currentGraph.fit === "function") _currentGraph.fit();
+  });
+})();
 
 // 兼容旧代码
 function renderNetworkGraph(svgEl, data, nodeColor, linkColor) {

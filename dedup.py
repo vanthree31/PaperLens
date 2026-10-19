@@ -32,6 +32,9 @@ def deduplicate_papers(papers: list) -> list:
 
     doi_map = {}  # doi_lower -> merged paper
     title_map = {}  # normalized_title -> merged paper (仅无 DOI 论文)
+    ordered_keys = []  # (kind, key) 首次出现顺序 —— 上游的相关度/作者降权排序
+                       # 必须保住：旧实现输出「DOI 组 + 标题组」两段拼接，
+                       # 会把排序完全打乱（作者降权排尾的结果又混回前面）
 
     for p in papers:
         doi_key = (p.doi or "").strip().lower()
@@ -43,17 +46,25 @@ def deduplicate_papers(papers: list) -> list:
             else:
                 # 创建新对象，不修改原引用
                 doi_map[doi_key] = replace(p)
+                ordered_keys.append(("doi", doi_key))
         elif title_key:
             if title_key in title_map:
                 title_map[title_key] = _merge_paper(title_map[title_key], p)
             else:
                 title_map[title_key] = replace(p)
+                ordered_keys.append(("title", title_key))
         else:
             # 无 DOI 无标题，保留原样（用唯一 key 避免碰撞）
-            title_map[f"_no_id_{len(title_map)}"] = replace(p)
+            k = f"_no_id_{len(title_map)}"
+            title_map[k] = replace(p)
+            ordered_keys.append(("title", k))
 
-    # 合并去重：先 DOI 去重的结果，再标题去重的结果
-    all_papers = list(doi_map.values()) + list(title_map.values())
+    # 合并去重：按首次出现顺序输出（保上游排序）
+    all_papers = []
+    for kind, key in ordered_keys:
+        src = doi_map if kind == "doi" else title_map
+        if key in src:
+            all_papers.append(src.pop(key))
 
     # 第二阶段：检测预印本↔正式版关系
     all_papers = _detect_version_relations(all_papers)

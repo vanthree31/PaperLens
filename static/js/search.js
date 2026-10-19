@@ -26,6 +26,68 @@ let _aiSearchAbort = null;
 let _suggestIdx = -1;
 
 // 构建搜索请求体（统一数据源字段）
+// ========== 数据源开关（单一数据源）==========
+// 原先「主搜索」与「AI 搜索」两处各自手写一份 use_* 清单，漂移后导致 12 个开关
+// 在 UI 上能勾却不发送（死开关）。此处统一为一张表，两处共用。
+// 格式：[请求字段名, checkbox id, 元素缺失时的默认值]
+const SOURCE_SWITCHES = [
+  ["use_pubmed", "usePubmed", true],
+  ["use_openalex", "useOpenalex", true],
+  ["use_semantic_scholar", "useSemanticScholar", true],
+  ["use_crossref", "useCrossref", true],
+  ["use_arxiv", "useArxiv", true],
+  ["use_sciencedirect", "useSciencedirect", true],
+  ["use_scopus", "useScopus", true],
+  ["use_jstor", "useJstor", true],
+  ["use_dblp", "useDblp", true],
+  ["use_biorxiv", "useBiorxiv", true],
+  ["use_agris", "useAgris", false],           // AGRIS 已下线，后端不实例化
+  ["use_pubag", "usePubag", true],
+  ["use_acs", "useAcs", true],
+  ["use_optica", "useOptica", true],
+  ["use_iop", "useIop", true],
+  ["use_aip", "useAip", true],
+  ["use_rsc", "useRsc", true],
+  ["use_europepmc", "useEuropepmc", true],
+  ["use_springer", "useSpringer", true],
+  ["use_wiley", "useWiley", true],
+  ["use_ieee", "useIeee", true],
+  ["use_muse", "useMuse", true],
+  ["use_frontiers", "useFrontiers", true],
+  ["use_acm", "useAcm", true],
+  ["use_jstage", "useJstage", true],
+  ["use_cochrane", "useCochrane", true],
+  ["use_google_scholar", "useGoogleScholar", false],
+  ["use_bing_academic", "useBingAcademic", false],
+  ["use_cnki", "useCNKI", true],
+  ["use_wanfang", "useWanfang", false],
+  ["use_vip", "useVIP", false],
+  ["use_core", "useCore", true],
+  ["use_lens", "useLens", true],
+  ["use_lens_patents", "useLensPatents", false],
+  ["use_zotero_mcp", "useZoteroMcp", false],
+  ["use_zenodo", "useZenodo", true],
+  ["use_datacite", "useDatacite", true],
+  ["use_doaj", "useDoaj", true],
+  ["use_oup", "useOup", true],
+  ["use_cup", "useCup", true],
+  ["use_sage", "useSage", true],
+  ["use_taylor_francis", "useTaylor_francis", true],
+  ["use_ebsco", "useEbsco", true],
+  ["use_wos", "useWos", false],
+  ["use_proquest", "useProquest", false],
+  ["use_openaire", "useOpenaire", true],
+];
+
+function collectSourceSwitches() {
+  const out = {};
+  for (const [key, id, dflt] of SOURCE_SWITCHES) {
+    const el = document.getElementById(id);
+    out[key] = el ? el.checked : dflt;
+  }
+  return out;
+}
+
 function buildSearchBody(overrides = {}) {
   const now = new Date().getFullYear();
   const yf = parseInt(document.getElementById("yearFrom").value);
@@ -35,45 +97,13 @@ function buildSearchBody(overrides = {}) {
     year_to: isNaN(yt) ? now : yt,
     sort: document.getElementById("sortBy").value,
     max_results: parseInt(document.getElementById("maxResults").value) || 50,
-    use_pubmed: document.getElementById("usePubmed").checked,
-    use_openalex: document.getElementById("useOpenalex").checked,
-    use_semantic_scholar: document.getElementById("useSemanticScholar")?.checked || false,
-    use_crossref: document.getElementById("useCrossref")?.checked ?? true,
-    use_arxiv: document.getElementById("useArxiv")?.checked ?? true,
-    use_sciencedirect: document.getElementById("useSciencedirect")?.checked ?? true,
-    use_scopus: document.getElementById("useScopus")?.checked ?? true,
-    use_jstor: document.getElementById("useJstor")?.checked ?? true,
-    use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
-    use_bing_academic: document.getElementById("useBingAcademic")?.checked || false,
-    use_cnki: document.getElementById("useCNKI")?.checked || false,
-    use_wanfang: document.getElementById("useWanfang")?.checked || false,
-    use_vip: document.getElementById("useVIP")?.checked || false,
-    use_dblp: document.getElementById("useDblp")?.checked ?? true,
-    use_biorxiv: document.getElementById("useBiorxiv")?.checked ?? true,
-    use_agris: document.getElementById("useAgris")?.checked ?? true,
-    use_acs: document.getElementById("useAcs")?.checked ?? true,
-    use_optica: document.getElementById("useOptica")?.checked ?? true,
-    use_iop: document.getElementById("useIop")?.checked ?? true,
-    use_aip: document.getElementById("useAip")?.checked ?? true,
-    use_rsc: document.getElementById("useRsc")?.checked ?? true,
-    use_europepmc: document.getElementById("useEuropepmc")?.checked ?? true,
-    use_springer: document.getElementById("useSpringer")?.checked ?? true,
-    use_wiley: document.getElementById("useWiley")?.checked ?? true,
-    use_ieee: document.getElementById("useIeee")?.checked ?? true,
-    use_muse: document.getElementById("useMuse")?.checked ?? true,
-    // [新增] CORE 和 Lens.org 数据源
-    use_core: document.getElementById("useCore")?.checked ?? true,
-    use_lens: document.getElementById("useLens")?.checked ?? true,
-    use_lens_patents: document.getElementById("useLensPatents")?.checked ?? false,
-    use_zotero_mcp: document.getElementById("useZoteroMcp")?.checked ?? false,
-    use_zenodo: document.getElementById("useZenodo")?.checked ?? true,
-    use_datacite: document.getElementById("useDatacite")?.checked ?? true,
-    use_doaj: document.getElementById("useDoaj")?.checked ?? true,
+    ...collectSourceSwitches(),
     smart_routing: document.getElementById("smartRouting")?.checked ?? false,
     oa_only: document.getElementById("oaOnly")?.checked ?? false,
     affiliation: document.getElementById("filterAffiliation")?.value?.trim() || "",
     impact_factor_min: parseFloat(document.getElementById("impactFactorMin")?.value) || 0,
     impact_factor_max: parseFloat(document.getElementById("impactFactorMax")?.value) || 0,
+    if_include_unknown: document.getElementById("ifIncludeUnknown")?.checked ?? true,
     cas_partition: getCasPartitionFilter(),
     journal: getJournalFilter(),
     field: document.getElementById("filterField").value,
@@ -1142,35 +1172,9 @@ async function doAISearch() {
     affiliation: document.getElementById("filterAffiliation")?.value?.trim() || "",
     impact_factor_min: parseFloat(document.getElementById("impactFactorMin")?.value) || 0,
     impact_factor_max: parseFloat(document.getElementById("impactFactorMax")?.value) || 0,
+    if_include_unknown: document.getElementById("ifIncludeUnknown")?.checked ?? true,
     cas_partition: getCasPartitionFilter(),
-    use_pubmed: document.getElementById("usePubmed").checked,
-    use_openalex: document.getElementById("useOpenalex").checked,
-    use_semantic_scholar: document.getElementById("useSemanticScholar")?.checked || false,
-    use_google_scholar: document.getElementById("useGoogleScholar")?.checked || false,
-    use_bing_academic: document.getElementById("useBingAcademic")?.checked || false,
-    use_cnki: document.getElementById("useCNKI")?.checked || false,
-    use_wanfang: document.getElementById("useWanfang")?.checked || false,
-    use_vip: document.getElementById("useVIP")?.checked || false,
-    use_dblp: document.getElementById("useDblp")?.checked ?? true,
-    use_biorxiv: document.getElementById("useBiorxiv")?.checked ?? true,
-    use_agris: document.getElementById("useAgris")?.checked ?? true,
-    use_acs: document.getElementById("useAcs")?.checked ?? true,
-    use_optica: document.getElementById("useOptica")?.checked ?? true,
-    use_iop: document.getElementById("useIop")?.checked ?? true,
-    use_aip: document.getElementById("useAip")?.checked ?? true,
-    use_rsc: document.getElementById("useRsc")?.checked ?? true,
-    use_europepmc: document.getElementById("useEuropepmc")?.checked ?? true,
-    use_springer: document.getElementById("useSpringer")?.checked ?? true,
-    use_wiley: document.getElementById("useWiley")?.checked ?? true,
-    use_ieee: document.getElementById("useIeee")?.checked ?? true,
-    use_muse: document.getElementById("useMuse")?.checked ?? true,
-    // [新增] CORE 和 Lens.org 数据源
-    use_core: document.getElementById("useCore")?.checked ?? true,
-    use_lens: document.getElementById("useLens")?.checked ?? true,
-    use_lens_patents: document.getElementById("useLensPatents")?.checked ?? false,
-    use_zenodo: document.getElementById("useZenodo")?.checked ?? true,
-    use_datacite: document.getElementById("useDatacite")?.checked ?? true,
-    use_doaj: document.getElementById("useDoaj")?.checked ?? true,
+    ...collectSourceSwitches(),
     force_refresh: window._forceRefresh || false,
   };
 
@@ -2136,7 +2140,7 @@ const SOURCE_GROUPS = [
   { title: "中文学术", sources: ["cnki","wanfang","vip"] },
   { title: "CARSI 聚合器", sources: ["wos","proquest"] },
   { title: "实验性", sources: ["google_scholar","bing_academic","lens_patents"] },
-  { title: "开放仓储", sources: ["zenodo","datacite","jstage","cochrane"] },
+  { title: "开放仓储", sources: ["zenodo","datacite","jstage","cochrane","openaire"] },
   { title: "本地", sources: ["zotero_mcp"] },
 ];
 const SOURCE_LABELS = {
@@ -2151,13 +2155,14 @@ const SOURCE_LABELS = {
   frontiers:"Frontiers", acm:"ACM", oup:"Oxford Academic", cup:"Cambridge Core",
   sage:"SAGE", taylor_francis:"Taylor & Francis", ebsco:"EBSCO",
   wos:"Web of Science", proquest:"ProQuest", jstage:"J-STAGE", cochrane:"Cochrane",
+  openaire:"OpenAIRE",
 };
 const SOURCE_BADGES = {
   sciencedirect:"🔐", scopus:"🔐", jstor:"🔐",
   google_scholar:"β", bing_academic:"β", cnki:"β", wanfang:"β", vip:"β",
   lens_patents:"🔬", zotero_mcp:"📚", core:"OA", lens:"📚", zenodo:"📦", datacite:"🌐",
   frontiers:"OA", acm:"OA", oup:"OA", cup:"OA", sage:"OA", taylor_francis:"OA", ebsco:"OA",
-  wos:"🔐", proquest:"🔐", jstage:"OA", cochrane:"OA",
+  wos:"🔐", proquest:"🔐", jstage:"OA", cochrane:"OA", openaire:"OA",
 };
 const CHECKBOX_MAP = {
   pubmed:"usePubmed", openalex:"useOpenalex", semantic_scholar:"useSemanticScholar",
@@ -2171,7 +2176,7 @@ const CHECKBOX_MAP = {
   zenodo:"useZenodo", datacite:"useDatacite", frontiers:"useFrontiers", acm:"useAcm",
   oup:"useOup", cup:"useCup", sage:"useSage", taylor_francis:"useTaylor_francis",
   ebsco:"useEbsco", wos:"useWos", proquest:"useProquest",
-  jstage:"useJstage", cochrane:"useCochrane",
+  jstage:"useJstage", cochrane:"useCochrane", openaire:"useOpenaire",
 };
 
 function _findCbId(sourceName) { return CHECKBOX_MAP[sourceName] || ""; }

@@ -8,10 +8,12 @@ import './collection.js';
 import './tags.js';
 import './zotero.js';
 import './graph.js';
+import './liquid-glass.js';
 
 // 导入需要暴露到 window 的函数
 import { t, te, teAI, safeSetDisabled, setLang, currentLang } from './i18n.js';
 import { escapeHtml, debugLog, safeURI } from './state.js';
+import { initLiquidGlass } from './liquid-glass.js';
 
 // ========== Window 导出：i18n 函数 ==========
 // inline 代码直接调用 t() / te() / teAI() 等，需要在 window 作用域
@@ -183,6 +185,9 @@ Object.defineProperty(window, '_searchMode', {
 
   // 初始化搜索模式
   window.setSearchMode(window._searchMode || "normal");
+
+  // 初始化液态玻璃表面
+  initLiquidGlass();
 
   // 应用语言
   window.applyLang();

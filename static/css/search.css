@@ -877,3 +877,15 @@
 .search-progress-chip.pending {
   opacity: 0.65;
 }
+
+/* 筛选器覆盖率提示（可悬停查看说明） */
+.filter-hint {
+  cursor: help;
+  color: var(--text-tertiary, #AEAEB2);
+  font-size: 12px;
+  margin-left: 4px;
+  user-select: none;
+}
+.filter-hint:hover {
+  color: var(--primary);
+}

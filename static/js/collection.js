@@ -153,25 +153,179 @@ async function saveCollectionGroups() {
 }
 
 // 渲染收藏列表
-function renderCollections() {
-  const body = document.getElementById("collectionsBody");
-  if (!body) return;
+// ========== Workspace 面板：筛选 / 排序 / 概览 / 笔记 ==========
+
+let _editingNote = null; // { doi, title } 当前正在编辑笔记的条目
+
+function _wsSearchTerm() {
+  const el = document.getElementById("wsSearch");
+  return el ? el.value.trim().toLowerCase() : "";
+}
+
+function _wsSortMode() {
+  const el = document.getElementById("wsSort");
+  return el ? el.value : "added";
+}
+
+function _wsFilteredItems() {
   const activeTagFilter = window.getActiveTagFilter ? window.getActiveTagFilter() : null;
-  const items = (window.PaperLens.collectionsData.items || []).filter(item => {
+  const term = _wsSearchTerm();
+  const all = window.PaperLens.collectionsData.items || [];
+  const items = all.filter(item => {
     if ((item.group_id || "default") !== window.PaperLens.currentGroupId) return false;
-    if (activeTagFilter) {
-      return (item.tags || []).includes(activeTagFilter);
+    if (activeTagFilter && !(item.tags || []).includes(activeTagFilter)) return false;
+    if (term) {
+      const hay = [
+        item.title || "",
+        item.journal || "",
+        (item.authors || []).join(" "),
+        (item.keywords || []).join(" "),
+      ].join(" ").toLowerCase();
+      if (!hay.includes(term)) return false;
     }
     return true;
   });
+  const mode = _wsSortMode();
+  if (mode === "year") {
+    items.sort((a, b) => (b.year || 0) - (a.year || 0));
+  } else if (mode === "citations") {
+    items.sort((a, b) => (b.citation_count || 0) - (a.citation_count || 0));
+  } else if (mode === "velocity") {
+    items.sort((a, b) => (b.citations_per_year || 0) - (a.citations_per_year || 0));
+  } else {
+    items.sort((a, b) => String(b.added_at || "").localeCompare(String(a.added_at || "")));
+  }
+  return items;
+}
+
+function renderWsOverview() {
+  const el = document.getElementById("wsOverview");
+  if (!el) return;
+  const all = (window.PaperLens.collectionsData.items || []).filter(
+    i => (i.group_id || "default") === window.PaperLens.currentGroupId
+  );
+  const total = all.length;
+  const read = all.filter(i => i.reading_status === "read").length;
+  const reading = all.filter(i => i.reading_status === "reading").length;
+  const unread = total - read - reading;
+  const num = n => `<span class="ws-ov-num">${n}</span>`;
+  el.innerHTML = [
+    `${t("wsTotal")} ${num(total)}`,
+    `${t("read")} ${num(read)}`,
+    `${t("reading")} ${num(reading)}`,
+    `${t("unread")} ${num(unread)}`,
+  ].join(`<span class="ws-ov-sep">·</span>`);
+}
+
+function _isEditingThis(item) {
+  if (!_editingNote) return false;
+  if (_editingNote.doi) {
+    return (item.doi || "").toLowerCase() === _editingNote.doi.toLowerCase();
+  }
+  return (item.title || "") === _editingNote.title;
+}
+
+function _noteBlock(item) {
+  if (_isEditingThis(item)) {
+    return `<div class="notes-editor" onclick="event.stopPropagation()">
+      <textarea id="wsNoteInput" maxlength="5000">${escapeHtml(item.notes || "")}</textarea>
+      <div class="notes-actions">
+        <button class="btn btn-sm btn-outline" onclick="cancelCollectionNote()">${t("cancel")}</button>
+        <button class="btn btn-sm btn-primary" onclick="saveCollectionNote()">${t("save")}</button>
+      </div>
+    </div>`;
+  }
+  const note = (item.notes || "").trim();
+  const encDoi = item.doi ? safeURI(item.doi) : "";
+  const encTitle = safeURI(item.title || "");
+  if (note) {
+    return `<div class="notes-row has-note" onclick="event.stopPropagation();editCollectionNote('${encDoi}','${encTitle}')" title="${escapeHtml(note)}">${escapeHtml(note)}</div>`;
+  }
+  return `<div class="notes-row" onclick="event.stopPropagation();editCollectionNote('${encDoi}','${encTitle}')">${t("wsAddNote")}</div>`;
+}
+
+function editCollectionNote(encDoi, encTitle) {
+  let doi = "";
+  let title = "";
+  try { doi = encDoi ? decodeURIComponent(encDoi) : ""; } catch (e) { doi = ""; }
+  try { title = encTitle ? decodeURIComponent(encTitle) : ""; } catch (e) { title = ""; }
+  _editingNote = { doi, title };
+  renderCollections();
+  const ta = document.getElementById("wsNoteInput");
+  if (ta) {
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+}
+
+function cancelCollectionNote() {
+  _editingNote = null;
+  renderCollections();
+}
+
+async function saveCollectionNote() {
+  const ta = document.getElementById("wsNoteInput");
+  if (!ta || !_editingNote) return;
+  const notes = ta.value;
+  const { doi, title } = _editingNote;
+  try {
+    const r = await fetch(`${API}/api/collections/item`, {
+      method: "PATCH",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ doi, title, notes, group_id: getCurrentGroupId() }),
+    });
+    if (r.ok) {
+      const items = getCollectionsData().items || [];
+      const item = items.find(i =>
+        doi
+          ? (i.doi || "").toLowerCase() === doi.toLowerCase()
+          : (i.title || "") === title
+      );
+      if (item) item.notes = notes;
+      _editingNote = null;
+      renderCollections();
+      if (window.showToast) window.showToast(t("wsNoteSaved"));
+    } else if (window.showToast) {
+      window.showToast(t("operationFailed"));
+    }
+  } catch (e) {
+    if (window.showToast) window.showToast(t("operationFailed"));
+  }
+}
+
+function initWorkspaceToolbar() {
+  const search = document.getElementById("wsSearch");
+  const sort = document.getElementById("wsSort");
+  if (search && !search.__wsBound) {
+    search.__wsBound = true;
+    search.addEventListener("input", () => renderCollections());
+  }
+  if (sort && !sort.__wsBound) {
+    sort.__wsBound = true;
+    sort.addEventListener("change", () => renderCollections());
+  }
+}
+
+function renderCollections() {
+  const body = document.getElementById("collectionsBody");
+  if (!body) return;
+  initWorkspaceToolbar();
+  const items = _wsFilteredItems();
+  renderWsOverview();
+
   if (items.length === 0) {
-    body.innerHTML = `<div class="collections-empty"><div class="icon">📚</div><p>${t("collectionsEmpty")}</p></div>`;
+    const term = _wsSearchTerm();
+    body.innerHTML = term
+      ? `<div class="collections-empty"><div class="icon">🔍</div><p>${t("wsNoMatch")}</p></div>`
+      : `<div class="collections-empty"><div class="icon">📚</div><p>${t("collectionsEmpty")}</p></div>`;
     return;
   }
+
   let html = '';
-  items.forEach((item, i) => {
+  items.forEach((item) => {
     const authors = (item.authors || []).length > 2 ? item.authors.slice(0, 2).map(a => escapeHtml(a)).join(", ") + " et al." : (item.authors || []).map(a => escapeHtml(a)).join(", ");
     const citedText = item.citation_count > 0 ? `· ${t("cited")} ${item.citation_count.toLocaleString()}` : '';
+    const veloText = item.citations_per_year > 0 ? ` <span class="badge" title="${t("citationsPerYearTip")}">📈 ${item.citations_per_year}${t("perYearUnit")}</span>` : '';
     const volumeInfo = item.volume ? `, ${escapeHtml(item.volume)}` : '';
     const issueInfo = item.issue ? ` (${escapeHtml(item.issue)})` : '';
     const pagesInfo = item.pages ? `, ${escapeHtml(item.pages)}` : '';
@@ -181,8 +335,9 @@ function renderCollections() {
     html += `
     <div class="collection-item" onclick="viewCollectionItem('${item.doi ? safeURI(item.doi) : ''}')">
       <div class="title">${escapeHtml(item.title) || t("noTitle")}</div>
-      <div class="meta">${authors} · ${escapeHtml(item.journal)}${volumeInfo}${issueInfo}${pagesInfo} (${item.year || "?"}) ${citedText}</div>
+      <div class="meta">${authors} · ${escapeHtml(item.journal)}${volumeInfo}${issueInfo}${pagesInfo} (${item.year || "?"}) ${citedText}${veloText}</div>
       ${window.renderCollectionItemTags ? window.renderCollectionItemTags(item) : ''}
+      ${_noteBlock(item)}
       <div class="actions">
         <span class="reading-status ${statusClass}" onclick="event.stopPropagation();toggleReadingStatus('${item.doi ? safeURI(item.doi) : ''}','${readingStatus}')" title="${t('readingStatusTip')}">
           <span class="reading-status-dot"></span>
@@ -475,6 +630,10 @@ window.loadCollections = loadCollections;
 window.toggleCollections = toggleCollections;
 window.refreshCollections = refreshCollections;
 window.renderCollections = renderCollections;
+window.renderWsOverview = renderWsOverview;
+window.editCollectionNote = editCollectionNote;
+window.cancelCollectionNote = cancelCollectionNote;
+window.saveCollectionNote = saveCollectionNote;
 window.renderGroupTabs = renderGroupTabs;
 window.switchGroup = switchGroup;
 window.addGroup = addGroup;

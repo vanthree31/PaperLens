@@ -4,7 +4,7 @@ import os
 import json
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
-from core.utils import _get_user_data_path
+from core.utils import _get_user_data_path, _calc_citations_per_year
 
 collections_bp = Blueprint("collections", __name__)
 
@@ -30,6 +30,9 @@ def get_collections():
                         for item in data.get("items", [])
                         if tag_id in item.get("tags", [])
                     ]
+                # 派生指标：引用速度（本地计算，不落盘）
+                for item in data.get("items", []):
+                    item["citations_per_year"] = _calc_citations_per_year(item)
                 return jsonify(data)
             except Exception as e:
                 print(f"[WARN] Failed to read collections.json: {e}")

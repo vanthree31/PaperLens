@@ -9,7 +9,7 @@
   <p align="center">
     <img src="https://img.shields.io/badge/python-3.9+-blue.svg?logo=python&logoColor=white" alt="Python 3.9+">
     <img src="https://img.shields.io/badge/license-custom-green.svg" alt="PaperLens Community License">
-    <img src="https://img.shields.io/badge/data%20sources-43-orange" alt="43 Data Sources">
+    <img src="https://img.shields.io/badge/data%20sources-46-orange" alt="46 Data Sources">
     <img src="https://img.shields.io/badge/AI-local%20%7C%20cloud-purple" alt="AI Models">
     <img src="https://img.shields.io/badge/universities-300%2B-blue" alt="300+ Universities via CARSI">
     <img src="https://img.shields.io/github/stars/vanthree31/PaperLens?style=social&logo=github" alt="GitHub Stars">
@@ -76,7 +76,7 @@ Describe your research question in natural language. PaperLens searches **43 dat
 |---|---|
 | VPN needed for off-campus access to ScienceDirect / Scopus | **CARSI authentication** — 300+ universities, zero config |
 | Don't know how to write Boolean queries | **Natural language** — type your question in Chinese or English, AI builds the query |
-| Switching between PubMed, Scopus, Google Scholar, CNKI... | **43 sources, one search** — unified, deduplicated results |
+| Switching between PubMed, Scopus, Google Scholar, CNKI... | **46 sources, one search** — unified, deduplicated results |
 | Reading 50 papers for a literature review | **AI Deep Analysis** — 7-dimension breakdown + multi-paper comparison |
 | Hard to find cross-disciplinary connections | **Interactive citation graph** (D3.js) — click to expand, drag to explore |
 | Data privacy concerns with cloud tools | **100% local** — works fully offline with Ollama, no data leaves your machine |
@@ -117,7 +117,7 @@ Export in any format: **RIS, BibTeX, CSV, EndNote XML**. Generate citations in *
 ## Core Features
 
 ### AI Search
-- **43 data sources** searched in parallel — see the full list in [ROADMAP.md](ROADMAP.md)
+- **46 data sources** searched in parallel — **29 independent upstream indexes** + **17 publisher slices** of the CrossRef index (ACS, IEEE, Wiley, Springer, ...). Full list in [ROADMAP.md](ROADMAP.md)
 - **Natural language** — Chinese or English, AI understands your intent
 - **Batch DOI import** — paste a list of DOIs, enrich all at once
 - **Smart filtering** — journal, year, field tags, publication type, metadata completeness
@@ -165,7 +165,7 @@ Connect to **300+ Chinese universities** via CARSI. Access ScienceDirect, Scopus
 | **Complete research workflow** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **AI Deep Analysis (7-dim)** | ✅ | ❌ | Surface-level | ❌ | ❌ |
 | **Multi-paper comparison** | ✅ | ❌ | Manual copy-paste | ❌ | ❌ |
-| **43 sources, one search** | ✅ | 1 source | 0 sources (no real-time) | ❌ | 1 source |
+| **46 sources, one search** | ✅ | 1 source | 0 sources (no real-time) | ❌ | 1 source |
 | **Citation graph** | ✅ | ❌ | ❌ | ❌ | ✅ |
 | **Offline / local-first** | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **CARSI 300+ universities** | ✅ | ❌ | ❌ | ❌ | ❌ |

@@ -2,6 +2,44 @@
 
 All notable changes to PaperLens will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **CrossRef metadata cache** (`core/work_cache.py`): the post-search DOI enrichment queried CrossRef once per incomplete paper (~150 per search, ~2s each) and repeated the same lookups across searches. Now cached per DOI (30-day TTL, thread-safe, persisted to `~/.paperlens/crossref_work_cache.json`, capped at 20k entries). Pure speed: cached payloads are byte-identical to live responses (verified 11/11 DOIs field-by-field against live CrossRef).
+- **Citation graph redesign (three-column lineage)**: new `CitationGraphV2` — referenced / current / citing three-column lineage layout (from the reviewed prototype), Top 10/20/all, flat / by-year / cluster arrangements (year bubbles expand on click), anchored physics drag, equal-ratio zoom, "+N more · expand all". The AI toolbar (summary / detail / novelty / export) is preserved. Floating mini-graphs keep the legacy renderer.
+- **Keyword co-occurrence / author collaboration graph redesign**: new `NetworkGraphV2` renderer — three deterministic layouts (circular / concentric / cluster), anchored physics (drag snaps back to its anchor), equal-ratio wheel zoom, community detection (weighted label propagation) for coloring, dashed edges for cross-cluster links, hover neighbor highlight with click-to-pin, and a segmented toolbar (data / arrange / count / fit). Replaces the temporary rendering path where these two networks were drawn by the citation graph class.
+- `/api/keyword-network` and `/api/author-network` now return the top 120 nodes by frequency (was: ad-hoc ≥2 filter / top 20-30), so the frontend Top-N control can switch without re-requesting.
+
+### Changed
+- **Faster search, no quality trade-off**: DOI enrichment concurrency 10 → 20 (CrossRef's public pool allows 50 req/s; this stays at ~13), connection-pooled `requests.Session` instead of bare `requests.get` (eliminates ~150 TCP/TLS handshakes per search), 429 backoff retry, and a `mailto:` User-Agent when any source has an email configured (polite pool, no rate limit). Measured on "deep learning microscopy" / 6 sources: **26.1s cold → 19.7s warm → ~15.5s with a fully warm cache** (was 30.8–40.2s). Nothing was removed — the enrichment fills title/authors/journal/abstract, which drive dedup, IF sorting and relatedness filtering, so cutting it would trade away result quality.
+
+### Fixed
+- **PubMed results carried other papers' DOIs (P0, silent data corruption)**: the XML parser used `article.findall(".//ArticleId")` and took the last `IdType="doi"` match — but `ReferenceList/Reference/ArticleIdList` uses the same element name, so the recursive search swept in every **reference's** IDs and the last reference's DOI overwrote the article's own. Measured 25–40% of PubMed results: e.g. PMID 35594500 ("Lipid-Nanoparticle-Based Delivery of CRISPR/Cas9") was tagged with `10.3390/vaccines9010065` (an mRNA vaccine paper). Impact: original-link/PDF buttons, exported RIS/BibTeX, citation graphs and DOI-based dedup all pointed at the wrong paper. Now scoped to `./PubmedData/ArticleIdList` (the article's own IDs) with an `ELocationID` fallback. After the fix: 0/10 mismatches (was 3/3), and title duplicates dropped from 8 groups to 0 — duplicates were a downstream symptom of DOIs being corrupted, which defeated dedup.
+- **Missing `import os`** in `search_engine.py` — `SearchEngine.__init__` crashed with `NameError` (introduced with the online journal-metrics fallback).
+- **Author search returning irrelevant results** ("搜某作者的论文全是无关结果") — three-layer fix:
+  1. *Query understanding*: added the most common patterns that were silently unrecognized — "张伟的论文" (no verb), bare Chinese names ("周金华"), "papers by X" (full surname was truncated to given name), "Zhang Wei's papers", honorifics (王五**教授**的论文), "写的"; blacklist switched to substring matching; lookbehind prevents mid-word splits ("深度学习" sawed into "度学习" evading the blacklist).
+  2. *Dispatch*: `/api/search` (keyword mode) never ran author detection at all — only the AI-search path did — and `engine.search`'s source dispatcher dropped the `author` parameter entirely, so the author name was sent to sources as a full-text keyword. Keyword mode now runs the same detection; the dispatcher routes the author name as the query subject (OpenAlex native author-ID lookup with `raw_author_name.search` fallback for Chinese names — 27k hits; PubMed `[au]` for Latin names; CNKI/Wanfang get the original Chinese name).
+  3. *Result gate*: au results whose author list has zero name match are demoted to the end (not dropped). The relatedness filter already exempted au mode — it was the "22 filtered → 0 cached" killer when field arrived wrong.
+- **Author + topic combined queries** ("张伟发表的CRISPR研究"): the extracted author was never applied to topic-search results, and `deduplicate_papers` reshuffled the ranked order into a "DOI group + title group" concatenation, silently destroying any upstream ordering. Now: author detection feeds a merged sort (author-hit first, then BM25 relevance), dedup preserves upstream order, and pypinyin-based variants let Chinese names match Latin signatures ("张伟" ↔ "Wei Zhang"/"Zhang W", 复姓 "欧阳文清" ↔ "Wenqing Ouyang"; full-name vs initials disambiguation keeps 张伟兴/张伟华 out of 张伟's results). `pypinyin` added to the project venv.
+- **AI translation fallback never worked**: translator called `chat(prompt, max_tokens=100)` but `AIAssistant.chat` has no `max_tokens` parameter — TypeError on every call, silently degrading to dictionary-only translation.
+- Citation graph reopening after viewing a network graph kept `legendCenterRow` hidden (row visibility was set but never restored).
+- **OpenAIRE data source** (46th): EU open-access aggregation, 1M+ research products via Graph API `/graph/v1/researchProducts`. Complements CORE/DOAJ with European institutional repositories and theses.
+- **Two-layer impact factor**: built-in official JCR value first, OpenAlex `2yr_mean_citedness` estimate as fallback (free, no key, tens of thousands of journals). Estimated values are marked with `*` in the UI and carry `impact_factor_src=openalex`.
+- **`保留未收录` (keep unknown) toggle** for impact-factor filter — previously papers without an IF were silently dropped, making the filter behave as a 102-journal whitelist.
+- **中科院分区「未收录」option** — the CAS table contains 102 entries (1区 92 / 2区 9 / 3区 1 / **4区 0**), so selecting 4区 always returned 0 results. Added an explicit `__unknown__` bucket plus a coverage hint icon.
+
+### Fixed
+- **12 dead source switches** — UI checkboxes existed and badges (CARSI/OA) were shown, but the flags were never sent in the search request. Refactored to a single source of truth `SOURCE_SWITCHES` in `search.js`, shared by both the normal and AI search paths.
+- **Filter cache key collision** — the cache stores filtered+sorted results, but the key omitted journal/field/mesh_term/pub_type/IF/CAS/OA/affiliation/author/sort/max_results. Changing any of these returned stale results. Extracted `_compute_filter_seed()` as the shared single source.
+- **Title-only relevance check** — relevance scoring only looked at the title (and had a DOI-substring bypass), so papers matching only in the abstract were treated as irrelevant. Now matches title OR abstract (title-only when the query field is explicitly `ti`).
+- **Author field override** — a residual topic word (e.g. `张伟发表的CRISPR研究`) was force-passed as `field=au`, turning `CRISPR` into an author name. Now `field=au` is only forced when no residual topic word remains.
+- **OpenAlex ISSN lookup** — `filter=issn:` requires the hyphenated form (`2156-7085`); the normalized form (`21567085`) returned 0 results, silently disabling the whole IF fallback layer.
+- **OpenAIRE DOI selection** — an item can carry several `doi` PIDs (publisher DOI first, then the `10.48550/arXiv...` preprint DOI). The old loop let the last one win, breaking dedup, citation lookup and DOI links. Preprint DOIs are now deprioritized.
+- **OpenAIRE junk entries** — EU project documents with no DOI/journal/authors leaked into results; added a quality floor (must have DOI, or journal+year, or authors+year).
+
+### Changed
+- Data-source count unified across README / README.zh-CN / ROADMAP: **46 retrieval entries = 29 independent upstream indexes + 17 CrossRef publisher slices** (37 enabled by default). Previously README said 43 and ROADMAP said 45.
+
 ## [1.3.0] - 2026-07-06
 
 ### Added

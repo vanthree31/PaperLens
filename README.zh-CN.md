@@ -9,7 +9,7 @@
   <p align="center">
     <img src="https://img.shields.io/badge/python-3.9+-blue.svg?logo=python&logoColor=white" alt="Python 3.9+">
     <img src="https://img.shields.io/badge/license-custom-green.svg" alt="PaperLens Community License">
-    <img src="https://img.shields.io/badge/数据源-43-orange" alt="43 数据源">
+    <img src="https://img.shields.io/badge/数据源-46-orange" alt="46 数据源">
     <img src="https://img.shields.io/badge/AI-本地%20%7C%20云端-purple" alt="AI 模型">
     <img src="https://img.shields.io/badge/高校-300%2B-blue" alt="300+ 高校 CARSI">
     <img src="https://img.shields.io/github/stars/vanthree31/PaperLens?style=social&logo=github" alt="GitHub Stars">
@@ -78,7 +78,7 @@ Google Scholar → arXiv → 打开 PDF → 发现不是我要的 → 继续搜 
 |------|---------------|
 | 校外访问 ScienceDirect/Scopus 需要 VPN | **CARSI 认证** — 300+ 高校，零配置直连 |
 | 不会写 Boolean 检索式 | **自然语言** — 中文描述研究方向，AI 自动构建检索式 |
-| 在 PubMed、Scopus、Google Scholar、CNKI 间反复横跳 | **43 个源，一键搜索** — 结果自动合并去重 |
+| 在 PubMed、Scopus、Google Scholar、CNKI 间反复横跳 | **46 个源，一键搜索** — 结果自动合并去重 |
 | 读 50 篇论文写文献综述 | **AI 详析** — 七维度拆解 + 多篇对比 |
 | 难以发现跨领域关联 | **交互式引用图谱**（D3.js）— 点击展开，拖拽探索 |
 | 担心云端工具数据隐私 | **100% 本地** — Ollama 完全离线，数据不出本机 |
@@ -119,7 +119,7 @@ PaperLens 不只是搜索工具，它是一个完整的流程：
 ## 核心功能
 
 ### AI 搜索
-- **43 个数据源**并发搜索 — 完整列表见 [ROADMAP.md](ROADMAP.md)
+- **46 个数据源**并发搜索 — 其中 **29 个独立上游索引** + **17 个 CrossRef 出版社切片**（ACS、IEEE、Wiley、Springer 等，同属 CrossRef 索引按 member 过滤）。完整列表见 [ROADMAP.md](ROADMAP.md)
 - **自然语言** — 中文或英文，AI 理解你的研究意图
 - **批量 DOI 导入** — 粘贴 DOI 列表，一键充实元数据
 - **智能筛选** — 期刊、年份、领域标签、文献类型、元数据完整度

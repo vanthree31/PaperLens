@@ -851,3 +851,115 @@
 @keyframes graphSpin {
   to { transform: rotate(360deg); }
 }
+
+/* === Network Graph V2 — 关键词共现 / 作者合作 === */
+
+/* 控件条（数据 / 排列 / 数量 / 适应） */
+.net-toolbar {
+  display: flex;
+  gap: 14px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--graph-toolbar-border, var(--border));
+  font-size: 12px;
+  color: var(--text-secondary);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.net-toolbar .nt-lab { color: var(--text-tertiary); margin-right: 4px; }
+.net-toolbar .nt-sp { flex: 1; }
+
+/* iOS 分段控件 */
+.net-seg {
+  display: inline-flex;
+  background: var(--primary-opacity-8);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+}
+.net-seg label { cursor: pointer; position: relative; display: block; }
+.net-seg input { position: absolute; opacity: 0; pointer-events: none; }
+.net-seg span {
+  display: block;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 7px;
+  color: var(--text);
+  white-space: nowrap;
+  transition: background 0.15s var(--ease-standard), box-shadow 0.15s var(--ease-standard);
+}
+.net-seg input:checked + span {
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-xs), 0 0 0 0.5px var(--border-subtle);
+}
+.net-seg input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 1px; }
+
+.net-btn {
+  font: inherit;
+  font-size: 12px;
+  color: var(--primary);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+}
+.net-btn:hover { background: var(--primary-opacity-8); }
+.net-zoom-pct { font-size: 12px; color: var(--text-secondary); min-width: 40px; text-align: right; }
+
+/* SVG 元素 */
+.net-nd { cursor: grab; transition: opacity 0.15s var(--ease-standard); }
+.net-nd:active { cursor: grabbing; }
+.net-nd text { pointer-events: none; user-select: none; }
+.net-lbl { font-size: 11.5px; fill: var(--text); }
+.net-cnt { font-size: 10px; fill: var(--text-secondary); }
+.net-clab { font-size: 11px; fill: var(--text-secondary); font-weight: 500; letter-spacing: 0.3px; }
+.net-ring { fill: none; stroke: var(--border); stroke-dasharray: 2 5; stroke-width: 1; }
+.net-lnk { fill: none; stroke-linecap: round; transition: stroke-opacity 0.15s var(--ease-standard); }
+.net-lnk.cross { stroke-dasharray: 3 3; }
+
+/* Tooltip */
+.net-tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--glass-e-bg, rgba(28, 28, 30, 0.94));
+  color: var(--text);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-e-border, transparent);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 11px;
+  border-radius: var(--radius-md);
+  max-width: 330px;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease-standard);
+  z-index: 9;
+  box-shadow: var(--shadow-md);
+}
+.net-tip.on { opacity: 1; }
+.net-tip .m { opacity: 0.72; }
+
+/* 图例簇行（颜色圆点列表，动态填充） */
+#legendClustersRow { display: none; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; }
+#legendClustersRow .lc-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+#legendClustersRow .lc-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+
+/* === Citation Graph V2 — 三栏谱系 === */
+.cit-colhead { font-size: 12.5px; fill: var(--text-secondary); }
+.cit-colline { stroke: var(--border-subtle); stroke-width: 1; }
+.cit-yrgap { stroke: var(--border); stroke-width: 1; }
+.cit-more { font-size: 11.5px; fill: var(--primary); cursor: pointer; }
+.cit-more:hover { text-decoration: underline; }
+.cit-lnk { fill: none; stroke-linecap: round; transition: stroke-opacity 0.15s var(--ease-standard); }
+.cit-nd { cursor: grab; }
+.cit-nd:active { cursor: grabbing; }
+.cit-nd text { pointer-events: none; user-select: none; }
+.cit-lbl { fill: var(--text); }
+.cit-yr { font-size: 11px; fill: var(--text-secondary); }
+.cit-yrtag { font-size: 10.5px; fill: var(--primary); font-weight: 500; }
